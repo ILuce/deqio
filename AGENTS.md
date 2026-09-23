@@ -4,9 +4,7 @@
 
 This repository contains a small local HTTP server around SemIf.
 
-Its primary purpose is to expose fast semantic decisions to other applications, through a stable local API.
-
-Keep the project small, deterministic, observable, and easy to reinstall with `uv`.
+Its purpose is to expose fast semantic decisions to other applications through a stable local API while keeping the model resident, observable, and easy to reinstall with `uv`.
 
 ---
 
@@ -55,13 +53,56 @@ Python dependencies must be declared in `pyproject.toml`.
 
 ---
 
-## Runtime backend
+## Configuration
 
-The current release uses the MLX backend on macOS Apple Silicon.
+`config.json` is the checked-in source of runtime defaults.
 
-Do not claim Linux or Windows support until a backend abstraction is implemented and validated in this repository.
+The server currently reads:
 
-When additional backends are introduced, backend-specific code must remain behind a small internal abstraction and API handlers must not contain backend-specific implementation details.
+```text
+backend
+model
+model_revision
+max_tokens
+mlx_cache_mib
+log
+torch_dtype
+llama_gguf
+llama_threads
+```
+
+Keep the default values in `config.json`; do not move them back into Python source.
+
+Environment-variable support is override-only and must remain backward compatible for the documented `SEMIF_*` variables.
+
+Relative filesystem paths from `config.json` must resolve relative to the configuration file, not the caller's working directory.
+
+---
+
+## Runtime backends
+
+Supported backend names are:
+
+```text
+mlx       macOS Apple Silicon
+cuda      Linux or Windows with one visible NVIDIA CUDA GPU
+llamacpp  CPU backend on macOS, Linux, or Windows
+```
+
+Backend-specific loading, scoring, cache cleanup, and shutdown belong in `src/semif_server/backends.py`.
+
+API handlers must not import MLX, Torch, or llama.cpp backend implementations directly.
+
+All backends must expose the same server semantics:
+
+```text
+direct scoring
+serial prefix reuse
+shared-state scoring
+runtime cache clearing
+```
+
+Do not claim support for a platform/backend combination unless it is supported by the pinned SemIf dependency.
 
 ---
 
@@ -79,9 +120,12 @@ POST /v1/noul
 POST /v1/choice
 POST /v1/decision
 POST /v1/shared
+POST /v1/cache/clear
 ```
 
 `/v1/decision` is retained as a compatibility alias for `/v1/choice`.
+
+`/v1/cache/clear` clears reusable runtime cache state but must not unload the active model or delete model files/disk caches.
 
 Do not silently change request or response schemas.
 
@@ -182,14 +226,22 @@ Changes affecting decision endpoints must test at least:
 /v1/shared
 ```
 
+Changes affecting runtime caching must test:
+
+```text
+/v1/cache/clear
+```
+
 Changes affecting the web UI must verify that:
 
 1. `/ui` loads successfully.
 2. Noul requests can be submitted.
 3. Choice options can be added and removed.
-4. Shared decisions can be submitted.
-5. Generated JSON matches the API request.
-6. Server responses are displayed without page reload.
+4. Shared decisions and their options can be added and removed.
+5. Text and JSON state modes both generate valid requests.
+6. Generated JSON matches the API request.
+7. Server responses are displayed without page reload.
+8. Runtime cache clearing is available and reports success/failure clearly.
 
 ---
 
@@ -218,7 +270,7 @@ Do not introduce React, Vue, Svelte, npm or another frontend toolchain unless ex
 The UI should expose enough information to understand model behavior:
 
 * endpoint
-* state
+* state and state format
 * question
 * options
 * generated request JSON
@@ -228,6 +280,7 @@ The UI should expose enough information to understand model behavior:
 * latency
 * cache hit
 * token count
+* active backend
 
 Avoid visual effects or unnecessary animation.
 
@@ -241,15 +294,32 @@ Persist:
 
 * timestamp
 * request ID
+* backend
 * endpoint/mode
 * state hash
 * question
-* option IDs
 * decision
 * probabilities
 * latency
 * token count
 * cache status
+
+---
+
+## Cache semantics
+
+The cache-clear operation is runtime hygiene, not model unloading.
+
+It should clear:
+
+* the current serial prefix cache for every backend;
+* MLX inactive allocator cache when using MLX;
+* the CUDA allocator cache when using CUDA;
+* llama.cpp scoring-context memory when using llama.cpp.
+
+The model weights must remain loaded after cache clearing.
+
+Do not delete Hugging Face cache files or local model files from the HTTP cache endpoint.
 
 ---
 
@@ -277,7 +347,7 @@ Do not automatically track the upstream `master` branch.
 
 When upgrading SemIf:
 
-1. update the pinned revision
+1. update the pinned revision;
 2. run:
 
 ```bash
@@ -285,11 +355,11 @@ uv lock
 uv sync
 ```
 
-3. start the server
-4. test all decision endpoints
-5. compare representative probability outputs
-6. compare latency
-7. commit the updated `uv.lock`
+3. start the available backends;
+4. test all decision endpoints and runtime-cache clearing;
+5. compare representative probability outputs;
+6. compare latency;
+7. commit the updated `uv.lock`.
 
 Probability changes after an upstream or model update are expected and must be treated as an explicit behavioral change.
 

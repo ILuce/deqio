@@ -1,0 +1,437 @@
+DASHBOARD = r"""
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SemIf Local</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 1180px;
+    margin: 32px auto;
+    padding: 0 20px 48px;
+    background: Canvas;
+    color: CanvasText;
+}
+h1 { margin: 0 0 4px; font-size: 28px; }
+h2 { margin: 0 0 16px; font-size: 19px; }
+.sub { opacity: .65; margin-bottom: 24px; }
+.toolbar, .tabs, .row, .option-row, .actions { display: flex; gap: 10px; align-items: center; }
+.toolbar { justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+.tabs { margin-bottom: 18px; }
+button, select, input, textarea {
+    font: inherit;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    border-radius: 8px;
+    background: Canvas;
+    color: CanvasText;
+}
+button { padding: 8px 12px; cursor: pointer; }
+button.primary { background: CanvasText; color: Canvas; border-color: CanvasText; }
+button.tab.active { font-weight: 700; border-color: CanvasText; }
+button.danger { border-color: #a33; }
+input, select, textarea { width: 100%; padding: 9px 10px; }
+textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 6px; }
+.panel {
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 18px;
+    background: color-mix(in srgb, Canvas 96%, CanvasText 4%);
+}
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field { margin-bottom: 14px; }
+.inline-field { min-width: 170px; }
+.option-row { margin-bottom: 8px; align-items: stretch; }
+.option-row .id { flex: 0 0 190px; }
+.option-row .desc { flex: 1; }
+.option-row button { flex: 0 0 auto; }
+.shared-card {
+    border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+.shared-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.card { border: 1px solid color-mix(in srgb, CanvasText 15%, transparent); border-radius: 10px; padding: 14px; }
+.card small { display: block; opacity: .6; margin-bottom: 5px; }
+.card strong { font-size: 20px; }
+.result-item { border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent); padding: 12px 0; }
+.result-item:first-child { border-top: 0; padding-top: 0; }
+.prob-row { display: grid; grid-template-columns: 160px 1fr 90px; gap: 10px; align-items: center; margin: 7px 0; }
+.bar { height: 8px; border-radius: 5px; background: color-mix(in srgb, CanvasText 10%, transparent); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: CanvasText; }
+.meta { opacity: .7; font-size: 12px; margin-top: 8px; }
+.status { font-size: 13px; min-height: 20px; }
+.status.error { color: #b23b3b; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 9px; border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent); vertical-align: top; }
+th { opacity: .7; }
+.hidden { display: none !important; }
+.badge { padding: 5px 9px; border: 1px solid color-mix(in srgb, CanvasText 15%, transparent); border-radius: 999px; font-size: 12px; }
+@media (max-width: 800px) {
+    .grid { grid-template-columns: 1fr; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .option-row { flex-wrap: wrap; }
+    .option-row .id { flex: 1 1 140px; }
+    .option-row .desc { flex: 1 1 280px; }
+    .prob-row { grid-template-columns: 100px 1fr 70px; }
+}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div>
+    <h1>SemIf Local</h1>
+    <div class="sub" id="runtimeSub">Loading runtime information...</div>
+  </div>
+  <div class="actions">
+    <span class="badge" id="healthBadge">health: ...</span>
+    <button id="clearCache" class="danger" type="button">Clear runtime cache</button>
+  </div>
+</div>
+
+<section class="panel">
+  <h2>Playground</h2>
+  <div class="tabs">
+    <button class="tab active" data-endpoint="noul" type="button">Noul</button>
+    <button class="tab" data-endpoint="choice" type="button">Choice</button>
+    <button class="tab" data-endpoint="shared" type="button">Shared</button>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="field">
+        <label for="stateFormat">State format</label>
+        <select id="stateFormat">
+          <option value="text">Text</option>
+          <option value="json">JSON</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="stateInput">Context / state</label>
+        <textarea id="stateInput">The cookie contains sugar, milk chocolate and vanilla.</textarea>
+      </div>
+
+      <div id="singleFields">
+        <div class="field">
+          <label for="questionInput">Question</label>
+          <input id="questionInput" value="Is the cookie sweet?">
+        </div>
+        <div class="field inline-field">
+          <label for="modeInput">Mode</label>
+          <select id="modeInput">
+            <option value="serial">serial</option>
+            <option value="direct">direct</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="choiceFields" class="hidden">
+        <div class="field">
+          <label>Options</label>
+          <div id="choiceOptions"></div>
+          <button id="addChoiceOption" type="button">+ Add option</button>
+        </div>
+      </div>
+
+      <div id="sharedFields" class="hidden">
+        <div class="field">
+          <label>Decisions</label>
+          <div id="sharedDecisions"></div>
+          <button id="addSharedDecision" type="button">+ Add decision</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="sendRequest" class="primary" type="button">Send</button>
+        <span id="requestStatus" class="status"></span>
+      </div>
+    </div>
+
+    <div>
+      <div class="field">
+        <label>Generated request JSON</label>
+        <div class="panel" style="margin:0; min-height:250px"><pre id="requestPreview"></pre></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Result</h2>
+  <div id="resultSummary" class="sub">No request sent yet.</div>
+  <div id="resultView"></div>
+  <details style="margin-top:14px">
+    <summary>Raw response JSON</summary>
+    <pre id="responseJson" style="margin-top:10px"></pre>
+  </details>
+</section>
+
+<section>
+  <div class="cards">
+    <div class="card"><small>Requests</small><strong id="requests">-</strong></div>
+    <div class="card"><small>Decisions</small><strong id="decisions">-</strong></div>
+    <div class="card"><small>P50 latency</small><strong id="p50">-</strong></div>
+    <div class="card"><small>P95 latency</small><strong id="p95">-</strong></div>
+    <div class="card"><small>Cache clears</small><strong id="cacheClears">-</strong></div>
+  </div>
+
+  <div class="panel">
+    <h2>Recent requests</h2>
+    <div style="overflow:auto">
+      <table>
+        <thead><tr><th>Time</th><th>Backend</th><th>Mode</th><th>Question</th><th>Decision</th><th>Latency</th><th>Cache</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+let endpoint = 'noul';
+let sharedCounter = 0;
+
+const byId = id => document.getElementById(id);
+const escapeHtml = value => String(value ?? '')
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+
+function optionRow(id = '', description = '') {
+  const row = document.createElement('div');
+  row.className = 'option-row';
+  row.innerHTML = `
+    <input class="id" placeholder="id" value="${escapeHtml(id)}">
+    <input class="desc" placeholder="description" value="${escapeHtml(description)}">
+    <button type="button" class="remove-option">Remove</button>`;
+  row.querySelector('.remove-option').addEventListener('click', () => {
+    row.remove();
+    updatePreview();
+  });
+  return row;
+}
+
+function addOption(container, id = '', description = '') {
+  container.appendChild(optionRow(id, description));
+  updatePreview();
+}
+
+function readOptions(container) {
+  return [...container.querySelectorAll('.option-row')].map(row => ({
+    id: row.querySelector('.id').value.trim(),
+    description: row.querySelector('.desc').value.trim(),
+  }));
+}
+
+function addSharedDecision(question = 'Is action required?') {
+  sharedCounter += 1;
+  const card = document.createElement('div');
+  card.className = 'shared-card';
+  card.dataset.decision = String(sharedCounter);
+  card.innerHTML = `
+    <div class="shared-head"><strong>Decision ${sharedCounter}</strong><button type="button" class="remove-decision">Remove</button></div>
+    <div class="field"><label>Question</label><input class="shared-question" value="${escapeHtml(question)}"></div>
+    <div class="field"><label>Options</label><div class="shared-options"></div><button type="button" class="add-shared-option">+ Add option</button></div>`;
+  const options = card.querySelector('.shared-options');
+  addOption(options, 'yes', 'Yes. The evidence supports the criterion.');
+  addOption(options, 'no', 'No. The evidence does not support the criterion.');
+  card.querySelector('.add-shared-option').addEventListener('click', () => addOption(options));
+  card.querySelector('.remove-decision').addEventListener('click', () => {
+    card.remove();
+    updatePreview();
+  });
+  byId('sharedDecisions').appendChild(card);
+  updatePreview();
+}
+
+function readState() {
+  const raw = byId('stateInput').value.trim();
+  if (!raw) throw new Error('State cannot be empty.');
+  if (byId('stateFormat').value === 'json') {
+    const parsed = JSON.parse(raw);
+    if (parsed === null || (typeof parsed !== 'object')) {
+      throw new Error('JSON state must be an object or array.');
+    }
+    return parsed;
+  }
+  return raw;
+}
+
+function buildPayload() {
+  const state = readState();
+  if (endpoint === 'noul') {
+    return { state, question: byId('questionInput').value.trim(), mode: byId('modeInput').value };
+  }
+  if (endpoint === 'choice') {
+    return {
+      state,
+      question: byId('questionInput').value.trim(),
+      mode: byId('modeInput').value,
+      options: readOptions(byId('choiceOptions')),
+    };
+  }
+  return {
+    state,
+    decisions: [...byId('sharedDecisions').querySelectorAll('.shared-card')].map(card => ({
+      id: `ui-shared-${card.dataset.decision}`,
+      question: card.querySelector('.shared-question').value.trim(),
+      options: readOptions(card.querySelector('.shared-options')),
+    })),
+  };
+}
+
+function updatePreview() {
+  try {
+    byId('requestPreview').textContent = JSON.stringify(buildPayload(), null, 2);
+    byId('requestStatus').textContent = '';
+    byId('requestStatus').className = 'status';
+  } catch (error) {
+    byId('requestPreview').textContent = `Invalid input: ${error.message}`;
+  }
+}
+
+function setEndpoint(next) {
+  endpoint = next;
+  document.querySelectorAll('.tab').forEach(button => button.classList.toggle('active', button.dataset.endpoint === next));
+  byId('singleFields').classList.toggle('hidden', next === 'shared');
+  byId('choiceFields').classList.toggle('hidden', next !== 'choice');
+  byId('sharedFields').classList.toggle('hidden', next !== 'shared');
+  updatePreview();
+}
+
+function renderOneResult(result) {
+  const probabilities = Object.entries(result.probabilities || {});
+  const bars = probabilities.map(([id, probability]) => `
+    <div class="prob-row">
+      <strong>${escapeHtml(id)}</strong>
+      <div class="bar"><span style="width:${Math.max(0, Math.min(100, probability * 100))}%"></span></div>
+      <span>${(probability * 100).toFixed(2)}%</span>
+    </div>`).join('');
+  const timing = result.timing || {};
+  return `
+    <div class="result-item">
+      <div><strong>Decision: ${escapeHtml(result.decision)}</strong></div>
+      ${bars}
+      <div class="meta">tokens=${escapeHtml(result.input_tokens)} · total=${escapeHtml(timing.total_ms ?? '-')} ms · cache=${escapeHtml(timing.cache_hit ?? '-')}</div>
+      <details><summary>Option logits</summary><pre>${escapeHtml(JSON.stringify(result.option_logits || {}, null, 2))}</pre></details>
+    </div>`;
+}
+
+function renderResponse(data) {
+  byId('responseJson').textContent = JSON.stringify(data, null, 2);
+  if (Array.isArray(data.results)) {
+    byId('resultSummary').textContent = `${data.results.length} shared decisions · ${data.shared_timing?.total_ms ?? '-'} ms total`;
+    byId('resultView').innerHTML = data.results.map(renderOneResult).join('');
+  } else {
+    byId('resultSummary').textContent = `${data.decision ?? 'result'} · ${data.timing?.total_ms ?? '-'} ms`;
+    byId('resultView').innerHTML = renderOneResult(data);
+  }
+}
+
+async function sendRequest() {
+  const status = byId('requestStatus');
+  try {
+    const payload = buildPayload();
+    if (endpoint !== 'shared' && !payload.question) throw new Error('Question cannot be empty.');
+    if (endpoint === 'choice' && payload.options.length < 2) throw new Error('Choice needs at least two options.');
+    if (endpoint === 'shared' && payload.decisions.length < 1) throw new Error('Shared needs at least one decision.');
+    status.textContent = 'Sending...';
+    status.className = 'status';
+    const response = await fetch(`/v1/${endpoint}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    renderResponse(data);
+    status.textContent = 'Done.';
+    await refreshStats();
+  } catch (error) {
+    status.textContent = error.message;
+    status.className = 'status error';
+  }
+}
+
+async function clearRuntimeCache() {
+  const button = byId('clearCache');
+  button.disabled = true;
+  try {
+    const response = await fetch('/v1/cache/clear', { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    byId('requestStatus').textContent = `Cache cleared (${data.backend}). Model remains loaded.`;
+    byId('requestStatus').className = 'status';
+    await refreshStats();
+  } catch (error) {
+    byId('requestStatus').textContent = error.message;
+    byId('requestStatus').className = 'status error';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function refreshHealth() {
+  try {
+    const health = await fetch('/health').then(r => r.json());
+    byId('healthBadge').textContent = `health: ${health.status}`;
+    byId('runtimeSub').textContent = `${health.backend} · ${health.model} · max ${health.max_tokens} tokens`;
+  } catch (_) {
+    byId('healthBadge').textContent = 'health: unavailable';
+  }
+}
+
+async function refreshStats() {
+  try {
+    const [stats, recent] = await Promise.all([
+      fetch('/v1/stats').then(r => r.json()),
+      fetch('/v1/recent').then(r => r.json()),
+    ]);
+    byId('requests').textContent = stats.requests;
+    byId('decisions').textContent = stats.decisions;
+    byId('cacheClears').textContent = stats.cache_clears;
+    byId('p50').textContent = stats.latency_ms.p50 == null ? '-' : `${stats.latency_ms.p50.toFixed(1)} ms`;
+    byId('p95').textContent = stats.latency_ms.p95 == null ? '-' : `${stats.latency_ms.p95.toFixed(1)} ms`;
+    byId('rows').innerHTML = recent.map(x => `
+      <tr>
+        <td>${escapeHtml(new Date(x.timestamp).toLocaleTimeString())}</td>
+        <td>${escapeHtml(x.backend ?? '-')}</td>
+        <td>${escapeHtml(x.mode)}</td>
+        <td>${escapeHtml(x.question)}</td>
+        <td>${escapeHtml(x.decision ?? '-')}</td>
+        <td>${escapeHtml(x.latency_ms == null ? '-' : `${x.latency_ms} ms`)}</td>
+        <td>${escapeHtml(x.cache_hit == null ? '-' : x.cache_hit)}</td>
+      </tr>`).join('');
+  } catch (_) {}
+}
+
+document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => setEndpoint(button.dataset.endpoint)));
+byId('addChoiceOption').addEventListener('click', () => addOption(byId('choiceOptions')));
+byId('addSharedDecision').addEventListener('click', () => addSharedDecision());
+byId('sendRequest').addEventListener('click', sendRequest);
+byId('clearCache').addEventListener('click', clearRuntimeCache);
+document.addEventListener('input', updatePreview);
+document.addEventListener('change', updatePreview);
+
+addOption(byId('choiceOptions'), 'access', 'Account access support.');
+addOption(byId('choiceOptions'), 'billing', 'Billing support.');
+addSharedDecision('Should memory be searched?');
+setEndpoint('noul');
+refreshHealth();
+refreshStats();
+setInterval(refreshStats, 2000);
+</script>
+</body>
+</html>
+"""

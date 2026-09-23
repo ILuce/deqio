@@ -1,0 +1,11 @@
+{
+  "backend": "mlx",
+  "model": "models/semif-qwen3.5-4b-mlx-4bit",
+  "model_revision": "local-vinci00-semif-qwen35-4b-mlx4",
+  "max_tokens": 4096,
+  "mlx_cache_mib": 256,
+  "log": "logs/requests.jsonl",
+  "torch_dtype": "bfloat16",
+  "llama_gguf": "models/llamacpp/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+  "llama_threads": null
+}
