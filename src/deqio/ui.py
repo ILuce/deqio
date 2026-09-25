@@ -4,7 +4,7 @@ DASHBOARD = r"""
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SemIf Local</title>
+<title>Deqio</title>
 <style>
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -21,6 +21,8 @@ h2 { margin: 0 0 16px; font-size: 19px; }
 .sub { opacity: .65; margin-bottom: 24px; }
 .toolbar, .tabs, .row, .option-row, .actions { display: flex; gap: 10px; align-items: center; }
 .toolbar { justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+.runtime-grid { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 10px; align-items: end; }
+.runtime-note { opacity: .65; font-size: 13px; margin-top: 8px; }
 .tabs { margin-bottom: 18px; }
 button, select, input, textarea {
     font: inherit;
@@ -93,7 +95,7 @@ th { opacity: .7; }
 <body>
 <div class="toolbar">
   <div>
-    <h1>SemIf Local</h1>
+    <h1>Deqio</h1>
     <div class="sub" id="runtimeSub">Loading runtime information...</div>
   </div>
   <div class="actions">
@@ -101,6 +103,19 @@ th { opacity: .7; }
     <button id="clearCache" class="danger" type="button">Clear runtime cache</button>
   </div>
 </div>
+
+<section class="panel">
+  <h2>Active model</h2>
+  <div class="runtime-grid">
+    <div class="field" style="margin:0">
+      <label for="modelSelect">Installed model / backend</label>
+      <select id="modelSelect"><option>Loading installed models...</option></select>
+    </div>
+    <button id="activateModel" class="primary" type="button">Activate</button>
+  </div>
+  <div class="runtime-note">Only locally installed profiles are listed. Switching pauses inference requests while the new runtime loads; the public API address stays unchanged.</div>
+  <div id="modelStatus" class="status" style="margin-top:8px"></div>
+</section>
 
 <section class="panel">
   <h2>Playground</h2>
@@ -121,13 +136,16 @@ th { opacity: .7; }
       </div>
       <div class="field">
         <label for="stateInput">Context / state</label>
-        <textarea id="stateInput">The cookie contains sugar, milk chocolate and vanilla.</textarea>
+        <textarea id="stateInput">A patch modified three source files responsible for data validation.
+The patch applied successfully.
+No tests have been run after the changes.
+The project has an existing unit test suite.</textarea>
       </div>
 
       <div id="singleFields">
         <div class="field">
           <label for="questionInput">Question</label>
-          <input id="questionInput" value="Is the cookie sweet?">
+          <input id="questionInput" value="Should tests be run before considering the task complete?">
         </div>
         <div class="field inline-field">
           <label for="modeInput">Mode</label>
@@ -192,7 +210,7 @@ th { opacity: .7; }
     <h2>Recent requests</h2>
     <div style="overflow:auto">
       <table>
-        <thead><tr><th>Time</th><th>Backend</th><th>Mode</th><th>Question</th><th>Decision</th><th>Latency</th><th>Cache</th></tr></thead>
+        <thead><tr><th>Time</th><th>Engine</th><th>Backend</th><th>Mode</th><th>Question</th><th>Decision</th><th>Latency</th><th>Cache</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -202,6 +220,58 @@ th { opacity: .7; }
 <script>
 let endpoint = 'noul';
 let sharedCounter = 0;
+let activeModelKey = '';
+let installedModels = [];
+const endpointInitialized = new Set();
+
+const EXAMPLES = {
+  noul: {
+    stateFormat: 'text',
+    state: `A patch modified three source files responsible for data validation.
+The patch applied successfully.
+No tests have been run after the changes.
+The project has an existing unit test suite.`,
+    question: 'Should tests be run before considering the task complete?',
+  },
+  choice: {
+    stateFormat: 'text',
+    state: `A customer was charged twice for the same subscription renewal.
+The service itself is working and the customer can access the account.
+The issue concerns the duplicate payment only.`,
+    question: 'Which team should handle this request?',
+    options: [
+      { id: 'billing', description: 'Handle payments, refunds, invoices, and duplicate charges.' },
+      { id: 'access', description: 'Handle login and account access problems.' },
+      { id: 'technical', description: 'Handle product defects and service failures.' },
+    ],
+  },
+  shared: {
+    stateFormat: 'text',
+    state: `A patch changed an internal authentication module.
+Unit tests passed.
+Integration tests have not been run yet.
+The change does not modify the public API.
+A rollback commit is available.`,
+    decisions: [
+      {
+        question: 'What should be the next validation action?',
+        options: [
+          { id: 'run_integration_tests', description: 'Run the integration test suite before proceeding.' },
+          { id: 'finish_task', description: 'Finish the task without additional validation.' },
+          { id: 'revert_change', description: 'Immediately revert the change.' },
+        ],
+      },
+      {
+        question: 'How should the change be treated before integration tests run?',
+        options: [
+          { id: 'continue_validation', description: 'Keep the change and continue validation.' },
+          { id: 'ready_for_release', description: 'Treat the change as fully verified and ready for release.' },
+          { id: 'revert_immediately', description: 'Revert the change without further investigation.' },
+        ],
+      },
+    ],
+  },
+};
 
 const byId = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '')
@@ -234,7 +304,7 @@ function readOptions(container) {
   }));
 }
 
-function addSharedDecision(question = 'Is action required?') {
+function addSharedDecision(question = 'Is action required?', initialOptions = null) {
   sharedCounter += 1;
   const card = document.createElement('div');
   card.className = 'shared-card';
@@ -244,8 +314,11 @@ function addSharedDecision(question = 'Is action required?') {
     <div class="field"><label>Question</label><input class="shared-question" value="${escapeHtml(question)}"></div>
     <div class="field"><label>Options</label><div class="shared-options"></div><button type="button" class="add-shared-option">+ Add option</button></div>`;
   const options = card.querySelector('.shared-options');
-  addOption(options, 'yes', 'Yes. The evidence supports the criterion.');
-  addOption(options, 'no', 'No. The evidence does not support the criterion.');
+  const seedOptions = initialOptions || [
+    { id: 'yes', description: 'Yes. The evidence supports the criterion.' },
+    { id: 'no', description: 'No. The evidence does not support the criterion.' },
+  ];
+  seedOptions.forEach(option => addOption(options, option.id, option.description));
   card.querySelector('.add-shared-option').addEventListener('click', () => addOption(options));
   card.querySelector('.remove-decision').addEventListener('click', () => {
     card.remove();
@@ -301,12 +374,34 @@ function updatePreview() {
   }
 }
 
+function loadEndpointExample(next) {
+  const example = EXAMPLES[next];
+  byId('stateFormat').value = example.stateFormat;
+  byId('stateInput').value = example.state;
+
+  if (next === 'noul') {
+    byId('questionInput').value = example.question;
+  } else if (next === 'choice') {
+    byId('questionInput').value = example.question;
+    byId('choiceOptions').replaceChildren();
+    example.options.forEach(option => addOption(byId('choiceOptions'), option.id, option.description));
+  } else if (next === 'shared') {
+    byId('sharedDecisions').replaceChildren();
+    sharedCounter = 0;
+    example.decisions.forEach(decision => addSharedDecision(decision.question, decision.options));
+  }
+}
+
 function setEndpoint(next) {
   endpoint = next;
   document.querySelectorAll('.tab').forEach(button => button.classList.toggle('active', button.dataset.endpoint === next));
   byId('singleFields').classList.toggle('hidden', next === 'shared');
   byId('choiceFields').classList.toggle('hidden', next !== 'choice');
   byId('sharedFields').classList.toggle('hidden', next !== 'shared');
+  if (!endpointInitialized.has(next)) {
+    endpointInitialized.add(next);
+    loadEndpointExample(next);
+  }
   updatePreview();
 }
 
@@ -336,6 +431,76 @@ function renderResponse(data) {
   } else {
     byId('resultSummary').textContent = `${data.decision ?? 'result'} · ${data.timing?.total_ms ?? '-'} ms`;
     byId('resultView').innerHTML = renderOneResult(data);
+  }
+}
+
+
+function modelKey(model) {
+  return `${model.model_id}::${model.backend}`;
+}
+
+async function refreshModels() {
+  const select = byId('modelSelect');
+  const status = byId('modelStatus');
+  try {
+    const data = await fetch('/v1/models/installed').then(async response => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || JSON.stringify(body));
+      return body;
+    });
+    installedModels = data.installed || [];
+    activeModelKey = `${data.active.model_id}::${data.active.backend}`;
+    select.replaceChildren();
+    if (!installedModels.length) {
+      const option = document.createElement('option');
+      option.textContent = 'No installed models detected';
+      option.value = '';
+      select.appendChild(option);
+      select.disabled = true;
+      byId('activateModel').disabled = true;
+      return;
+    }
+    select.disabled = false;
+    installedModels.forEach(model => {
+      const option = document.createElement('option');
+      option.value = modelKey(model);
+      option.textContent = `${model.label} · ${model.backend} · ${model.engine}${model.active ? ' · active' : ''}`;
+      option.selected = option.value === activeModelKey;
+      select.appendChild(option);
+    });
+    byId('activateModel').disabled = select.value === activeModelKey;
+  } catch (error) {
+    status.textContent = `Could not inspect installed models: ${error.message}`;
+    status.className = 'status error';
+  }
+}
+
+async function activateSelectedModel() {
+  const select = byId('modelSelect');
+  const button = byId('activateModel');
+  const status = byId('modelStatus');
+  const selected = installedModels.find(model => modelKey(model) === select.value);
+  if (!selected || select.value === activeModelKey) return;
+
+  button.disabled = true;
+  select.disabled = true;
+  status.textContent = `Switching to ${selected.label} / ${selected.backend}...`;
+  status.className = 'status';
+  try {
+    const response = await fetch('/v1/models/activate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model_id: selected.model_id, backend: selected.backend }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    status.textContent = `Active: ${data.active.model_id} / ${data.active.backend} · loaded in ${data.load_ms.toFixed(1)} ms`;
+    await Promise.all([refreshHealth(), refreshStats(), refreshModels()]);
+  } catch (error) {
+    status.textContent = error.message;
+    status.className = 'status error';
+    select.disabled = false;
+    button.disabled = select.value === activeModelKey;
   }
 }
 
@@ -371,7 +536,9 @@ async function clearRuntimeCache() {
     const response = await fetch('/v1/cache/clear', { method: 'POST' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
-    byId('requestStatus').textContent = `Cache cleared (${data.backend}). Model remains loaded.`;
+    byId('requestStatus').textContent = data.cache_clear_supported === false
+      ? `Cache clearing is not exposed by ${data.engine || data.backend}; model remains loaded.`
+      : `Cache cleared (${data.backend}). Model remains loaded.`;
     byId('requestStatus').className = 'status';
     await refreshStats();
   } catch (error) {
@@ -386,7 +553,7 @@ async function refreshHealth() {
   try {
     const health = await fetch('/health').then(r => r.json());
     byId('healthBadge').textContent = `health: ${health.status}`;
-    byId('runtimeSub').textContent = `${health.backend} · ${health.model} · max ${health.max_tokens} tokens`;
+    byId('runtimeSub').textContent = `${health.engine} · ${health.model_id} · ${health.backend} · ${health.model}`;
   } catch (_) {
     byId('healthBadge').textContent = 'health: unavailable';
   }
@@ -406,6 +573,7 @@ async function refreshStats() {
     byId('rows').innerHTML = recent.map(x => `
       <tr>
         <td>${escapeHtml(new Date(x.timestamp).toLocaleTimeString())}</td>
+        <td>${escapeHtml(x.engine ?? '-')}</td>
         <td>${escapeHtml(x.backend ?? '-')}</td>
         <td>${escapeHtml(x.mode)}</td>
         <td>${escapeHtml(x.question)}</td>
@@ -421,15 +589,15 @@ byId('addChoiceOption').addEventListener('click', () => addOption(byId('choiceOp
 byId('addSharedDecision').addEventListener('click', () => addSharedDecision());
 byId('sendRequest').addEventListener('click', sendRequest);
 byId('clearCache').addEventListener('click', clearRuntimeCache);
+byId('activateModel').addEventListener('click', activateSelectedModel);
+byId('modelSelect').addEventListener('change', () => { byId('activateModel').disabled = byId('modelSelect').value === activeModelKey; });
 document.addEventListener('input', updatePreview);
 document.addEventListener('change', updatePreview);
 
-addOption(byId('choiceOptions'), 'access', 'Account access support.');
-addOption(byId('choiceOptions'), 'billing', 'Billing support.');
-addSharedDecision('Should memory be searched?');
 setEndpoint('noul');
 refreshHealth();
 refreshStats();
+refreshModels();
 setInterval(refreshStats, 2000);
 </script>
 </body>

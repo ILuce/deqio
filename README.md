@@ -1,326 +1,332 @@
-# SemIf Local Server
+# Deqio
 
-Small local HTTP server for [SemIf](https://github.com/TheoLeeCJ/SemIf).
+**Decisions in. Probabilities out.**
 
-The server keeps one SemIf decision model loaded in memory and exposes generation-free semantic decisions over HTTP. It returns option probabilities and logits instead of generating answer text.
+Deqio runs fast typed AI decision models behind one consistent local API and a lightweight browser UI. It supports multiple decision engines and lets you switch between installed models without changing your application code.
 
-## Features
+Public decision endpoints stay the same regardless of the active model:
 
-- `POST /v1/noul` — binary yes/no decisions
-- `POST /v1/choice` — decisions between arbitrary options
-- `POST /v1/shared` — multiple decisions over one shared state
-- `POST /v1/cache/clear` — clear reusable runtime caches without unloading the model
-- serial prefix-cache reuse
-- request latency and probability statistics
-- lightweight browser playground and dashboard
-- JSONL request logs
-- FastAPI/OpenAPI interface
-- MLX, CUDA, and llama.cpp backends
+```text
+POST /v1/noul
+POST /v1/choice
+POST /v1/shared
+```
 
-`POST /v1/decision` is kept as a compatibility alias for `POST /v1/choice`.
+## 1. Installation
 
-## Requirements
+### macOS — Apple Silicon
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/)
-- one of the supported runtimes below
+Deqio supports both **MLX** and **MPS** on Apple Silicon.
 
-| Backend | Platforms | Hardware |
-| --- | --- | --- |
-| `mlx` | macOS Apple Silicon | Apple GPU / unified memory |
-| `cuda` | Linux, Windows | one visible NVIDIA CUDA GPU |
-| `llamacpp` | macOS, Linux, Windows | CPU |
-
-The default `config.json` is configured for the MLX backend on Apple Silicon.
-
-## Clone
+1. Install `uv` if you do not already have it:
 
 ```bash
-git clone https://github.com/ILuce/semif-local
-cd semif-local-server
-uv python install 3.12
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## Configuration
-
-Runtime defaults live in `config.json`:
-
-```json
-{
-  "backend": "mlx",
-  "model": "models/semif-qwen3.5-4b-mlx-4bit",
-  "model_revision": "local-vinci00-semif-qwen35-4b-mlx4",
-  "max_tokens": 4096,
-  "mlx_cache_mib": 256,
-  "log": "logs/requests.jsonl",
-  "torch_dtype": "bfloat16",
-  "llama_gguf": "models/llamacpp/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
-  "llama_threads": null
-}
-```
-
-Relative file paths are resolved relative to `config.json`.
-
-The original environment variables remain available as optional overrides:
-
-- `SEMIF_MODEL`
-- `SEMIF_MODEL_REVISION`
-- `SEMIF_MAX_TOKENS`
-- `SEMIF_MLX_CACHE_MIB`
-- `SEMIF_LOG`
-
-Additional overrides:
-
-- `SEMIF_CONFIG` — alternate JSON configuration file
-- `SEMIF_BACKEND` — `mlx`, `cuda`, or `llamacpp`
-- `SEMIF_TORCH_DTYPE` — `bfloat16`, `float16`, or `float32`
-- `SEMIF_GGUF` — llama.cpp GGUF path
-- `SEMIF_LLAMA_THREADS` — positive CPU thread count
-
-## macOS Apple Silicon — MLX
-
-Install the locked project:
+2. Clone Deqio and enter the project:
 
 ```bash
-uv sync --frozen
+git clone https://github.com/ILuce/deqio.git
+cd deqio
 ```
 
-Download the 4-bit MLX model:
+3. Install the project:
 
 ```bash
-uv run hf download \
-  vinci00/semif-qwen3.5-4b-mlx-4bit \
-  --local-dir models/semif-qwen3.5-4b-mlx-4bit
+uv sync
 ```
 
-Use the default `config.json`:
-
-```json
-{
-  "backend": "mlx",
-  "model": "models/semif-qwen3.5-4b-mlx-4bit",
-  "model_revision": "local-vinci00-semif-qwen35-4b-mlx4",
-  "max_tokens": 4096,
-  "mlx_cache_mib": 256,
-  "log": "logs/requests.jsonl",
-  "torch_dtype": "bfloat16",
-  "llama_gguf": "models/llamacpp/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
-  "llama_threads": null
-}
-```
-
-Run:
+4. Choose a backend and model:
 
 ```bash
-uv run semif-server
+uv run deqio models setup
 ```
 
-## Linux — CUDA
+On a Mac, the installer offers:
 
-Install:
+- `mlx` — recommended for models with native MLX support
+- `mps` — PyTorch on Apple Silicon, required by models such as Decider
+
+5. Start Deqio:
 
 ```bash
-uv sync --frozen
+uv run deqio serve
 ```
 
-A compatible NVIDIA driver is required. SemIf expects exactly one visible CUDA GPU for a scorer process.
+The first start of a model may download its weights.
 
-Set `config.json` to:
+---
 
-```json
-{
-  "backend": "cuda",
-  "model": "Qwen/Qwen3.5-4B",
-  "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
-  "max_tokens": 4096,
-  "mlx_cache_mib": 256,
-  "log": "logs/requests.jsonl",
-  "torch_dtype": "bfloat16",
-  "llama_gguf": "models/llamacpp/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
-  "llama_threads": null
-}
-```
+### Linux — NVIDIA GPU
 
-Then run with one visible GPU:
+Deqio uses the **CUDA** backend on Linux.
+
+1. Make sure the NVIDIA driver is working:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 uv run semif-server
+nvidia-smi
 ```
 
-The model is downloaded by Transformers/Hugging Face on first use unless `model` points to a local Transformers checkpoint.
+2. Install `uv`:
 
-## Windows — CUDA
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-Install from PowerShell:
+3. Clone and install Deqio:
+
+```bash
+git clone https://github.com/ILuce/deqio.git
+cd deqio
+uv sync
+```
+
+4. Choose a CUDA-compatible model:
+
+```bash
+uv run deqio models setup
+```
+
+5. Start Deqio:
+
+```bash
+uv run deqio serve
+```
+
+---
+
+### Windows — NVIDIA GPU
+
+Deqio uses the **CUDA** backend on Windows.
+
+1. Make sure the NVIDIA driver is working in PowerShell:
 
 ```powershell
-uv sync --frozen
+nvidia-smi
 ```
 
-Use the same CUDA `config.json` shown in the Linux section.
-
-Expose one GPU and start the server:
+2. Install `uv`:
 
 ```powershell
-$env:CUDA_VISIBLE_DEVICES="0"
-uv run semif-server
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-A compatible NVIDIA driver is required. The model is downloaded on first use unless a local Transformers checkpoint is configured.
-
-## macOS / Linux / Windows — llama.cpp CPU
-
-Install the llama.cpp extra:
-
-```bash
-uv sync --frozen --extra llamacpp
-```
-
-Download a compatible GGUF:
-
-```bash
-mkdir -p models/llamacpp
-uv run hf download \
-  bartowski/Qwen_Qwen3.5-4B-GGUF \
-  Qwen_Qwen3.5-4B-Q4_K_M.gguf \
-  --local-dir models/llamacpp
-```
-
-On PowerShell, create the directory with:
+3. Clone and install Deqio:
 
 ```powershell
-New-Item -ItemType Directory -Force models/llamacpp
+git clone https://github.com/ILuce/deqio.git
+cd deqio
+uv sync
 ```
 
-Then run the same `uv run hf download ...` command on one line or using PowerShell backticks for line continuation.
+4. Choose a CUDA-compatible model:
 
-Set `config.json` to:
-
-```json
-{
-  "backend": "llamacpp",
-  "model": "Qwen/Qwen3.5-4B",
-  "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
-  "max_tokens": 4096,
-  "mlx_cache_mib": 256,
-  "log": "logs/requests.jsonl",
-  "torch_dtype": "bfloat16",
-  "llama_gguf": "models/llamacpp/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
-  "llama_threads": null
-}
+```powershell
+uv run deqio models setup
 ```
 
-`llama_threads: null` lets SemIf use the visible CPU count. Set a positive integer to cap it.
+5. Start Deqio:
 
-Start:
+```powershell
+uv run deqio serve
+```
+
+---
+
+### Models you already installed
+
+List locally available models:
 
 ```bash
-uv run semif-server
+uv run deqio models installed
 ```
 
-`llama-cpp-python` is an upstream native dependency. On platforms where a compatible wheel is unavailable, a local C/C++ build toolchain may be required during installation.
+Choose another installed model before starting the server:
 
-## Server
+```bash
+uv run deqio models use
+```
 
-Default addresses:
+Show the current selection:
 
-- server: `http://127.0.0.1:8787`
-- OpenAPI: `http://127.0.0.1:8787/docs`
-- playground/dashboard: `http://127.0.0.1:8787/ui`
-- health: `http://127.0.0.1:8787/health`
+```bash
+uv run deqio status
+```
 
-The model is loaded once when the server starts and remains resident.
+## 2. Using Deqio from the UI
 
-## Browser playground
+Start the server:
 
-The `/ui` page can build and send all public decision request types without manually writing JSON:
+```bash
+uv run deqio serve
+```
 
-- `Noul` — context, question, direct/serial mode
-- `Choice` — context, question, dynamic option list, direct/serial mode
-- `Shared` — one context and multiple dynamic decisions/options
-- Text or structured JSON state
-- live generated request JSON
-- probabilities, logits, token count, latency and cache status
-- runtime statistics and recent requests
-- runtime-cache clearing without unloading model weights
+Open:
 
-The cache button clears reusable prefix state and backend allocator/context caches where supported. It does not delete model files or the Hugging Face disk cache.
+```text
+http://127.0.0.1:8787
+```
 
-## API examples
+The browser redirects to the Deqio UI.
 
-Binary decision:
+### Select a model
+
+At the top of the UI, choose one of the models already installed on the machine and click **Activate**. Deqio unloads the previous runtime, loads the selected model, runs a warmup, and keeps the public API on the same address.
+
+### Noul — yes/no decision
+
+Use **Noul** when the result should be a binary decision.
+
+Fill in:
+
+- `State` — the context
+- `Question` — the yes/no question
+
+Click **Send** to see the selected answer, probabilities, latency, token count, and cache information.
+
+### Choice — choose between options
+
+Use **Choice** when the model should select one option from a list.
+
+Fill in:
+
+- `State`
+- `Question`
+- one or more options with an `ID` and description
+
+Add or remove options directly in the UI and click **Send**.
+
+### Shared — several decisions over one state
+
+Use **Shared** when several decisions should be evaluated against the same context.
+
+Enter the shared `State`, add the decisions and their options, then send them together. This is preferable to several separate requests when an engine can reuse the common state efficiently.
+
+### Useful links
+
+```text
+UI:        http://127.0.0.1:8787/ui
+API docs:  http://127.0.0.1:8787/docs
+Health:    http://127.0.0.1:8787/health
+```
+
+Stop the server with `Ctrl+C`.
+
+## 3. Using Deqio as an API
+
+Start Deqio once:
+
+```bash
+uv run deqio serve
+```
+
+Base URL:
+
+```text
+http://127.0.0.1:8787
+```
+
+The UI is not involved when your application calls the API directly.
+
+### Noul
 
 ```bash
 curl -s \
   -X POST http://127.0.0.1:8787/v1/noul \
   -H 'Content-Type: application/json' \
   -d '{
-    "state": "The cookie contains sugar, chocolate and vanilla.",
-    "question": "Is the cookie sweet?"
+    "state": "The patch changed source code and no tests have been run yet.",
+    "question": "Should tests be run before considering the task complete?"
   }'
 ```
 
-Choice decision:
+Typical response:
+
+```json
+{
+  "decision": "yes",
+  "probabilities": {
+    "yes": 0.97,
+    "no": 0.03
+  }
+}
+```
+
+### Choice
 
 ```bash
 curl -s \
   -X POST http://127.0.0.1:8787/v1/choice \
   -H 'Content-Type: application/json' \
   -d '{
-    "state": "The customer cannot access their account.",
+    "state": "A customer was charged twice for the same subscription renewal.",
     "question": "Which team should handle this request?",
     "options": [
-      {"id": "access", "description": "Account access support."},
-      {"id": "billing", "description": "Billing support."}
+      {"id": "billing", "description": "Payments, refunds, invoices, and duplicate charges."},
+      {"id": "access", "description": "Login and account access problems."},
+      {"id": "technical", "description": "Product defects and service failures."}
     ]
   }'
 ```
 
-Clear runtime cache:
+### Shared
 
 ```bash
-curl -s -X POST http://127.0.0.1:8787/v1/cache/clear
+curl -s \
+  -X POST http://127.0.0.1:8787/v1/shared \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "state": "A patch changed an authentication module. Unit tests passed, but integration tests have not been run.",
+    "decisions": [
+      {
+        "id": "validation",
+        "question": "What should happen next?",
+        "options": [
+          {"id": "run_integration_tests", "description": "Run integration tests before proceeding."},
+          {"id": "finish", "description": "Finish without more validation."}
+        ]
+      },
+      {
+        "id": "release",
+        "question": "Is the change ready to release?",
+        "options": [
+          {"id": "yes", "description": "The change is ready to release."},
+          {"id": "no", "description": "More validation is required."}
+        ]
+      }
+    ]
+  }'
 ```
 
-## Development
+### Check and switch the active model through the API
 
-Install development dependencies:
+List installed model profiles:
 
 ```bash
-uv sync --frozen --extra dev
+curl -s http://127.0.0.1:8787/v1/models/installed
 ```
 
-For llama.cpp development:
+Activate an already installed profile:
 
 ```bash
-uv sync --frozen --extra dev --extra llamacpp
+curl -s \
+  -X POST http://127.0.0.1:8787/v1/models/activate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model_id": "decider-0.8b",
+    "backend": "mps"
+  }'
 ```
 
-Validate:
+The decision API URL does not change when the active model changes.
 
-```bash
-uv run python -m compileall -q src tests
-uv run pytest
+For the complete request and response schemas, open:
+
+```text
+http://127.0.0.1:8787/docs
 ```
-
-Repository changes should follow `AGENTS.md`.
-
-## Updating SemIf
-
-SemIf is pinned to an immutable Git revision in `pyproject.toml`.
-
-When intentionally upgrading it:
-
-1. change the `rev` value under `[tool.uv.sources]`;
-2. run `uv lock`;
-3. run the full test suite;
-4. start each backend available on the test machine;
-5. test `noul`, `choice`, `shared`, and cache clearing;
-6. compare representative probabilities and latency;
-7. commit both `pyproject.toml` and `uv.lock`.
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE`.
-
-SemIf and model weights are separate upstream works and remain subject to their own licenses and terms.
+MIT. See [LICENSE](LICENSE).

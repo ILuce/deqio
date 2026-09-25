@@ -1206,8 +1206,8 @@ wheels = [
 ]
 
 [[package]]
-name = "semif-local-server"
-version = "0.2.0"
+name = "deqio"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -1221,9 +1221,6 @@ dev = [
     { name = "httpx" },
     { name = "pytest" },
 ]
-llamacpp = [
-    { name = "semif-phase1", extra = ["llamacpp"] },
-]
 
 [package.metadata]
 requires-dist = [
@@ -1231,11 +1228,10 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "huggingface-hub" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "semif-phase1", extras = ["llamacpp"], marker = "extra == 'llamacpp'", git = "https://github.com/TheoLeeCJ/SemIf.git?rev=1f2dea3e25379f9dfc98cb83c324f00ab5deda37" },
     { name = "semif-phase1", extras = ["mlx"], git = "https://github.com/TheoLeeCJ/SemIf.git?rev=1f2dea3e25379f9dfc98cb83c324f00ab5deda37" },
     { name = "uvicorn", extras = ["standard"] },
 ]
-provides-extras = ["dev", "llamacpp"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "semif-phase1"

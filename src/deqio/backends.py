@@ -24,6 +24,7 @@ class BackendRuntime:
     ) -> None:
         self.settings = settings
         self.name = settings.backend
+        self.engine = "semif"
         self.model = model
         self.tokenizer = tokenizer
         self.metadata = metadata
@@ -34,6 +35,11 @@ class BackendRuntime:
 
     @classmethod
     def load(cls, settings: Settings) -> "BackendRuntime":
+        if settings.engine != "semif":
+            from .systemone_runtime import SystemOneRuntime
+
+            return SystemOneRuntime.load(settings)  # type: ignore[return-value]
+
         if settings.backend == "mlx":
             if platform.system() != "Darwin" or platform.machine() != "arm64":
                 raise RuntimeError("MLX backend requires macOS on Apple Silicon (Darwin arm64)")
@@ -63,7 +69,10 @@ class BackendRuntime:
                 shared_score=mlx_backend.score_shared,
             )
 
-        if settings.backend == "cuda":
+        if settings.backend in {"cuda", "mps"}:
+            if settings.backend == "mps" and (platform.system() != "Darwin" or platform.machine() != "arm64"):
+                raise RuntimeError("MPS backend requires macOS on Apple Silicon (Darwin arm64)")
+
             from semif_phase1.core import load_causal_model
             from semif_phase1.direct import score
             from semif_phase1.serial import SerialPrefixScorer
@@ -72,7 +81,7 @@ class BackendRuntime:
             model, tokenizer, metadata = load_causal_model(
                 settings.model,
                 settings.model_revision,
-                "cuda",
+                settings.backend,
                 settings.torch_dtype,
             )
             return cls(
@@ -83,37 +92,6 @@ class BackendRuntime:
                 direct_score=score,
                 serial_factory=SerialPrefixScorer,
                 shared_score=score_shared,
-            )
-
-        if settings.backend == "llamacpp":
-            if not settings.llama_gguf.is_file():
-                raise RuntimeError(
-                    f"GGUF checkpoint does not exist: {settings.llama_gguf}. "
-                    "Download it before starting the llama.cpp backend."
-                )
-            try:
-                from semif_phase1 import llamacpp_backend
-            except ImportError as error:
-                raise RuntimeError(
-                    "llama.cpp support is not installed. Run: "
-                    "uv sync --frozen --extra llamacpp"
-                ) from error
-
-            model, tokenizer, metadata = llamacpp_backend.load_model(
-                settings.model,
-                settings.model_revision,
-                settings.llama_gguf,
-                threads=settings.llama_threads,
-                context_tokens=settings.max_tokens,
-            )
-            return cls(
-                settings=settings,
-                model=model,
-                tokenizer=tokenizer,
-                metadata=metadata,
-                direct_score=llamacpp_backend.score,
-                serial_factory=llamacpp_backend.SerialPrefixScorer,
-                shared_score=llamacpp_backend.score_shared,
             )
 
         raise RuntimeError(f"Unsupported backend: {settings.backend}")
@@ -139,6 +117,16 @@ class BackendRuntime:
             )
         raise ValueError(f"Unsupported scoring mode: {mode}")
 
+    def score_noul(self, row: dict, mode: str) -> dict:
+        choice_row = {
+            **row,
+            "options": [
+                {"id": "yes", "description": "Yes. The evidence supports the criterion or question."},
+                {"id": "no", "description": "No. The evidence does not support the criterion or question."},
+            ],
+        }
+        return self.score(choice_row, mode)
+
     def score_shared(self, rows: list[dict]) -> tuple[list[dict], dict]:
         return self._shared_score(
             self.model,
@@ -154,6 +142,7 @@ class BackendRuntime:
         gc.collect()
 
         details: dict[str, Any] = {
+            "engine": self.engine,
             "backend": self.name,
             "prefix_cache": "cleared",
             "model_loaded": True,
@@ -181,12 +170,19 @@ class BackendRuntime:
                 allocator_cache_bytes_before=before,
                 allocator_cache_bytes_after=after,
             )
-        elif self.name == "llamacpp":
-            self.model.engine.clear()
-            details.update(context_cache="cleared")
+        elif self.name == "mps":
+            import torch
+
+            before = int(torch.mps.current_allocated_memory()) if hasattr(torch.mps, "current_allocated_memory") else None
+            torch.mps.empty_cache()
+            after = int(torch.mps.current_allocated_memory()) if hasattr(torch.mps, "current_allocated_memory") else None
+            details.update(
+                allocator_cache="cleared",
+                allocator_cache_bytes_before=before,
+                allocator_cache_bytes_after=after,
+            )
 
         return details
 
     def close(self) -> None:
-        if self.name == "llamacpp" and callable(getattr(self.model, "close", None)):
-            self.model.close()
+        return None

@@ -2,30 +2,73 @@
 
 ## Purpose
 
-This repository contains a small local HTTP server around SemIf.
+Deqio is a small multi-engine runtime for typed AI decisions.
 
-Its purpose is to expose fast semantic decisions to other applications through a stable local API while keeping the model resident, observable, and easy to reinstall with `uv`.
+It exposes one stable HTTP API and a lightweight browser UI over independent decision engines while keeping installation reproducible with `uv`.
 
----
+Keep the project small, deterministic, observable, fast, and easy to reinstall.
 
 ## Core principles
 
-1. Keep this repository independent from downstream applications and private integrations.
-2. Keep SemIf as an upstream dependency.
-3. Do not vendor SemIf source code into this repository.
-4. Do not commit model weights.
-5. Do not commit `.venv`.
-6. Prefer simple code over framework abstractions.
-7. Do not introduce infrastructure such as Docker, Redis, Prometheus or Grafana unless explicitly requested.
-8. Preserve backward compatibility of existing HTTP endpoints unless a task explicitly allows breaking changes.
-9. Keep one model instance per server process.
-10. Do not enable multiple Uvicorn workers for inference.
+1. Preserve the public HTTP API unless a task explicitly permits a breaking change.
+2. Keep model/engine-specific behavior behind runtime adapters.
+3. Do not vendor upstream engine source code or model weights.
+4. Do not commit `.venv`, `.model-runtimes`, model weights, local Deqio state, or request logs.
+5. Use `uv` exclusively for Python and dependency management.
+6. Keep one selected decision model resident per server process.
+7. Do not convert classification into autoregressive answer generation.
+8. Do not claim backend support that the upstream runtime does not actually provide.
+9. Keep the browser UI dependency-free: plain HTML, CSS, and JavaScript only.
+10. Treat probability calibration as engine-specific.
 
----
+## Naming
+
+The project, Python package, CLI, logs, and local state use the Deqio name:
+
+```text
+project:      deqio
+package:      deqio
+CLI:          deqio
+console:      [deqio]
+local state:  .deqio/
+```
+
+SemIf remains the name of one supported upstream engine. Do not rename upstream engine names, model IDs, package names, or protocol concepts to Deqio.
+
+## Runtime architecture
+
+The main environment contains Deqio and the native SemIf integration.
+
+Other engines live in isolated environments under:
+
+```text
+.model-runtimes/<runtime-key>/
+```
+
+This isolation is intentional. Independent engines can require conflicting PyTorch, Transformers, MLX, or accelerator versions.
+
+The model catalog is `models.json`.
+
+The active selection is stored in `config.json` as:
+
+```text
+engine
+model_id
+backend
+model
+```
+
+Supported wrapper backend labels are:
+
+```text
+mlx
+mps
+cuda
+```
+
+A catalog profile must exist for every allowed `(model_id, backend)` pair.
 
 ## Package management
-
-This repository uses `uv` exclusively.
 
 Do not use:
 
@@ -45,74 +88,56 @@ uv add
 uv remove
 uv lock
 uv run
+uv venv
+uv pip install --python ...
 ```
 
-Python dependencies must be declared in `pyproject.toml`.
+The public CLI is:
 
-`uv.lock` must be committed.
-
----
+```bash
+uv run deqio serve
+uv run deqio models list
+uv run deqio models installed
+uv run deqio models setup
+uv run deqio models use
+uv run deqio models status
+uv run deqio status
+```
 
 ## Configuration
 
-`config.json` is the checked-in source of runtime defaults.
+Default configuration lives in `config.json`.
 
-The server currently reads:
+Environment overrides use the `DEQIO_` prefix, including:
 
 ```text
-backend
-model
-model_revision
-max_tokens
-mlx_cache_mib
-log
-torch_dtype
-llama_gguf
-llama_threads
+DEQIO_CONFIG
+DEQIO_ENGINE
+DEQIO_MODEL_ID
+DEQIO_BACKEND
+DEQIO_MODEL
+DEQIO_MODEL_REVISION
+DEQIO_MAX_TOKENS
+DEQIO_MLX_CACHE_MIB
+DEQIO_LOG
+DEQIO_TORCH_DTYPE
+DEQIO_RUNTIME_DIR
+DEQIO_MODEL_CATALOG
+DEQIO_SIDECAR_STARTUP_SECONDS
 ```
 
-Keep the default values in `config.json`; do not move them back into Python source.
+Keep project configuration under the `DEQIO_` namespace. `SemIf` remains the name of one upstream engine.
 
-Environment-variable support is override-only and must remain backward compatible for the documented `SEMIF_*` variables.
+## Public HTTP API
 
-Relative filesystem paths from `config.json` must resolve relative to the configuration file, not the caller's working directory.
-
----
-
-## Runtime backends
-
-Supported backend names are:
+Keep these endpoints backward compatible:
 
 ```text
-mlx       macOS Apple Silicon
-cuda      Linux or Windows with one visible NVIDIA CUDA GPU
-llamacpp  CPU backend on macOS, Linux, or Windows
-```
-
-Backend-specific loading, scoring, cache cleanup, and shutdown belong in `src/semif_server/backends.py`.
-
-API handlers must not import MLX, Torch, or llama.cpp backend implementations directly.
-
-All backends must expose the same server semantics:
-
-```text
-direct scoring
-serial prefix reuse
-shared-state scoring
-runtime cache clearing
-```
-
-Do not claim support for a platform/backend combination unless it is supported by the pinned SemIf dependency.
-
----
-
-## Stable HTTP API
-
-The public API currently consists of:
-
-```text
+GET  /
 GET  /health
 GET  /ui
+GET  /v1/models
+GET  /v1/models/installed
 GET  /v1/stats
 GET  /v1/recent
 
@@ -121,290 +146,133 @@ POST /v1/choice
 POST /v1/decision
 POST /v1/shared
 POST /v1/cache/clear
+POST /v1/models/activate
 ```
 
-`/v1/decision` is retained as a compatibility alias for `/v1/choice`.
+`/v1/decision` is a compatibility alias for `/v1/choice`.
 
-`/v1/cache/clear` clears reusable runtime cache state but must not unload the active model or delete model files/disk caches.
+External engines should be normalized to the same response shape. If an engine does not expose raw logits, return an empty `option_logits` object. Never fabricate logits from probabilities and label them as raw logits.
 
-Do not silently change request or response schemas.
+## Model catalog rules
 
-Any intentional schema change must also update:
+`models.json` is the source of truth for selectable models.
 
-```text
-README.md
-UI request builder
-tests
-```
+Every entry needs:
 
----
+- stable local `id`
+- `engine`
+- human-readable label and description
+- upstream source URL
+- explicit compatible backends
+- model identifier/path for each backend
+- isolated runtime install packages when applicable
+
+Do not silently fall back from an unsupported backend to CPU or another backend.
+
+Installed-profile state is local machine state under `.deqio/` and must not be committed. Installation and activation are separate concerns: the live activation endpoint must never install packages or silently download a new runtime. It may only switch to a profile already detected as installed.
+
+Live model switching must keep one resident model at a time. Unload the old runtime before loading the new one, block inference during the transition, persist `config.json` only after the new runtime passes warmup, and attempt to restore the previous runtime on failure.
+
+Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime stacks.
 
 ## Change workflow
 
-All repository modifications must be prepared and reviewed as a Git patch.
-
-Do not perform undocumented direct edits.
-
-For every change:
-
-1. Inspect the current repository state.
-2. Read the relevant source files before modifying them.
-3. Check:
+Before work:
 
 ```bash
 git status --short
 ```
 
-4. Implement only the requested change.
-5. Produce the patch:
+After changes:
+
+```bash
+uv run python -m compileall -q src tests
+uv run pytest
+git diff --check
+git diff
+```
+
+Produce a patch with:
 
 ```bash
 git diff --binary > change.patch
 ```
 
-6. Review the patch:
-
-```bash
-git diff --check
-git diff
-```
-
-7. Run the required validation.
-8. Report:
-
-   * files changed
-   * behavior changed
-   * tests executed
-   * validation result
-   * known limitations
-
-When applying a supplied patch, always validate it first:
+Before applying a supplied patch:
 
 ```bash
 git apply --check change.patch
-```
-
-Only after validation:
-
-```bash
 git apply change.patch
 ```
 
-Never use:
+Do not use `git apply --reject` unless explicitly requested.
 
-```bash
-git apply --reject
-```
-
-unless explicitly requested.
-
-A patch must either apply cleanly or be corrected.
-
----
+Do not use destructive Git commands unless explicitly requested.
 
 ## Validation
 
 Minimum validation after Python changes:
 
 ```bash
-uv sync --frozen --extra dev
 uv run python -m compileall -q src tests
 uv run pytest
 ```
 
-For server changes, also verify:
+Changes to model management must also verify:
 
 ```bash
-curl http://127.0.0.1:8787/health
+uv run deqio models list
+uv run deqio models installed
+uv run deqio status
 ```
 
-Changes affecting decision endpoints must test at least:
+Changes to serving must verify:
 
 ```text
+/health
 /v1/noul
 /v1/choice
 /v1/shared
 ```
 
-Changes affecting runtime caching must test:
+Changes to UI must verify:
 
-```text
-/v1/cache/clear
-```
-
-Changes affecting the web UI must verify that:
-
-1. `/ui` loads successfully.
+1. `/ui` loads.
 2. Noul requests can be submitted.
 3. Choice options can be added and removed.
-4. Shared decisions and their options can be added and removed.
-5. Text and JSON state modes both generate valid requests.
-6. Generated JSON matches the API request.
-7. Server responses are displayed without page reload.
-8. Runtime cache clearing is available and reports success/failure clearly.
-
----
-
-## UI rules
-
-The UI is a developer/debugging interface, not a consumer application.
-
-Keep it:
-
-* lightweight
-* dependency-free
-* responsive
-* readable
-* functional without a build step
-
-Prefer plain:
-
-```text
-HTML
-CSS
-JavaScript
-```
-
-Do not introduce React, Vue, Svelte, npm or another frontend toolchain unless explicitly requested.
-
-The UI should expose enough information to understand model behavior:
-
-* endpoint
-* state and state format
-* question
-* options
-* generated request JSON
-* decision
-* probabilities
-* logits
-* latency
-* cache hit
-* token count
-* active backend
-
-Avoid visual effects or unnecessary animation.
-
----
+4. Shared decisions can be submitted.
+5. generated JSON matches the API request.
+6. responses render without page reload.
+7. active engine/model/backend are visible.
+8. installed model profiles are listed.
+9. switching an installed profile keeps the same public API URL.
 
 ## Logging
 
-Do not log the complete state by default.
+Console logging is part of the developer-facing interface.
 
-Persist:
+Rules:
 
-* timestamp
-* request ID
-* backend
-* endpoint/mode
-* state hash
-* question
-* decision
-* probabilities
-* latency
-* token count
-* cache status
+- identify the public server as `[deqio]`;
+- prefix external runtime output as `[sidecar:<engine>]`;
+- suppress internal sidecar HTTP access-log noise;
+- keep the main Uvicorn access log disabled;
+- log wrapper-owned `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared` requests clearly;
+- print the UI, API docs, and health URLs at startup;
+- describe random sidecar ports as internal inference-only;
+- keep useful model download, loading, accelerator, and runtime diagnostics visible.
 
----
-
-## Cache semantics
-
-The cache-clear operation is runtime hygiene, not model unloading.
-
-It should clear:
-
-* the current serial prefix cache for every backend;
-* MLX inactive allocator cache when using MLX;
-* the CUDA allocator cache when using CUDA;
-* llama.cpp scoring-context memory when using llama.cpp.
-
-The model weights must remain loaded after cache clearing.
-
-Do not delete Hugging Face cache files or local model files from the HTTP cache endpoint.
-
----
+Do not persist the full request state by default.
 
 ## Performance
 
-Performance is part of the API contract.
-
 Avoid changes that:
 
-* reload the model between requests
-* create additional model instances
-* serialize inference unnecessarily beyond backend requirements
-* disable prefix reuse
-* convert classification into text generation
+- reload model weights per request;
+- create duplicate resident models;
+- add text generation to typed decisions;
+- disable native batching/shared-state behavior without reason;
+- merge incompatible engine dependencies into the main environment;
+- put UI rendering or model-selection work in the normal decision request path.
 
-Record latency regressions when modifying inference code.
-
----
-
-## SemIf updates
-
-SemIf is pinned to a Git revision through `pyproject.toml`.
-
-Do not automatically track the upstream `master` branch.
-
-When upgrading SemIf:
-
-1. update the pinned revision;
-2. run:
-
-```bash
-uv lock
-uv sync
-```
-
-3. start the available backends;
-4. test all decision endpoints and runtime-cache clearing;
-5. compare representative probability outputs;
-6. compare latency;
-7. commit the updated `uv.lock`.
-
-Probability changes after an upstream or model update are expected and must be treated as an explicit behavioral change.
-
----
-
-## Git discipline
-
-Before beginning work:
-
-```bash
-git status --short
-```
-
-Do not overwrite unrelated user modifications.
-
-Do not use destructive commands such as:
-
-```text
-git reset --hard
-git clean -fd
-git checkout -- .
-```
-
-unless explicitly requested.
-
-Keep commits focused on one logical change.
-
-Suggested commit prefixes:
-
-```text
-feat:
-fix:
-perf:
-refactor:
-docs:
-test:
-chore:
-```
-
----
-
-## Project scope
-
-This repository should remain a small SemIf serving and inspection layer.
-
-Do not add documentation, source comments, configuration, examples, or tests that name private downstream projects or private integration targets unless explicitly required for a public integration.
-
-Do not push, publish, tag, or create a remote repository unless the user explicitly requests that action.
+External engines should remain resident in a localhost-only child process for the lifetime of the main server.

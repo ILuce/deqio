@@ -19,3 +19,6 @@ dist/
 *.egg-info/
 
 TODO
+.model-runtimes/
+
+.deqio/

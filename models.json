@@ -1,0 +1,388 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "semif-qwen3.5-4b",
+      "engine": "semif",
+      "label": "SemIf / Qwen3.5 4B",
+      "description": "SemIf option-logit readout over Qwen3.5-4B. This is the original runtime supported by Deqio.",
+      "source": "https://github.com/TheoLeeCJ/SemIf",
+      "backends": {
+        "mlx": {
+          "model": "models/semif-qwen3.5-4b-mlx-4bit",
+          "model_revision": "local-vinci00-semif-qwen35-4b-mlx4",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vinci00/semif-qwen3.5-4b-mlx-4bit",
+            "local_dir": "models/semif-qwen3.5-4b-mlx-4bit"
+          }
+        },
+        "cuda": {
+          "model": "Qwen/Qwen3.5-4B",
+          "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+        },
+        "mps": {
+          "model": "Qwen/Qwen3.5-4B",
+          "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+        }
+      }
+    },
+    {
+      "id": "kev-0.8b",
+      "engine": "kev",
+      "label": "Kev 0.8B",
+      "description": "Small Jev-like Qwen3.5 decision model with a TypeSafe-compatible System One server.",
+      "source": "https://github.com/jaredpalmer/kev",
+      "backends": {
+        "mlx": {
+          "model": "jaredpalmer/kev-0.8b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "cuda": {
+          "model": "jaredpalmer/kev-0.8b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "mps": {
+          "model": "jaredpalmer/kev-0.8b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "kev-4b",
+      "engine": "kev",
+      "label": "Kev 4B",
+      "description": "Kev's 4B Qwen3.5 decision checkpoint. A strong general-purpose Kev profile.",
+      "source": "https://github.com/jaredpalmer/kev",
+      "backends": {
+        "mlx": {
+          "model": "jaredpalmer/kev-4b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "cuda": {
+          "model": "jaredpalmer/kev-4b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "mps": {
+          "model": "jaredpalmer/kev-4b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "kev-9b",
+      "engine": "kev",
+      "label": "Kev 9B",
+      "description": "Largest currently catalogued Kev checkpoint.",
+      "source": "https://github.com/jaredpalmer/kev",
+      "backends": {
+        "mlx": {
+          "model": "jaredpalmer/kev-9b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "cuda": {
+          "model": "jaredpalmer/kev-9b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        },
+        "mps": {
+          "model": "jaredpalmer/kev-9b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decider-0.8b",
+      "engine": "decider",
+      "label": "Decider 0.8B",
+      "description": "Compact one-pass typed-decision model based on Qwen3.5-0.8B-Base.",
+      "source": "https://github.com/Mapika/decider",
+      "backends": {
+        "cuda": {
+          "model": "Mapika/decider-0.8b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        },
+        "mps": {
+          "model": "Mapika/decider-0.8b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decider-2b",
+      "engine": "decider",
+      "label": "Decider 2B",
+      "description": "Default Decider checkpoint for routing, classification and typed judgments.",
+      "source": "https://github.com/Mapika/decider",
+      "backends": {
+        "cuda": {
+          "model": "Mapika/decider-2b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        },
+        "mps": {
+          "model": "Mapika/decider-2b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decider-4b",
+      "engine": "decider",
+      "label": "Decider 4B",
+      "description": "Larger dense Decider checkpoint based on Qwen3.5-4B-Base.",
+      "source": "https://github.com/Mapika/decider",
+      "backends": {
+        "cuda": {
+          "model": "Mapika/decider-4b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        },
+        "mps": {
+          "model": "Mapika/decider-4b",
+          "wire_model": "decider",
+          "runtime_key": "decider",
+          "python": "3.12",
+          "packages": [
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+          ]
+        }
+      }
+    },
+    {
+      "id": "laya-english",
+      "engine": "laya",
+      "label": "Laya English 421M",
+      "description": "Small bidirectional System One model for English typed decisions.",
+      "source": "https://github.com/NandhaKishorM/laya",
+      "backends": {
+        "mlx": {
+          "model": "aac6fef/laya-mlx",
+          "wire_model": "aac6fef/laya-mlx",
+          "runtime_key": "laya-mlx",
+          "launcher": "laya_mlx",
+          "python": "3.12",
+          "packages": [
+            "laya-mlx",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.27"
+          ]
+        },
+        "cuda": {
+          "model": "convaiinnovations/laya",
+          "wire_model": "english",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "english",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        },
+        "mps": {
+          "model": "convaiinnovations/laya",
+          "wire_model": "english",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "english",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        }
+      }
+    },
+    {
+      "id": "laya-multilingual",
+      "engine": "laya",
+      "label": "Laya Multilingual 322M",
+      "description": "Laya multilingual checkpoint for 100+ languages.",
+      "source": "https://github.com/NandhaKishorM/laya",
+      "backends": {
+        "mlx": {
+          "model": "aac6fef/laya-multilingual-mlx",
+          "wire_model": "aac6fef/laya-multilingual-mlx",
+          "runtime_key": "laya-mlx",
+          "launcher": "laya_mlx",
+          "python": "3.12",
+          "packages": [
+            "laya-mlx",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.27"
+          ]
+        },
+        "cuda": {
+          "model": "convaiinnovations/laya-multilingual",
+          "wire_model": "multilingual",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "multilingual",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        },
+        "mps": {
+          "model": "convaiinnovations/laya-multilingual",
+          "wire_model": "multilingual",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "multilingual",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        }
+      }
+    },
+    {
+      "id": "laya-typed-decisions",
+      "engine": "laya",
+      "label": "Laya Typed Decisions 421M",
+      "description": "Laya checkpoint fine-tuned specifically for typed-decision workflows.",
+      "source": "https://github.com/NandhaKishorM/laya",
+      "backends": {
+        "mlx": {
+          "model": "aac6fef/laya-typed-decisions-mlx",
+          "wire_model": "aac6fef/laya-typed-decisions-mlx",
+          "runtime_key": "laya-mlx",
+          "launcher": "laya_mlx",
+          "python": "3.12",
+          "packages": [
+            "laya-mlx",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.27"
+          ]
+        },
+        "cuda": {
+          "model": "convaiinnovations/laya-typed-decisions",
+          "wire_model": "typed-decisions",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "typed-decisions",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        },
+        "mps": {
+          "model": "convaiinnovations/laya-typed-decisions",
+          "wire_model": "typed-decisions",
+          "runtime_key": "laya-torch",
+          "launcher": "laya",
+          "laya_model": "typed-decisions",
+          "python": "3.12",
+          "packages": [
+            "laya @ git+https://github.com/NandhaKishorM/laya.git",
+            "fastapi>=0.110",
+            "uvicorn[standard]>=0.28"
+          ]
+        }
+      }
+    },
+    {
+      "id": "von",
+      "engine": "von",
+      "label": "Von",
+      "description": "ModernBERT-based non-autoregressive System One decision engine with a Jev-compatible server.",
+      "source": "https://github.com/wfzyx/von",
+      "backends": {
+        "cuda": {
+          "model": "von",
+          "wire_model": "von-1.2.0",
+          "runtime_key": "von",
+          "python": "3.12",
+          "packages": [
+            "von-sdk @ git+https://github.com/wfzyx/von.git"
+          ]
+        },
+        "mps": {
+          "model": "von",
+          "wire_model": "von-1.2.0",
+          "runtime_key": "von",
+          "python": "3.12",
+          "packages": [
+            "von-sdk @ git+https://github.com/wfzyx/von.git"
+          ]
+        }
+      }
+    }
+  ]
+}
