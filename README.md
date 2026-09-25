@@ -12,6 +12,22 @@ POST /v1/choice
 POST /v1/shared
 ```
 
+### Supported models
+
+| Model | MLX | MPS | CUDA |
+| --- | :---: | :---: | :---: |
+| SemIf / Qwen3.5 4B | ✓ | ✓ | ✓ |
+| Kev 0.8B | ✓ | ✓ | ✓ |
+| Kev 4B | ✓ | ✓ | ✓ |
+| Kev 9B | ✓ | ✓ | ✓ |
+| Decider 0.8B | — | ✓ | ✓ |
+| Decider 2B | — | ✓ | ✓ |
+| Decider 4B | — | ✓ | ✓ |
+| Laya English 421M | ✓ | ✓ | ✓ |
+| Laya Multilingual 322M | ✓ | ✓ | ✓ |
+| Laya Typed Decisions 421M | ✓ | ✓ | ✓ |
+| Von | — | ✓ | ✓ |
+
 ## 1. Installation
 
 ### macOS — Apple Silicon
