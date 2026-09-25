@@ -1,0 +1,4315 @@
+{
+  "schema_version": 1,
+  "name": "deqio-basic-150",
+  "description": "Extended editable benchmark: 50 Noul requests, 50 Choice requests and 50 Shared requests. Cases are original and cover agentic execution, routing, policy checks, answer adequacy, severity, intent classification, enum extraction, uncertainty, multi-hop reasoning, distractors, numeric/date rules, contract validation and shared-state decisions.",
+  "cases": [
+    {
+      "id": "noul-01",
+      "type": "noul",
+      "state": "A deployment completed. Unit tests, integration tests, health checks, and the database migration all passed. An optional telemetry upload failed, but policy marks telemetry as non-blocking.",
+      "question": "Are all blocking release requirements satisfied?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-02",
+      "type": "noul",
+      "state": "A task produced every requested file, but final verification crashed before checking two mandatory acceptance criteria. No later verification exists.",
+      "question": "Is there sufficient evidence that the task completed successfully?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-03",
+      "type": "noul",
+      "state": "The current patch changed authentication logic. Unit tests passed. The only integration-test report is from before the patch was applied.",
+      "question": "Has the changed authentication logic been validated by current integration-test evidence?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-04",
+      "type": "noul",
+      "state": "A build artifact hash matches the signed manifest for the exact approved revision, and signature verification succeeded.",
+      "question": "Does the artifact pass the stated integrity checks?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-05",
+      "type": "noul",
+      "state": "A package checksum matches the published checksum, but its detached signature fails. Policy requires both checks.",
+      "question": "Is the package trusted under the policy?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-06",
+      "type": "noul",
+      "state": "A planner defined four mandatory verification criteria. Evidence covers criteria 1, 2, and 4 only.",
+      "question": "Does the verification evidence exactly cover every mandatory criterion?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-07",
+      "type": "noul",
+      "state": "The primary inference engine timed out. A configured fallback completed the same request, and its output passed schema and deterministic post-checks.",
+      "question": "Can the request be treated as successfully completed?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-08",
+      "type": "noul",
+      "state": "The primary operation failed three times. Policy allows at most three attempts total and no fallback exists.",
+      "question": "Is another retry permitted?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-09",
+      "type": "noul",
+      "state": "A command returned exit code 1 during a negative test whose expected outcome was rejection. The harness asserted rejection and marked PASS.",
+      "question": "Did the negative test succeed?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-10",
+      "type": "noul",
+      "state": "A command returned exit code 0, but the required output file was never created and no equivalent artifact exists.",
+      "question": "Did the operation satisfy its output requirement?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-11",
+      "type": "noul",
+      "state": "Three replicas are configured. Read-only traffic requires quorum of two healthy replicas. Exactly two are healthy.",
+      "question": "Can the service serve read-only traffic under its quorum rule?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-12",
+      "type": "noul",
+      "state": "Release requires security approval AND either a passing full regression suite OR an approved emergency waiver. Approval exists, regression failed, approved waiver exists.",
+      "question": "Does the release satisfy the gate?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-13",
+      "type": "noul",
+      "state": "Release requires security approval AND either a passing regression suite OR an approved emergency waiver. Approval exists, regression failed, waiver is pending.",
+      "question": "Does the release satisfy the gate?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-14",
+      "type": "noul",
+      "state": "An older config snapshot shows feature X enabled. The current signed authoritative config shows it disabled.",
+      "question": "Is feature X currently enabled?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-15",
+      "type": "noul",
+      "state": "Maintenance window is 2026-09-25 22:00–23:00 UTC. Current time is 2026-09-25 22:37 UTC.",
+      "question": "Is the current time inside the maintenance window?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-16",
+      "type": "noul",
+      "state": "Policy requires a verified backup no older than 24 hours. Latest backup restored successfully but is 31 hours old.",
+      "question": "Does the backup satisfy the freshness policy?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-17",
+      "type": "noul",
+      "state": "A tool has a retry budget of five attempts. Three attempts failed and no attempt is running.",
+      "question": "Does the retry budget still allow another attempt?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-18",
+      "type": "noul",
+      "state": "A cached result used model revision r17 and config hash abc. Current request uses the same revision and hash. Cache keys on both.",
+      "question": "Is the cached result eligible for reuse?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-19",
+      "type": "noul",
+      "state": "A cached result used revision r17 and config hash abc. Current request uses r17 and hash def. Both must match.",
+      "question": "Is the cached result eligible for reuse?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-20",
+      "type": "noul",
+      "state": "Workspace policy rejects any path whose parent chain contains a symbolic link. The requested file resolves correctly, but one parent is a symlink.",
+      "question": "Is the path acceptable under policy?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-21",
+      "type": "noul",
+      "state": "An output path is inside the allowed workspace after normalization, contains no symlinked parent, and remains in-root after resolution.",
+      "question": "Does the path satisfy workspace constraints?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-22",
+      "type": "noul",
+      "state": "A JSON document contains every required key plus an additional debug key. Schema allows additional properties.",
+      "question": "Is the document valid?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-23",
+      "type": "noul",
+      "state": "A JSON document contains every required key plus an additional debug key. Schema sets additionalProperties=false.",
+      "question": "Is the document valid?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-24",
+      "type": "noul",
+      "state": "A file exists but is zero bytes. Acceptance requires a non-empty UTF-8 document.",
+      "question": "Does the file satisfy the criterion?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-25",
+      "type": "noul",
+      "state": "The latest authoritative validation run passed all checks. An older superseded log contains failures.",
+      "question": "Is the current validated state passing?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-26",
+      "type": "noul",
+      "state": "A critical vulnerability exists in a transitive package and the vulnerable code is reachable through a used feature.",
+      "question": "Is the vulnerability relevant to the deployed application?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-27",
+      "type": "noul",
+      "state": "A vulnerability exists only in an optional plugin that is not installed and cannot load at runtime. Policy blocks only reachable installed vulnerabilities.",
+      "question": "Does this finding block the production image?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-28",
+      "type": "noul",
+      "state": "The task is a local transformation. All inputs are present and the specification forbids network access.",
+      "question": "Is network access required?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-29",
+      "type": "noul",
+      "state": "Validation requires a public schema that is missing from both repository and cache.",
+      "question": "Is external retrieval required before validation can complete?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-30",
+      "type": "noul",
+      "state": "A model accepts 8192 input tokens. State is 7900 tokens and required schema/instructions add about 500.",
+      "question": "Does the full request fit the input limit?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-31",
+      "type": "noul",
+      "state": "A threshold accepts x where 0.40 <= x <= 0.60. Measured x is exactly 0.60.",
+      "question": "Does the value satisfy the threshold?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-32",
+      "type": "noul",
+      "state": "An action is allowed only when confidence is strictly greater than 0.50. Confidence is exactly 0.50.",
+      "question": "Is the action allowed?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-33",
+      "type": "noul",
+      "state": "Instruction says: unless any mandatory test fails, proceed to packaging. Every mandatory test passed; one optional benchmark regressed.",
+      "question": "Should packaging proceed?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-34",
+      "type": "noul",
+      "state": "Status says no unresolved blockers remain. The only blocker was closed after a verified fix and no new blocker exists.",
+      "question": "Are there any unresolved blockers?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-35",
+      "type": "noul",
+      "state": "Access was approved at 09:00 and explicitly revoked at 11:00. Operation would occur at 11:30.",
+      "question": "Is the earlier approval still valid?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-36",
+      "type": "noul",
+      "state": "Release artifact was built from revision 9d1. Approved revision is 9d2. All tests on 9d1 passed.",
+      "question": "Is the artifact built from the approved revision?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-37",
+      "type": "noul",
+      "state": "A macOS-specific filesystem fix was validated only on Linux, while release criteria explicitly require macOS validation.",
+      "question": "Has the release criterion been satisfied?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-38",
+      "type": "noul",
+      "state": "A change claims macOS, Linux, and Windows support. Required smoke tests passed on all three for the same revision.",
+      "question": "Has the cross-platform smoke requirement been satisfied?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-39",
+      "type": "noul",
+      "state": "First inference timed out, second returned malformed JSON, third configured fallback returned valid output passing deterministic validation.",
+      "question": "Did the bounded fallback sequence produce an acceptable result?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-40",
+      "type": "noul",
+      "state": "Fallback confidence is lower than primary target, but every deterministic acceptance criterion passes and policy permits any compliant fallback.",
+      "question": "Can the fallback result be accepted?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-41",
+      "type": "noul",
+      "state": "A model reports 0.99 confidence that a file exists. A direct filesystem check after inference says the path does not exist.",
+      "question": "Should the system treat the file as existing?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-42",
+      "type": "noul",
+      "state": "Acceptance criteria are create index.html, include a title, and include one working relative stylesheet link. Evidence directly verifies all three.",
+      "question": "Does the evidence fully cover the acceptance criteria?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-43",
+      "type": "noul",
+      "state": "Deployment requires error rate below 1% for 15 consecutive minutes. Measurements stayed below 1% for exactly 15 consecutive minutes.",
+      "question": "Has the stability-window requirement been met?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-44",
+      "type": "noul",
+      "state": "Deployment requires error rate below 1% for 15 consecutive minutes. In the last 15 minutes one reading was 1.2%.",
+      "question": "Has the stability-window requirement been met?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-45",
+      "type": "noul",
+      "state": "An answer explains a likely coding fix but provides none of the requested patch, commands, or modified files. Rubric requires an actionable implementation artifact.",
+      "question": "Is the answer adequate under the rubric?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-46",
+      "type": "noul",
+      "state": "An answer identifies the root cause, cites observed evidence, and gives the exact minimal command sequence requested without unsupported claims.",
+      "question": "Is the answer adequate under the rubric?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-47",
+      "type": "noul",
+      "state": "A request says do not contact external services. Proposed plan queries a public API even though all required data is local.",
+      "question": "Does the plan comply with the request constraints?",
+      "expected": "no"
+    },
+    {
+      "id": "noul-48",
+      "type": "noul",
+      "state": "Migration requires at least 20 GB free space. Filesystem reports 21.4 GB available and documented max temporary usage is 18 GB.",
+      "question": "Is the free-space prerequisite satisfied?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-49",
+      "type": "noul",
+      "state": "A scheduler may run a job only when dependency A succeeded and dependency B is succeeded or skipped-by-policy. A succeeded; B is skipped-by-policy.",
+      "question": "May the scheduler run the job?",
+      "expected": "yes"
+    },
+    {
+      "id": "noul-50",
+      "type": "noul",
+      "state": "A task is marked complete, but one mandatory output was created outside the declared project root. Policy requires every deliverable in-root.",
+      "question": "Is the task complete under the acceptance policy?",
+      "expected": "no"
+    },
+    {
+      "id": "choice-01",
+      "type": "choice",
+      "state": "A customer reports two charges with the same merchant, amount, subscription ID, and billing period. They can still sign in and the product works.",
+      "question": "Which team should own the request?",
+      "options": [
+        {
+          "id": "billing",
+          "description": "Payments, refunds, invoices, duplicate charges."
+        },
+        {
+          "id": "access",
+          "description": "Authentication and account access."
+        },
+        {
+          "id": "technical",
+          "description": "Product defects and outages."
+        },
+        {
+          "id": "unclear",
+          "description": "Evidence does not distinguish a category."
+        }
+      ],
+      "expected": "billing"
+    },
+    {
+      "id": "choice-02",
+      "type": "choice",
+      "state": "A user says login fails only after entering a correct password because their second-factor device was lost. Billing and application features are otherwise normal.",
+      "question": "Which team should own the request?",
+      "options": [
+        {
+          "id": "billing",
+          "description": "Payments and invoices."
+        },
+        {
+          "id": "access",
+          "description": "Login, MFA, password, identity."
+        },
+        {
+          "id": "technical",
+          "description": "General application defects."
+        }
+      ],
+      "expected": "access"
+    },
+    {
+      "id": "choice-03",
+      "type": "choice",
+      "state": "Checkout requests return HTTP 503 for every customer in three regions. Authentication works and no incorrect charges have been recorded.",
+      "question": "Which team should own the incident?",
+      "options": [
+        {
+          "id": "billing",
+          "description": "Incorrect or disputed financial transactions."
+        },
+        {
+          "id": "access",
+          "description": "Identity and login."
+        },
+        {
+          "id": "technical",
+          "description": "Service availability and application failures."
+        }
+      ],
+      "expected": "technical"
+    },
+    {
+      "id": "choice-04",
+      "type": "choice",
+      "state": "An API key was committed to a public repository and is still active. Repository history can be rewritten later.",
+      "question": "What should happen first?",
+      "options": [
+        {
+          "id": "revoke_rotate",
+          "description": "Revoke the exposed key and issue a replacement."
+        },
+        {
+          "id": "rewrite_history",
+          "description": "Rewrite repository history before touching the key."
+        },
+        {
+          "id": "document",
+          "description": "Write an incident note first."
+        },
+        {
+          "id": "wait",
+          "description": "Wait for evidence of misuse."
+        }
+      ],
+      "expected": "revoke_rotate"
+    },
+    {
+      "id": "choice-05",
+      "type": "choice",
+      "state": "A release candidate passed unit tests and static checks but failed an integration test covering the only payment workflow. There is no waiver.",
+      "question": "What release state best fits?",
+      "options": [
+        {
+          "id": "ready",
+          "description": "All blocking checks are satisfied."
+        },
+        {
+          "id": "hold",
+          "description": "A blocking validation failed."
+        },
+        {
+          "id": "abandon",
+          "description": "The release can never proceed."
+        }
+      ],
+      "expected": "hold"
+    },
+    {
+      "id": "choice-06",
+      "type": "choice",
+      "state": "Monitoring shows normal latency and CPU, but 18% of write requests fail while reads remain healthy.",
+      "question": "How should service health be classified?",
+      "options": [
+        {
+          "id": "healthy",
+          "description": "No meaningful impairment."
+        },
+        {
+          "id": "degraded",
+          "description": "Service remains available but an important capability is impaired."
+        },
+        {
+          "id": "outage",
+          "description": "The entire service is unavailable."
+        }
+      ],
+      "expected": "degraded"
+    },
+    {
+      "id": "choice-07",
+      "type": "choice",
+      "state": "The production database is unreachable for all application instances and no customer can complete the core workflow.",
+      "question": "What incident severity is appropriate?",
+      "options": [
+        {
+          "id": "sev3",
+          "description": "Minor issue with workaround."
+        },
+        {
+          "id": "sev2",
+          "description": "Major degradation with partial functionality."
+        },
+        {
+          "id": "sev1",
+          "description": "Core production workflow unavailable to all users."
+        }
+      ],
+      "expected": "sev1"
+    },
+    {
+      "id": "choice-08",
+      "type": "choice",
+      "state": "A documentation typo was fixed. No executable file, API, dependency, configuration, or generated artifact changed.",
+      "question": "Which change category fits best?",
+      "options": [
+        {
+          "id": "docs",
+          "description": "Documentation-only."
+        },
+        {
+          "id": "runtime",
+          "description": "Executable behavior changed."
+        },
+        {
+          "id": "security",
+          "description": "Security mitigation."
+        },
+        {
+          "id": "breaking",
+          "description": "Incompatible contract change."
+        }
+      ],
+      "expected": "docs"
+    },
+    {
+      "id": "choice-09",
+      "type": "choice",
+      "state": "A function keeps its name and arguments but now interprets timeout=0 as infinite instead of fail immediately. Existing callers may observe different behavior.",
+      "question": "Which change category fits best?",
+      "options": [
+        {
+          "id": "docs",
+          "description": "Documentation only."
+        },
+        {
+          "id": "behavioral",
+          "description": "Runtime semantics changed without signature change."
+        },
+        {
+          "id": "no_change",
+          "description": "No observable change."
+        },
+        {
+          "id": "security_only",
+          "description": "Pure security metadata change."
+        }
+      ],
+      "expected": "behavioral"
+    },
+    {
+      "id": "choice-10",
+      "type": "choice",
+      "state": "A task created the requested files, but final verification did not run because the verifier crashed. The files have not been independently checked.",
+      "question": "What should the orchestrator do next?",
+      "options": [
+        {
+          "id": "verify",
+          "description": "Run or recover verification before declaring completion."
+        },
+        {
+          "id": "finish",
+          "description": "Declare success based only on file existence."
+        },
+        {
+          "id": "delete",
+          "description": "Delete outputs immediately."
+        },
+        {
+          "id": "restart_from_zero",
+          "description": "Discard all work before investigating."
+        }
+      ],
+      "expected": "verify"
+    },
+    {
+      "id": "choice-11",
+      "type": "choice",
+      "state": "A planner produced a valid plan. Execution has not started. All prerequisites are present and no blocker exists.",
+      "question": "What lifecycle state best fits?",
+      "options": [
+        {
+          "id": "planned",
+          "description": "Plan exists; execution has not started."
+        },
+        {
+          "id": "executing",
+          "description": "Actions are currently being performed."
+        },
+        {
+          "id": "verifying",
+          "description": "Outputs are being checked."
+        },
+        {
+          "id": "complete",
+          "description": "All acceptance criteria passed."
+        }
+      ],
+      "expected": "planned"
+    },
+    {
+      "id": "choice-12",
+      "type": "choice",
+      "state": "Execution completed and produced outputs. The system is currently checking acceptance criteria and hashes.",
+      "question": "What lifecycle state best fits?",
+      "options": [
+        {
+          "id": "planned",
+          "description": "Only planning is complete."
+        },
+        {
+          "id": "executing",
+          "description": "Actions are still running."
+        },
+        {
+          "id": "verifying",
+          "description": "Outputs exist and are being validated."
+        },
+        {
+          "id": "complete",
+          "description": "Verification already passed."
+        }
+      ],
+      "expected": "verifying"
+    },
+    {
+      "id": "choice-13",
+      "type": "choice",
+      "state": "A file lookup failed because the stored path contains '..' segments and a symlinked parent. Security requires canonical in-root paths with no symlinked parent.",
+      "question": "What is the correct next action?",
+      "options": [
+        {
+          "id": "canonicalize_validate",
+          "description": "Resolve and validate the canonical path against workspace rules."
+        },
+        {
+          "id": "disable_checks",
+          "description": "Bypass path validation."
+        },
+        {
+          "id": "retry_same_path",
+          "description": "Retry the identical unchecked path."
+        },
+        {
+          "id": "mark_complete",
+          "description": "Assume the file is correct."
+        }
+      ],
+      "expected": "canonicalize_validate"
+    },
+    {
+      "id": "choice-14",
+      "type": "choice",
+      "state": "A model output fails JSON schema because one required enum value is misspelled. One bounded correction attempt remains.",
+      "question": "What should happen next?",
+      "options": [
+        {
+          "id": "correct_once",
+          "description": "Use the remaining bounded correction attempt."
+        },
+        {
+          "id": "accept_raw",
+          "description": "Accept malformed output."
+        },
+        {
+          "id": "infinite_retry",
+          "description": "Retry until it works."
+        },
+        {
+          "id": "erase_state",
+          "description": "Delete task state."
+        }
+      ],
+      "expected": "correct_once"
+    },
+    {
+      "id": "choice-15",
+      "type": "choice",
+      "state": "The correction budget is exhausted and structured output remains invalid.",
+      "question": "What result should the runtime return?",
+      "options": [
+        {
+          "id": "structured_failure",
+          "description": "Return a controlled failure with diagnostic information."
+        },
+        {
+          "id": "pretend_success",
+          "description": "Invent a valid answer."
+        },
+        {
+          "id": "loop_forever",
+          "description": "Continue correcting without bound."
+        }
+      ],
+      "expected": "structured_failure"
+    },
+    {
+      "id": "choice-16",
+      "type": "choice",
+      "state": "A deterministic filesystem check contradicts a model's high-confidence claim that an artifact exists.",
+      "question": "Which evidence should determine the state?",
+      "options": [
+        {
+          "id": "filesystem",
+          "description": "Use the direct deterministic check."
+        },
+        {
+          "id": "model",
+          "description": "Use the model claim because confidence is high."
+        },
+        {
+          "id": "average",
+          "description": "Average a boolean filesystem result with model confidence."
+        }
+      ],
+      "expected": "filesystem"
+    },
+    {
+      "id": "choice-17",
+      "type": "choice",
+      "state": "Three candidate actions exist. A is fast but violates a mandatory constraint. B is slower and satisfies every constraint. C has unknown compatibility and no validation evidence.",
+      "question": "Which action should be selected?",
+      "options": [
+        {
+          "id": "a",
+          "description": "Fast but violates a mandatory constraint."
+        },
+        {
+          "id": "b",
+          "description": "Slower but fully compliant."
+        },
+        {
+          "id": "c",
+          "description": "Unvalidated compatibility."
+        }
+      ],
+      "expected": "b"
+    },
+    {
+      "id": "choice-18",
+      "type": "choice",
+      "state": "A backup is 30 hours old; policy requires <=24 hours. A new backup can be created now and restore verification is available.",
+      "question": "What should happen next?",
+      "options": [
+        {
+          "id": "create_verify_backup",
+          "description": "Create a fresh backup and verify restore."
+        },
+        {
+          "id": "use_old_backup",
+          "description": "Proceed with the stale backup."
+        },
+        {
+          "id": "disable_policy",
+          "description": "Ignore the freshness requirement."
+        }
+      ],
+      "expected": "create_verify_backup"
+    },
+    {
+      "id": "choice-19",
+      "type": "choice",
+      "state": "A request says: I was charged correctly, but please send another copy of invoice 4812 to accounting.",
+      "question": "What is the user's intent?",
+      "options": [
+        {
+          "id": "refund",
+          "description": "Reverse a payment."
+        },
+        {
+          "id": "invoice_copy",
+          "description": "Obtain a copy of an existing invoice."
+        },
+        {
+          "id": "charge_dispute",
+          "description": "Dispute a charge."
+        },
+        {
+          "id": "access",
+          "description": "Account login issue."
+        }
+      ],
+      "expected": "invoice_copy"
+    },
+    {
+      "id": "choice-20",
+      "type": "choice",
+      "state": "A transfer shows completed in the app, but the recipient says nothing arrived. It is unknown whether the recipient checked the correct account.",
+      "question": "Which routing label is justified?",
+      "options": [
+        {
+          "id": "transfer_missing",
+          "description": "Evidence establishes transfer failed to arrive."
+        },
+        {
+          "id": "recipient_error",
+          "description": "Evidence establishes recipient error."
+        },
+        {
+          "id": "needs_investigation",
+          "description": "Evidence is insufficient to assign either cause."
+        }
+      ],
+      "expected": "needs_investigation"
+    },
+    {
+      "id": "choice-21",
+      "type": "choice",
+      "state": "Policy: P0 if all customers are blocked from the core workflow; P1 if a major subset is blocked; P2 if a workaround exists. Incident: 40% cannot check out; no workaround.",
+      "question": "Which priority applies?",
+      "options": [
+        {
+          "id": "p0",
+          "description": "All customers blocked."
+        },
+        {
+          "id": "p1",
+          "description": "Major subset blocked, no workaround."
+        },
+        {
+          "id": "p2",
+          "description": "Workaround exists."
+        }
+      ],
+      "expected": "p1"
+    },
+    {
+      "id": "choice-22",
+      "type": "choice",
+      "state": "Policy escalates after two consecutive automated retries fail for the same transient error. First and second attempts both timed out.",
+      "question": "What should happen now?",
+      "options": [
+        {
+          "id": "escalate",
+          "description": "Escalate after the second consecutive failure."
+        },
+        {
+          "id": "retry_silently",
+          "description": "Continue without escalation."
+        },
+        {
+          "id": "mark_success",
+          "description": "Treat timeout as success."
+        }
+      ],
+      "expected": "escalate"
+    },
+    {
+      "id": "choice-23",
+      "type": "choice",
+      "state": "The latest run failed because an external dependency returned 429. Retry-After is 30 seconds and retry budget has two attempts left.",
+      "question": "What is the best next action?",
+      "options": [
+        {
+          "id": "wait_retry",
+          "description": "Respect Retry-After, then retry within budget."
+        },
+        {
+          "id": "immediate_retry_loop",
+          "description": "Retry continuously without delay."
+        },
+        {
+          "id": "permanent_failure",
+          "description": "Treat one rate limit as permanent."
+        }
+      ],
+      "expected": "wait_retry"
+    },
+    {
+      "id": "choice-24",
+      "type": "choice",
+      "state": "A patch changes a parser. Existing tests cover happy paths, but the production bug involves malformed input and there is no regression test for it.",
+      "question": "What validation should be added first?",
+      "options": [
+        {
+          "id": "regression_test",
+          "description": "Add a focused test reproducing the malformed-input bug."
+        },
+        {
+          "id": "benchmark_only",
+          "description": "Run only a speed benchmark."
+        },
+        {
+          "id": "docs_only",
+          "description": "Update documentation without testing."
+        }
+      ],
+      "expected": "regression_test"
+    },
+    {
+      "id": "choice-25",
+      "type": "choice",
+      "state": "An answer says probably restart the service but does not address the supplied error, cite evidence, or provide the requested commands.",
+      "question": "How should answer adequacy be classified?",
+      "options": [
+        {
+          "id": "adequate",
+          "description": "Complete, supported, actionable."
+        },
+        {
+          "id": "partial",
+          "description": "Some relevant direction but materially incomplete."
+        },
+        {
+          "id": "irrelevant",
+          "description": "Unrelated to the task."
+        }
+      ],
+      "expected": "partial"
+    },
+    {
+      "id": "choice-26",
+      "type": "choice",
+      "state": "An answer explains a connection error, points to the exact mismatched host in supplied config, and gives the requested one-line correction plus verification command.",
+      "question": "How should answer adequacy be classified?",
+      "options": [
+        {
+          "id": "adequate",
+          "description": "Complete, supported, actionable."
+        },
+        {
+          "id": "partial",
+          "description": "Material pieces missing."
+        },
+        {
+          "id": "irrelevant",
+          "description": "Unrelated."
+        }
+      ],
+      "expected": "adequate"
+    },
+    {
+      "id": "choice-27",
+      "type": "choice",
+      "state": "The message says: I changed my phone number and now the SMS code goes to the old number.",
+      "question": "Which intent label fits?",
+      "options": [
+        {
+          "id": "card_payment_wrong_exchange_rate",
+          "description": "Exchange-rate dispute."
+        },
+        {
+          "id": "cash_withdrawal",
+          "description": "ATM issue."
+        },
+        {
+          "id": "change_personal_details",
+          "description": "Updating contact details affects access."
+        },
+        {
+          "id": "cash_deposit",
+          "description": "Cash deposit."
+        }
+      ],
+      "expected": "change_personal_details"
+    },
+    {
+      "id": "choice-28",
+      "type": "choice",
+      "state": "The message says: My card was declined at a store, but online purchases still work and the card is not expired.",
+      "question": "Which intent label fits best?",
+      "options": [
+        {
+          "id": "cash_withdrawal",
+          "description": "ATM cash issue."
+        },
+        {
+          "id": "card_payment_wrong_exchange_rate",
+          "description": "Exchange-rate issue."
+        },
+        {
+          "id": "card_payment_fee_charged",
+          "description": "Fee issue."
+        },
+        {
+          "id": "card_payment_not_recognised",
+          "description": "Unknown transaction."
+        },
+        {
+          "id": "card_payment_wrong_status",
+          "description": "Card payment authorization/status problem."
+        }
+      ],
+      "expected": "card_payment_wrong_status"
+    },
+    {
+      "id": "choice-29",
+      "type": "choice",
+      "state": "News: The central bank raised rates by 25 basis points after inflation remained above target.",
+      "question": "Which topic label fits best?",
+      "options": [
+        {
+          "id": "sports",
+          "description": "Sports events."
+        },
+        {
+          "id": "business",
+          "description": "Economy, finance, companies, markets."
+        },
+        {
+          "id": "science",
+          "description": "Scientific research."
+        },
+        {
+          "id": "entertainment",
+          "description": "Arts and celebrity."
+        }
+      ],
+      "expected": "business"
+    },
+    {
+      "id": "choice-30",
+      "type": "choice",
+      "state": "Review: The premise was clever, but pacing dragged and I would not recommend the movie.",
+      "question": "What sentiment label fits?",
+      "options": [
+        {
+          "id": "positive",
+          "description": "Overall favorable."
+        },
+        {
+          "id": "negative",
+          "description": "Overall unfavorable."
+        }
+      ],
+      "expected": "negative"
+    },
+    {
+      "id": "choice-31",
+      "type": "choice",
+      "state": "Policy allows export only when requester is owner OR has explicit delegated permission. Requester is not owner and has no delegation.",
+      "question": "What policy decision applies?",
+      "options": [
+        {
+          "id": "allow",
+          "description": "Conditions satisfied."
+        },
+        {
+          "id": "deny",
+          "description": "Conditions fail."
+        },
+        {
+          "id": "no_clear_answer",
+          "description": "Required facts missing."
+        }
+      ],
+      "expected": "deny"
+    },
+    {
+      "id": "choice-32",
+      "type": "choice",
+      "state": "Policy allows export only when requester is owner OR delegated. State identifies requester but contains no ownership or delegation facts.",
+      "question": "What policy decision applies?",
+      "options": [
+        {
+          "id": "allow",
+          "description": "Conditions known satisfied."
+        },
+        {
+          "id": "deny",
+          "description": "Conditions known failed."
+        },
+        {
+          "id": "no_clear_answer",
+          "description": "Required facts missing."
+        }
+      ],
+      "expected": "no_clear_answer"
+    },
+    {
+      "id": "choice-33",
+      "type": "choice",
+      "state": "Scheduler options are run_tests, package, release. Tests have not run; packaging requires passing tests; release requires signed package.",
+      "question": "What is the next valid step?",
+      "options": [
+        {
+          "id": "run_tests",
+          "description": "Execute validation."
+        },
+        {
+          "id": "package",
+          "description": "Package before tests."
+        },
+        {
+          "id": "release",
+          "description": "Release immediately."
+        }
+      ],
+      "expected": "run_tests"
+    },
+    {
+      "id": "choice-34",
+      "type": "choice",
+      "state": "Tests passed. Package has not been built. Release requires a signed package.",
+      "question": "What is the next valid step?",
+      "options": [
+        {
+          "id": "run_tests",
+          "description": "Repeat tests without cause."
+        },
+        {
+          "id": "package",
+          "description": "Build and sign package."
+        },
+        {
+          "id": "release",
+          "description": "Release without package."
+        }
+      ],
+      "expected": "package"
+    },
+    {
+      "id": "choice-35",
+      "type": "choice",
+      "state": "Tests passed, package is built and signed, release window is open, and no blocker exists.",
+      "question": "What is the next valid step?",
+      "options": [
+        {
+          "id": "run_tests",
+          "description": "Restart validation."
+        },
+        {
+          "id": "package",
+          "description": "Rebuild unnecessarily."
+        },
+        {
+          "id": "release",
+          "description": "Proceed with release."
+        }
+      ],
+      "expected": "release"
+    },
+    {
+      "id": "choice-36",
+      "type": "choice",
+      "state": "An existing storage format must remain unchanged because a very large corpus already uses it. New documents must be added without changing stored representation.",
+      "question": "Which implementation strategy best fits?",
+      "options": [
+        {
+          "id": "compatible_extension",
+          "description": "Preserve storage and add ingestion around it."
+        },
+        {
+          "id": "rewrite_storage",
+          "description": "Replace format and migrate everything."
+        },
+        {
+          "id": "drop_old_data",
+          "description": "Delete historical data."
+        }
+      ],
+      "expected": "compatible_extension"
+    },
+    {
+      "id": "choice-37",
+      "type": "choice",
+      "state": "A file was generated correctly, but a later check rejects it because high-level path rewriting differs from lower-level filesystem validation. Security path semantics must have one canonical implementation.",
+      "question": "Where should canonical path validation live?",
+      "options": [
+        {
+          "id": "single_low_level_validator",
+          "description": "Use one canonical low-level validator."
+        },
+        {
+          "id": "duplicate_checks",
+          "description": "Keep divergent implementations."
+        },
+        {
+          "id": "disable_validation",
+          "description": "Remove checks."
+        }
+      ],
+      "expected": "single_low_level_validator"
+    },
+    {
+      "id": "choice-38",
+      "type": "choice",
+      "state": "A weak model repeatedly produces invalid structured plans despite bounded correction. A stronger configured fallback is available.",
+      "question": "What should the orchestrator do?",
+      "options": [
+        {
+          "id": "fallback",
+          "description": "Use the configured stronger fallback with diagnostic context."
+        },
+        {
+          "id": "crash",
+          "description": "Terminate without context."
+        },
+        {
+          "id": "infinite_correction",
+          "description": "Correct forever."
+        }
+      ],
+      "expected": "fallback"
+    },
+    {
+      "id": "choice-39",
+      "type": "choice",
+      "state": "Tools available: filesystem_read, web_search, shell_exec. Needed information is in a local file whose exact path is known.",
+      "question": "Which tool should be used first?",
+      "options": [
+        {
+          "id": "filesystem_read",
+          "description": "Read the known local file."
+        },
+        {
+          "id": "web_search",
+          "description": "Search public web."
+        },
+        {
+          "id": "shell_exec",
+          "description": "Run unrelated shell command."
+        }
+      ],
+      "expected": "filesystem_read"
+    },
+    {
+      "id": "choice-40",
+      "type": "choice",
+      "state": "Task asks for latest external API documentation. Local repository contains only a two-year-old snapshot.",
+      "question": "Which information source should be preferred?",
+      "options": [
+        {
+          "id": "current_authoritative_web",
+          "description": "Use current authoritative external docs."
+        },
+        {
+          "id": "stale_local_snapshot",
+          "description": "Use old snapshot."
+        },
+        {
+          "id": "guess",
+          "description": "Infer from memory."
+        }
+      ],
+      "expected": "current_authoritative_web"
+    },
+    {
+      "id": "choice-41",
+      "type": "choice",
+      "state": "Schema has enum small, medium, large. Observed item is 75 MB. Policy: small <10, medium 10–100 inclusive, large >100.",
+      "question": "Which enum value applies?",
+      "options": [
+        {
+          "id": "small",
+          "description": "Less than 10 MB."
+        },
+        {
+          "id": "medium",
+          "description": "10–100 MB inclusive."
+        },
+        {
+          "id": "large",
+          "description": "Greater than 100 MB."
+        }
+      ],
+      "expected": "medium"
+    },
+    {
+      "id": "choice-42",
+      "type": "choice",
+      "state": "Severity rubric: 0=no impact, 1=minor, 2=major but recoverable, 3=complete outage. Users can read data but cannot create or update anything.",
+      "question": "Which severity score fits best?",
+      "options": [
+        {
+          "id": "0",
+          "description": "No impact."
+        },
+        {
+          "id": "1",
+          "description": "Minor impact."
+        },
+        {
+          "id": "2",
+          "description": "Major degradation with partial service."
+        },
+        {
+          "id": "3",
+          "description": "Complete outage."
+        }
+      ],
+      "expected": "2"
+    },
+    {
+      "id": "choice-43",
+      "type": "choice",
+      "state": "Deployment has one failed optional analytics job and every customer-facing component is healthy. Policy says optional analytics failures do not change release status.",
+      "question": "Which release status fits?",
+      "options": [
+        {
+          "id": "ready",
+          "description": "All blocking conditions pass."
+        },
+        {
+          "id": "blocked",
+          "description": "A blocker failed."
+        },
+        {
+          "id": "unknown",
+          "description": "Required evidence missing."
+        }
+      ],
+      "expected": "ready"
+    },
+    {
+      "id": "choice-44",
+      "type": "choice",
+      "state": "A user asks: Can you cancel the transfer I made yesterday? State does not say whether transfer is pending, completed, or reversible.",
+      "question": "Which answerability label fits?",
+      "options": [
+        {
+          "id": "can_answer_yes",
+          "description": "Evidence proves cancellation possible."
+        },
+        {
+          "id": "can_answer_no",
+          "description": "Evidence proves impossible."
+        },
+        {
+          "id": "need_status",
+          "description": "Transfer status is required."
+        }
+      ],
+      "expected": "need_status"
+    },
+    {
+      "id": "choice-45",
+      "type": "choice",
+      "state": "Task says output must be a JSON file and must not include markdown. Candidate answer is a fenced JSON block containing otherwise valid JSON.",
+      "question": "How should format compliance be classified?",
+      "options": [
+        {
+          "id": "compliant",
+          "description": "All format constraints satisfied."
+        },
+        {
+          "id": "fixable_format_error",
+          "description": "Content is usable but violates no-markdown constraint."
+        },
+        {
+          "id": "semantic_failure",
+          "description": "Underlying answer is wrong."
+        }
+      ],
+      "expected": "fixable_format_error"
+    },
+    {
+      "id": "choice-46",
+      "type": "choice",
+      "state": "Build requires Node >=22 and Python >=3.12. Environment has Node 22.4 and Python 3.11.9.",
+      "question": "What prerequisite status applies?",
+      "options": [
+        {
+          "id": "ready",
+          "description": "All requirements met."
+        },
+        {
+          "id": "python_upgrade",
+          "description": "Python requirement is not met."
+        },
+        {
+          "id": "node_upgrade",
+          "description": "Node requirement is not met."
+        },
+        {
+          "id": "both_upgrade",
+          "description": "Neither requirement met."
+        }
+      ],
+      "expected": "python_upgrade"
+    },
+    {
+      "id": "choice-47",
+      "type": "choice",
+      "state": "A result is correct for 49 of 50 required records. Contract requires all records and has no partial-success mode.",
+      "question": "What completion status applies?",
+      "options": [
+        {
+          "id": "complete",
+          "description": "Every record present."
+        },
+        {
+          "id": "partial_failure",
+          "description": "Some required output missing."
+        },
+        {
+          "id": "no_work_done",
+          "description": "Nothing useful produced."
+        }
+      ],
+      "expected": "partial_failure"
+    },
+    {
+      "id": "choice-48",
+      "type": "choice",
+      "state": "Two logs conflict. Log A is 10:00 from a deprecated worker. Log B is 10:05 from the current authoritative controller and has the same request ID.",
+      "question": "Which log should determine current state?",
+      "options": [
+        {
+          "id": "a",
+          "description": "Older deprecated log."
+        },
+        {
+          "id": "b",
+          "description": "Newer authoritative controller log."
+        },
+        {
+          "id": "neither",
+          "description": "Authority and time are irrelevant."
+        }
+      ],
+      "expected": "b"
+    },
+    {
+      "id": "choice-49",
+      "type": "choice",
+      "state": "Model policy prefers compatibility first, then validated quality, then latency. A is fastest but lacks shared decisions. B supports all primitives and is validated. C supports them but is untested.",
+      "question": "Which model should be selected?",
+      "options": [
+        {
+          "id": "a",
+          "description": "Fastest but incompatible."
+        },
+        {
+          "id": "b",
+          "description": "Compatible and validated."
+        },
+        {
+          "id": "c",
+          "description": "Compatible but unvalidated."
+        }
+      ],
+      "expected": "b"
+    },
+    {
+      "id": "choice-50",
+      "type": "choice",
+      "state": "A request contains two independent equal-urgency issues: I cannot log in after my card was charged twice. The system supports splitting work.",
+      "question": "What routing action is best?",
+      "options": [
+        {
+          "id": "access_only",
+          "description": "Ignore duplicate charge."
+        },
+        {
+          "id": "billing_only",
+          "description": "Ignore login issue."
+        },
+        {
+          "id": "split",
+          "description": "Create access and billing work items."
+        },
+        {
+          "id": "random",
+          "description": "Choose arbitrarily."
+        }
+      ],
+      "expected": "split"
+    },
+    {
+      "id": "shared-01",
+      "type": "shared",
+      "state": "A patch changes authentication token parsing. Unit tests passed. Integration tests have not run. Release policy requires both unit and integration coverage for authentication changes.",
+      "decisions": [
+        {
+          "id": "next",
+          "question": "What should happen next?",
+          "options": [
+            {
+              "id": "run_integration",
+              "description": "Run authentication integration tests."
+            },
+            {
+              "id": "release",
+              "description": "Release immediately."
+            },
+            {
+              "id": "rewrite",
+              "description": "Rewrite without evidence."
+            }
+          ],
+          "expected": "run_integration"
+        },
+        {
+          "id": "ready",
+          "question": "Is the change release-ready?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "All required validation complete."
+            },
+            {
+              "id": "no",
+              "description": "Required validation remains."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "risk",
+          "question": "What is the dominant unresolved risk?",
+          "options": [
+            {
+              "id": "validation_gap",
+              "description": "Changed behavior lacks required integration validation."
+            },
+            {
+              "id": "billing",
+              "description": "Billing may be wrong."
+            },
+            {
+              "id": "none",
+              "description": "No unresolved risk."
+            }
+          ],
+          "expected": "validation_gap"
+        }
+      ]
+    },
+    {
+      "id": "shared-02",
+      "type": "shared",
+      "state": "A production checkout service returns HTTP 503 to all customers. Authentication and catalog browsing still work. The on-call engineer has been paged and an incident channel is open.",
+      "decisions": [
+        {
+          "id": "severity",
+          "question": "What severity applies?",
+          "options": [
+            {
+              "id": "low",
+              "description": "Minor issue."
+            },
+            {
+              "id": "major",
+              "description": "Partial major degradation."
+            },
+            {
+              "id": "critical",
+              "description": "Core customer workflow unavailable to all users."
+            }
+          ],
+          "expected": "critical"
+        },
+        {
+          "id": "owner",
+          "question": "Who owns immediate response?",
+          "options": [
+            {
+              "id": "on_call",
+              "description": "Current incident on-call."
+            },
+            {
+              "id": "sales",
+              "description": "Sales."
+            },
+            {
+              "id": "docs",
+              "description": "Documentation."
+            }
+          ],
+          "expected": "on_call"
+        },
+        {
+          "id": "next",
+          "question": "What is the next operational action?",
+          "options": [
+            {
+              "id": "stabilize",
+              "description": "Restore or mitigate checkout."
+            },
+            {
+              "id": "feature_work",
+              "description": "Start unrelated feature work."
+            },
+            {
+              "id": "close",
+              "description": "Close incident."
+            }
+          ],
+          "expected": "stabilize"
+        }
+      ]
+    },
+    {
+      "id": "shared-03",
+      "type": "shared",
+      "state": "A customer cannot sign in because their MFA device was lost. Their subscription is paid and no refund complaint is present.",
+      "decisions": [
+        {
+          "id": "team",
+          "question": "Which team owns the request?",
+          "options": [
+            {
+              "id": "access",
+              "description": "Authentication/account access."
+            },
+            {
+              "id": "billing",
+              "description": "Payments."
+            },
+            {
+              "id": "technical",
+              "description": "General product bug."
+            }
+          ],
+          "expected": "access"
+        },
+        {
+          "id": "refund",
+          "question": "Is a refund action appropriate?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Refund issue present."
+            },
+            {
+              "id": "no",
+              "description": "No refund issue."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "intent",
+          "question": "What is the primary intent?",
+          "options": [
+            {
+              "id": "recover_access",
+              "description": "Regain account access."
+            },
+            {
+              "id": "cancel_subscription",
+              "description": "Cancel billing."
+            },
+            {
+              "id": "report_outage",
+              "description": "Report system outage."
+            }
+          ],
+          "expected": "recover_access"
+        }
+      ]
+    },
+    {
+      "id": "shared-04",
+      "type": "shared",
+      "state": "A dependency used in the production request path has a published critical vulnerability. A patched compatible version is available.",
+      "decisions": [
+        {
+          "id": "priority",
+          "question": "What priority applies?",
+          "options": [
+            {
+              "id": "high",
+              "description": "Security-critical and reachable."
+            },
+            {
+              "id": "low",
+              "description": "Optional cleanup."
+            }
+          ],
+          "expected": "high"
+        },
+        {
+          "id": "action",
+          "question": "What should be done?",
+          "options": [
+            {
+              "id": "upgrade",
+              "description": "Upgrade to patched compatible version."
+            },
+            {
+              "id": "ignore",
+              "description": "Keep vulnerable version."
+            },
+            {
+              "id": "remove_tests",
+              "description": "Disable security tests."
+            }
+          ],
+          "expected": "upgrade"
+        },
+        {
+          "id": "release",
+          "question": "Should a new release proceed before remediation?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Ship vulnerability."
+            },
+            {
+              "id": "no",
+              "description": "Remediate first."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-05",
+      "type": "shared",
+      "state": "All blocking release checks passed, artifact hash matches signed manifest, approval is recorded, and deployment window is open.",
+      "decisions": [
+        {
+          "id": "deploy",
+          "question": "Should deployment proceed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Proceed."
+            },
+            {
+              "id": "no",
+              "description": "Do not deploy."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "state",
+          "question": "How should release state be classified?",
+          "options": [
+            {
+              "id": "ready",
+              "description": "Validated and approved."
+            },
+            {
+              "id": "blocked",
+              "description": "A blocker remains."
+            },
+            {
+              "id": "unknown",
+              "description": "Evidence missing."
+            }
+          ],
+          "expected": "ready"
+        },
+        {
+          "id": "next",
+          "question": "What is the next lifecycle step?",
+          "options": [
+            {
+              "id": "deploy",
+              "description": "Deploy approved artifact."
+            },
+            {
+              "id": "replan",
+              "description": "Discard validated plan."
+            },
+            {
+              "id": "rebuild",
+              "description": "Rebuild without cause."
+            }
+          ],
+          "expected": "deploy"
+        }
+      ]
+    },
+    {
+      "id": "shared-06",
+      "type": "shared",
+      "state": "A scheduled backup completed. Restore verification succeeded. Backup is 8 hours old and policy requires <=24 hours.",
+      "decisions": [
+        {
+          "id": "backup",
+          "question": "What is backup status?",
+          "options": [
+            {
+              "id": "valid",
+              "description": "Verified and fresh."
+            },
+            {
+              "id": "invalid",
+              "description": "Failed or stale."
+            }
+          ],
+          "expected": "valid"
+        },
+        {
+          "id": "remediate",
+          "question": "Is immediate remediation required?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Backup policy failed."
+            },
+            {
+              "id": "no",
+              "description": "Policy satisfied."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "use",
+          "question": "Can this backup be used for planned migration?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Prerequisites met."
+            },
+            {
+              "id": "no",
+              "description": "Prerequisites not met."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-07",
+      "type": "shared",
+      "state": "A feature flag is disabled in production and enabled only in staging. Automated staging tests are running.",
+      "decisions": [
+        {
+          "id": "prod",
+          "question": "Are production users exposed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Enabled in production."
+            },
+            {
+              "id": "no",
+              "description": "Not enabled in production."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "env",
+          "question": "Where is feature enabled?",
+          "options": [
+            {
+              "id": "staging",
+              "description": "Staging only."
+            },
+            {
+              "id": "production",
+              "description": "Production."
+            },
+            {
+              "id": "nowhere",
+              "description": "Disabled everywhere."
+            }
+          ],
+          "expected": "staging"
+        },
+        {
+          "id": "state",
+          "question": "What lifecycle state best fits?",
+          "options": [
+            {
+              "id": "testing",
+              "description": "Under staging validation."
+            },
+            {
+              "id": "released",
+              "description": "Live in production."
+            },
+            {
+              "id": "retired",
+              "description": "Removed."
+            }
+          ],
+          "expected": "testing"
+        }
+      ]
+    },
+    {
+      "id": "shared-08",
+      "type": "shared",
+      "state": "An invoice is 45 days overdue. Two automated reminders were sent. Policy requires manual escalation after 30 days and two reminders.",
+      "decisions": [
+        {
+          "id": "status",
+          "question": "How should invoice be classified?",
+          "options": [
+            {
+              "id": "overdue",
+              "description": "Past due."
+            },
+            {
+              "id": "paid",
+              "description": "Settled."
+            },
+            {
+              "id": "future",
+              "description": "Not due."
+            }
+          ],
+          "expected": "overdue"
+        },
+        {
+          "id": "action",
+          "question": "What should happen next?",
+          "options": [
+            {
+              "id": "escalate",
+              "description": "Manual collections escalation."
+            },
+            {
+              "id": "close",
+              "description": "Close as paid."
+            },
+            {
+              "id": "wait_first_reminder",
+              "description": "Send first reminder."
+            }
+          ],
+          "expected": "escalate"
+        },
+        {
+          "id": "policy",
+          "question": "Has reminder prerequisite been met?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Two reminders sent."
+            },
+            {
+              "id": "no",
+              "description": "Prerequisite missing."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-09",
+      "type": "shared",
+      "state": "A pull request changes only README examples. No executable/configuration file changed. Markdown validation passes.",
+      "decisions": [
+        {
+          "id": "change",
+          "question": "What kind of change is this?",
+          "options": [
+            {
+              "id": "docs",
+              "description": "Documentation-only."
+            },
+            {
+              "id": "runtime",
+              "description": "Runtime behavior."
+            },
+            {
+              "id": "security",
+              "description": "Security patch."
+            }
+          ],
+          "expected": "docs"
+        },
+        {
+          "id": "runtime_risk",
+          "question": "Does it directly alter runtime behavior?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Executable behavior changed."
+            },
+            {
+              "id": "no",
+              "description": "No executable behavior changed."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What validation is sufficient under docs-only policy?",
+          "options": [
+            {
+              "id": "docs_checks",
+              "description": "Documentation checks."
+            },
+            {
+              "id": "prod_migration",
+              "description": "Production migration."
+            },
+            {
+              "id": "gpu_benchmark",
+              "description": "GPU benchmark."
+            }
+          ],
+          "expected": "docs_checks"
+        }
+      ]
+    },
+    {
+      "id": "shared-10",
+      "type": "shared",
+      "state": "Monitoring reports normal latency, zero error spikes, all probes passing, and no user reports of failure.",
+      "decisions": [
+        {
+          "id": "health",
+          "question": "What is service health?",
+          "options": [
+            {
+              "id": "healthy",
+              "description": "Operating normally."
+            },
+            {
+              "id": "degraded",
+              "description": "Meaningful impairment."
+            },
+            {
+              "id": "outage",
+              "description": "Unavailable."
+            }
+          ],
+          "expected": "healthy"
+        },
+        {
+          "id": "incident",
+          "question": "Should an outage incident be opened?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Evidence indicates outage."
+            },
+            {
+              "id": "no",
+              "description": "No outage evidence."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "action",
+          "question": "What should operations do?",
+          "options": [
+            {
+              "id": "continue_monitoring",
+              "description": "Continue normal monitoring."
+            },
+            {
+              "id": "emergency_failover",
+              "description": "Fail over immediately."
+            },
+            {
+              "id": "disable_service",
+              "description": "Disable service."
+            }
+          ],
+          "expected": "continue_monitoring"
+        }
+      ]
+    },
+    {
+      "id": "shared-11",
+      "type": "shared",
+      "state": "A generated project contains the requested HTML and CSS files. The HTML references './style.css', the file exists, and browser smoke testing succeeds. Final evidence names only the HTML criterion and omits the CSS-link criterion.",
+      "decisions": [
+        {
+          "id": "complete",
+          "question": "Is the task fully verified?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "All criteria explicitly covered."
+            },
+            {
+              "id": "no",
+              "description": "Evidence coverage incomplete."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen next?",
+          "options": [
+            {
+              "id": "repair_evidence",
+              "description": "Complete verification evidence."
+            },
+            {
+              "id": "regenerate",
+              "description": "Regenerate all files."
+            },
+            {
+              "id": "finish",
+              "description": "Declare completion."
+            }
+          ],
+          "expected": "repair_evidence"
+        },
+        {
+          "id": "artifact",
+          "question": "Are artifacts apparently functional?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Smoke and file checks pass."
+            },
+            {
+              "id": "no",
+              "description": "Artifacts broken."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-12",
+      "type": "shared",
+      "state": "A weak planning model returned malformed structured output twice. Bounded correction limit is two attempts. A stronger fallback is configured and healthy.",
+      "decisions": [
+        {
+          "id": "primary",
+          "question": "What is primary model state?",
+          "options": [
+            {
+              "id": "exhausted",
+              "description": "Correction budget exhausted."
+            },
+            {
+              "id": "ready",
+              "description": "Keep correcting forever."
+            }
+          ],
+          "expected": "exhausted"
+        },
+        {
+          "id": "next",
+          "question": "What should happen next?",
+          "options": [
+            {
+              "id": "fallback",
+              "description": "Invoke configured fallback."
+            },
+            {
+              "id": "crash",
+              "description": "Crash application."
+            },
+            {
+              "id": "accept_invalid",
+              "description": "Accept malformed plan."
+            }
+          ],
+          "expected": "fallback"
+        },
+        {
+          "id": "user_message",
+          "question": "If fallback also fails, what should be surfaced?",
+          "options": [
+            {
+              "id": "controlled_failure",
+              "description": "Clear diagnostic with context."
+            },
+            {
+              "id": "silent_exit",
+              "description": "No message."
+            },
+            {
+              "id": "fake_success",
+              "description": "Claim success."
+            }
+          ],
+          "expected": "controlled_failure"
+        }
+      ]
+    },
+    {
+      "id": "shared-13",
+      "type": "shared",
+      "state": "A cached trajectory was created for revision A with normalized path /work/item. Current revision B changes path-handling code but has the same textual path. Cache policy invalidates on implementation revision change.",
+      "decisions": [
+        {
+          "id": "cache",
+          "question": "Can old cache be reused?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Text matches."
+            },
+            {
+              "id": "no",
+              "description": "Implementation revision changed."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "recompute",
+              "description": "Recompute under revision B."
+            },
+            {
+              "id": "trust_cache",
+              "description": "Reuse old trajectory."
+            },
+            {
+              "id": "delete_project",
+              "description": "Delete project."
+            }
+          ],
+          "expected": "recompute"
+        },
+        {
+          "id": "reason",
+          "question": "What is deciding factor?",
+          "options": [
+            {
+              "id": "revision",
+              "description": "Cache key includes implementation revision."
+            },
+            {
+              "id": "path_text",
+              "description": "Only path text matters."
+            },
+            {
+              "id": "latency",
+              "description": "Fastest answer wins."
+            }
+          ],
+          "expected": "revision"
+        }
+      ]
+    },
+    {
+      "id": "shared-14",
+      "type": "shared",
+      "state": "A path points to /workspace/out/result.json. The file is intended for the workspace, but /workspace/out is a symlink to /tmp/out. Policy forbids symlinked parents.",
+      "decisions": [
+        {
+          "id": "allowed",
+          "question": "Is path allowed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Final intent is enough."
+            },
+            {
+              "id": "no",
+              "description": "Symlinked parent violates policy."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "reject",
+              "description": "Reject and require compliant path."
+            },
+            {
+              "id": "rewrite_python_only",
+              "description": "Silently rewrite in one layer."
+            },
+            {
+              "id": "ignore",
+              "description": "Ignore policy."
+            }
+          ],
+          "expected": "reject"
+        },
+        {
+          "id": "validator",
+          "question": "Where should invariant be enforced?",
+          "options": [
+            {
+              "id": "canonical_fs_layer",
+              "description": "One canonical filesystem/path layer."
+            },
+            {
+              "id": "every_layer_differently",
+              "description": "Different semantics in each layer."
+            }
+          ],
+          "expected": "canonical_fs_layer"
+        }
+      ]
+    },
+    {
+      "id": "shared-15",
+      "type": "shared",
+      "state": "A patch applies cleanly. Tests pass. After tests, an untracked script modifies a generated runtime file. Policy requires tested tree and release tree to be identical.",
+      "decisions": [
+        {
+          "id": "ready",
+          "question": "Is release ready?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Tests passed."
+            },
+            {
+              "id": "no",
+              "description": "Tree changed after testing."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "retest_final_tree",
+              "description": "Re-run validation on final tree."
+            },
+            {
+              "id": "ship",
+              "description": "Ship untested tree."
+            },
+            {
+              "id": "ignore_change",
+              "description": "Ignore change."
+            }
+          ],
+          "expected": "retest_final_tree"
+        },
+        {
+          "id": "risk",
+          "question": "What is main risk?",
+          "options": [
+            {
+              "id": "evidence_mismatch",
+              "description": "Evidence no longer matches release contents."
+            },
+            {
+              "id": "billing",
+              "description": "Billing error."
+            },
+            {
+              "id": "none",
+              "description": "No risk."
+            }
+          ],
+          "expected": "evidence_mismatch"
+        }
+      ]
+    },
+    {
+      "id": "shared-16",
+      "type": "shared",
+      "state": "A job must run A then B then C. A succeeded. B failed with transient timeout, policy permits one retry of B without rerunning A. C must wait for B.",
+      "decisions": [
+        {
+          "id": "next",
+          "question": "What is next step?",
+          "options": [
+            {
+              "id": "retry_b",
+              "description": "Retry B."
+            },
+            {
+              "id": "run_c",
+              "description": "Skip to C."
+            },
+            {
+              "id": "rerun_a",
+              "description": "Rerun A."
+            }
+          ],
+          "expected": "retry_b"
+        },
+        {
+          "id": "c_allowed",
+          "question": "May C run now?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "A succeeded."
+            },
+            {
+              "id": "no",
+              "description": "B not successful."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "a_state",
+          "question": "Must A be repeated?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Always restart."
+            },
+            {
+              "id": "no",
+              "description": "Successful A is preserved."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-17",
+      "type": "shared",
+      "state": "A model reports probabilities alpha=.42, beta=.41, gamma=.17. Policy auto-executes only when top probability >=.70; otherwise human review.",
+      "decisions": [
+        {
+          "id": "decision",
+          "question": "Which option is top-ranked?",
+          "options": [
+            {
+              "id": "alpha",
+              "description": ".42."
+            },
+            {
+              "id": "beta",
+              "description": ".41."
+            },
+            {
+              "id": "gamma",
+              "description": ".17."
+            }
+          ],
+          "expected": "alpha"
+        },
+        {
+          "id": "auto",
+          "question": "Should action auto-execute?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Threshold met."
+            },
+            {
+              "id": "no",
+              "description": "Top probability below threshold."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen next?",
+          "options": [
+            {
+              "id": "human_review",
+              "description": "Escalate for review."
+            },
+            {
+              "id": "execute_alpha",
+              "description": "Execute despite threshold."
+            },
+            {
+              "id": "random",
+              "description": "Random choice."
+            }
+          ],
+          "expected": "human_review"
+        }
+      ]
+    },
+    {
+      "id": "shared-18",
+      "type": "shared",
+      "state": "A customer says the app marks a transfer complete but recipient did not receive it. They also changed phones yesterday. No evidence links phone change to transfer.",
+      "decisions": [
+        {
+          "id": "primary",
+          "question": "What is primary issue?",
+          "options": [
+            {
+              "id": "transfer_investigation",
+              "description": "Investigate transfer delivery/status."
+            },
+            {
+              "id": "phone_change",
+              "description": "Treat phone as proven cause."
+            },
+            {
+              "id": "refund",
+              "description": "Immediate refund."
+            }
+          ],
+          "expected": "transfer_investigation"
+        },
+        {
+          "id": "cause",
+          "question": "Is phone change established as cause?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Causal link proven."
+            },
+            {
+              "id": "no",
+              "description": "No causal evidence."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "routing",
+          "question": "What routing is safest?",
+          "options": [
+            {
+              "id": "payments_ops",
+              "description": "Transfer/payments investigation."
+            },
+            {
+              "id": "access_only",
+              "description": "Ignore transfer."
+            },
+            {
+              "id": "marketing",
+              "description": "Marketing."
+            }
+          ],
+          "expected": "payments_ops"
+        }
+      ]
+    },
+    {
+      "id": "shared-19",
+      "type": "shared",
+      "state": "Policy: requester must be owner OR delegated; exports above 1 GB additionally require security approval. Requester has delegation, export is 1.4 GB, security approval absent.",
+      "decisions": [
+        {
+          "id": "base_permission",
+          "question": "Does requester satisfy ownership/delegation?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Delegation exists."
+            },
+            {
+              "id": "no",
+              "description": "No permission."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "export",
+          "question": "May export proceed now?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Delegation sufficient."
+            },
+            {
+              "id": "no",
+              "description": "Large-export approval missing."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What is required next?",
+          "options": [
+            {
+              "id": "security_approval",
+              "description": "Obtain security approval."
+            },
+            {
+              "id": "new_delegation",
+              "description": "Get delegation again."
+            },
+            {
+              "id": "nothing",
+              "description": "Proceed."
+            }
+          ],
+          "expected": "security_approval"
+        }
+      ]
+    },
+    {
+      "id": "shared-20",
+      "type": "shared",
+      "state": "A support answer says card is probably expired. State explicitly says card expires next year and failure occurs only at one merchant.",
+      "decisions": [
+        {
+          "id": "adequacy",
+          "question": "Is answer adequate?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Matches evidence."
+            },
+            {
+              "id": "no",
+              "description": "Contradicts explicit state."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "better_label",
+          "question": "Which diagnosis is better supported?",
+          "options": [
+            {
+              "id": "merchant_specific_payment_issue",
+              "description": "Failure is merchant-specific."
+            },
+            {
+              "id": "expired_card",
+              "description": "Card expired."
+            },
+            {
+              "id": "cash_withdrawal",
+              "description": "ATM issue."
+            }
+          ],
+          "expected": "merchant_specific_payment_issue"
+        },
+        {
+          "id": "confidence",
+          "question": "Should high model confidence override state?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Confidence overrides evidence."
+            },
+            {
+              "id": "no",
+              "description": "Evidence controls."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-21",
+      "type": "shared",
+      "state": "Repository has active config at config/current.json and obsolete example at docs/examples/config.json. Task asks to modify active runtime config only.",
+      "decisions": [
+        {
+          "id": "target",
+          "question": "Which file should be modified?",
+          "options": [
+            {
+              "id": "current",
+              "description": "config/current.json."
+            },
+            {
+              "id": "example",
+              "description": "docs/examples/config.json."
+            },
+            {
+              "id": "both",
+              "description": "Both automatically."
+            }
+          ],
+          "expected": "current"
+        },
+        {
+          "id": "example_change",
+          "question": "Should example change without explicit docs requirement?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Always edit examples."
+            },
+            {
+              "id": "no",
+              "description": "Do not expand scope."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "scope",
+          "question": "What principle applies?",
+          "options": [
+            {
+              "id": "minimal_scope",
+              "description": "Modify authoritative target only."
+            },
+            {
+              "id": "broad_rewrite",
+              "description": "Rewrite every similar file."
+            }
+          ],
+          "expected": "minimal_scope"
+        }
+      ]
+    },
+    {
+      "id": "shared-22",
+      "type": "shared",
+      "state": "Release requires macOS and Linux smoke tests. macOS passed revision 7f3. Linux passed 7f2. Code changed between 7f2 and 7f3.",
+      "decisions": [
+        {
+          "id": "ready",
+          "question": "Is cross-platform validation complete for 7f3?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Each platform passed some revision."
+            },
+            {
+              "id": "no",
+              "description": "Linux evidence is stale."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "linux_7f3",
+              "description": "Run Linux smoke on 7f3."
+            },
+            {
+              "id": "release",
+              "description": "Release now."
+            },
+            {
+              "id": "rerun_macos_only",
+              "description": "Rerun only macOS."
+            }
+          ],
+          "expected": "linux_7f3"
+        },
+        {
+          "id": "stale",
+          "question": "Which evidence is stale?",
+          "options": [
+            {
+              "id": "linux",
+              "description": "Linux result."
+            },
+            {
+              "id": "macos",
+              "description": "macOS result."
+            },
+            {
+              "id": "none",
+              "description": "Neither."
+            }
+          ],
+          "expected": "linux"
+        }
+      ]
+    },
+    {
+      "id": "shared-23",
+      "type": "shared",
+      "state": "Benchmark: Model A 48/50 correct at 500 ms median. Model B 46/50 at 20 ms. Policy requires accuracy >=94%, then minimizes latency.",
+      "decisions": [
+        {
+          "id": "eligible_a",
+          "question": "Is Model A eligible?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "96% meets threshold."
+            },
+            {
+              "id": "no",
+              "description": "Too slow regardless."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "eligible_b",
+          "question": "Is Model B eligible?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Speed compensates."
+            },
+            {
+              "id": "no",
+              "description": "92% fails threshold."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "select",
+          "question": "Which model should be selected?",
+          "options": [
+            {
+              "id": "a",
+              "description": "Model A."
+            },
+            {
+              "id": "b",
+              "description": "Model B."
+            }
+          ],
+          "expected": "a"
+        }
+      ]
+    },
+    {
+      "id": "shared-24",
+      "type": "shared",
+      "state": "A shared benchmark case has two decisions. Model answers first correctly and second incorrectly. Request passes only if all decisions are correct; decision accuracy counts each field.",
+      "decisions": [
+        {
+          "id": "request",
+          "question": "Is shared request a PASS?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "At least one field passed."
+            },
+            {
+              "id": "no",
+              "description": "Not all fields passed."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "decision_score",
+          "question": "What field-level score applies?",
+          "options": [
+            {
+              "id": "half",
+              "description": "1 of 2 correct."
+            },
+            {
+              "id": "full",
+              "description": "2 of 2."
+            },
+            {
+              "id": "zero",
+              "description": "0 of 2."
+            }
+          ],
+          "expected": "half"
+        },
+        {
+          "id": "keep_result",
+          "question": "Should partial outcome still be recorded?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Record per-decision evidence."
+            },
+            {
+              "id": "no",
+              "description": "Discard failures."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-25",
+      "type": "shared",
+      "state": "A tool call is idempotent and failed before response. Provider status confirms no operation was created. One retry remains.",
+      "decisions": [
+        {
+          "id": "retry",
+          "question": "Should tool call be retried?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "No side effect and retry remains."
+            },
+            {
+              "id": "no",
+              "description": "Never retry."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "duplicate_risk",
+          "question": "Is duplicate side effect currently evidenced?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Operation exists."
+            },
+            {
+              "id": "no",
+              "description": "Status confirms none."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What action is safest?",
+          "options": [
+            {
+              "id": "retry_once",
+              "description": "Retry once within budget."
+            },
+            {
+              "id": "loop",
+              "description": "Retry indefinitely."
+            },
+            {
+              "id": "mark_success",
+              "description": "Assume success."
+            }
+          ],
+          "expected": "retry_once"
+        }
+      ]
+    },
+    {
+      "id": "shared-26",
+      "type": "shared",
+      "state": "A non-idempotent payment creation timed out. Provider status is unknown and no idempotency key was used.",
+      "decisions": [
+        {
+          "id": "retry",
+          "question": "Should system blindly retry?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Timeout means nothing happened."
+            },
+            {
+              "id": "no",
+              "description": "Duplicate effect risk unresolved."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "reconcile",
+              "description": "Check provider state first."
+            },
+            {
+              "id": "retry_now",
+              "description": "Create another payment."
+            },
+            {
+              "id": "ignore",
+              "description": "Close request."
+            }
+          ],
+          "expected": "reconcile"
+        },
+        {
+          "id": "risk",
+          "question": "What is main risk?",
+          "options": [
+            {
+              "id": "duplicate_effect",
+              "description": "Original may have succeeded."
+            },
+            {
+              "id": "disk_space",
+              "description": "Disk full."
+            },
+            {
+              "id": "schema",
+              "description": "JSON issue."
+            }
+          ],
+          "expected": "duplicate_effect"
+        }
+      ]
+    },
+    {
+      "id": "shared-27",
+      "type": "shared",
+      "state": "Task requires editing an existing document without altering unrelated sections. Candidate recreates entire document and drops two unrelated appendices.",
+      "decisions": [
+        {
+          "id": "adequate",
+          "question": "Does solution satisfy constraint?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Requested section changed."
+            },
+            {
+              "id": "no",
+              "description": "Unrelated content lost."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "strategy",
+          "question": "Which strategy is better?",
+          "options": [
+            {
+              "id": "targeted_edit",
+              "description": "Minimal targeted edit."
+            },
+            {
+              "id": "full_rewrite",
+              "description": "Rewrite everything."
+            }
+          ],
+          "expected": "targeted_edit"
+        },
+        {
+          "id": "risk",
+          "question": "What failed?",
+          "options": [
+            {
+              "id": "preservation",
+              "description": "Unrelated content preservation."
+            },
+            {
+              "id": "network",
+              "description": "Network availability."
+            },
+            {
+              "id": "auth",
+              "description": "Authentication."
+            }
+          ],
+          "expected": "preservation"
+        }
+      ]
+    },
+    {
+      "id": "shared-28",
+      "type": "shared",
+      "state": "Policy: internal staff may skip manager approval only for read-only data under 100 MB. Request is internal, read-only, 140 MB, no manager approval.",
+      "decisions": [
+        {
+          "id": "staff",
+          "question": "Is requester internal?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Internal."
+            },
+            {
+              "id": "no",
+              "description": "External."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "skip",
+          "question": "Can approval be skipped?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Internal enough."
+            },
+            {
+              "id": "no",
+              "description": "Size exceeds exception."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What is required?",
+          "options": [
+            {
+              "id": "manager_approval",
+              "description": "Obtain manager approval."
+            },
+            {
+              "id": "convert_to_write",
+              "description": "Make it writable."
+            },
+            {
+              "id": "nothing",
+              "description": "Proceed."
+            }
+          ],
+          "expected": "manager_approval"
+        }
+      ]
+    },
+    {
+      "id": "shared-29",
+      "type": "shared",
+      "state": "Policy: external requests may access public datasets; confidential datasets require owner approval and encrypted transport. Request is external, dataset confidential, approval exists, transport is plaintext HTTP.",
+      "decisions": [
+        {
+          "id": "owner",
+          "question": "Is owner-approval satisfied?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Approval exists."
+            },
+            {
+              "id": "no",
+              "description": "No approval."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "transport",
+          "question": "Is transport condition satisfied?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "HTTP is encrypted."
+            },
+            {
+              "id": "no",
+              "description": "Plaintext violates requirement."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "allow",
+          "question": "May access proceed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Approval alone enough."
+            },
+            {
+              "id": "no",
+              "description": "All confidential-data conditions required."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-30",
+      "type": "shared",
+      "state": "Build log contains many optional-plugin warnings, but fatal line is 'linker: undefined symbol _foo' and process exits 1.",
+      "decisions": [
+        {
+          "id": "status",
+          "question": "What is build status?",
+          "options": [
+            {
+              "id": "success",
+              "description": "Warnings only."
+            },
+            {
+              "id": "failure",
+              "description": "Fatal linker error and exit 1."
+            }
+          ],
+          "expected": "failure"
+        },
+        {
+          "id": "root",
+          "question": "What is primary failure category?",
+          "options": [
+            {
+              "id": "linker",
+              "description": "Linker failure."
+            },
+            {
+              "id": "optional_warning",
+              "description": "Optional warning."
+            },
+            {
+              "id": "network",
+              "description": "Network issue."
+            }
+          ],
+          "expected": "linker"
+        },
+        {
+          "id": "next",
+          "question": "What should be investigated first?",
+          "options": [
+            {
+              "id": "undefined_symbol",
+              "description": "Resolve missing symbol."
+            },
+            {
+              "id": "silence_warnings",
+              "description": "Hide warnings."
+            },
+            {
+              "id": "rerun_forever",
+              "description": "Retry unchanged build."
+            }
+          ],
+          "expected": "undefined_symbol"
+        }
+      ]
+    },
+    {
+      "id": "shared-31",
+      "type": "shared",
+      "state": "Test suite has 999 passes and one failure that directly covers the bug fixed by the patch. Release requires that regression test to pass.",
+      "decisions": [
+        {
+          "id": "ready",
+          "question": "Is patch release-ready?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "99.9% pass rate."
+            },
+            {
+              "id": "no",
+              "description": "Required regression fails."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "priority",
+          "question": "Which failure matters most?",
+          "options": [
+            {
+              "id": "regression",
+              "description": "Bug-specific failure."
+            },
+            {
+              "id": "random_pass",
+              "description": "A passing test."
+            }
+          ],
+          "expected": "regression"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "fix_retest",
+              "description": "Fix and rerun regression."
+            },
+            {
+              "id": "ship",
+              "description": "Ship based on aggregate rate."
+            }
+          ],
+          "expected": "fix_retest"
+        }
+      ]
+    },
+    {
+      "id": "shared-32",
+      "type": "shared",
+      "state": "A model's top choice changes from hold to release when the question is paraphrased, while state and option semantics are unchanged.",
+      "decisions": [
+        {
+          "id": "reliable",
+          "question": "Is decision paraphrase-stable?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Consistent."
+            },
+            {
+              "id": "no",
+              "description": "Changed under equivalent wording."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "metric",
+          "question": "Which benchmark property is affected?",
+          "options": [
+            {
+              "id": "reliability",
+              "description": "Paraphrase consistency."
+            },
+            {
+              "id": "disk",
+              "description": "Disk usage."
+            },
+            {
+              "id": "licence",
+              "description": "License openness."
+            }
+          ],
+          "expected": "reliability"
+        },
+        {
+          "id": "action",
+          "question": "What should benchmark record?",
+          "options": [
+            {
+              "id": "both",
+              "description": "Record both and inconsistency."
+            },
+            {
+              "id": "hide_one",
+              "description": "Discard one run."
+            }
+          ],
+          "expected": "both"
+        }
+      ]
+    },
+    {
+      "id": "shared-33",
+      "type": "shared",
+      "state": "A classifier returns probabilities summing to 1 and chooses correct label, but across 100 similar cases its .9-confidence predictions are correct only 60% of the time.",
+      "decisions": [
+        {
+          "id": "accuracy_case",
+          "question": "Is this individual label prediction correct?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Chosen label matches gold."
+            },
+            {
+              "id": "no",
+              "description": "Wrong label."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "calibration",
+          "question": "What broader property is poor?",
+          "options": [
+            {
+              "id": "calibration",
+              "description": "Confidence overstates correctness."
+            },
+            {
+              "id": "schema",
+              "description": "Probabilities do not sum."
+            },
+            {
+              "id": "latency",
+              "description": "Inference slow."
+            }
+          ],
+          "expected": "calibration"
+        },
+        {
+          "id": "benchmark",
+          "question": "Is accuracy alone sufficient?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Only label matters."
+            },
+            {
+              "id": "no",
+              "description": "Calibration is separate quality axis."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-34",
+      "type": "shared",
+      "state": "Routing request mentions refund only in quoted history: 'Support told me this was not a refund issue.' Actual request: 'I cannot log in after changing my email.'",
+      "decisions": [
+        {
+          "id": "intent",
+          "question": "What is current intent?",
+          "options": [
+            {
+              "id": "access",
+              "description": "Login/account access."
+            },
+            {
+              "id": "refund",
+              "description": "Refund request."
+            },
+            {
+              "id": "billing",
+              "description": "Invoice request."
+            }
+          ],
+          "expected": "access"
+        },
+        {
+          "id": "distractor",
+          "question": "Is word refund decisive?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Any mention controls."
+            },
+            {
+              "id": "no",
+              "description": "It is negated historical context."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "team",
+          "question": "Which team should own it?",
+          "options": [
+            {
+              "id": "access",
+              "description": "Access team."
+            },
+            {
+              "id": "billing",
+              "description": "Billing team."
+            }
+          ],
+          "expected": "access"
+        }
+      ]
+    },
+    {
+      "id": "shared-35",
+      "type": "shared",
+      "state": "Request: delete my test account after exporting its data. Policy requires export to finish and checksum verification to pass before deletion.",
+      "decisions": [
+        {
+          "id": "first",
+          "question": "What should happen first?",
+          "options": [
+            {
+              "id": "export_verify",
+              "description": "Export and verify checksum."
+            },
+            {
+              "id": "delete",
+              "description": "Delete immediately."
+            },
+            {
+              "id": "skip_export",
+              "description": "Ignore export."
+            }
+          ],
+          "expected": "export_verify"
+        },
+        {
+          "id": "delete_now",
+          "question": "May deletion happen now?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "User requested it."
+            },
+            {
+              "id": "no",
+              "description": "Export prerequisite incomplete."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "dependency",
+          "question": "What dependency exists?",
+          "options": [
+            {
+              "id": "export_before_delete",
+              "description": "Verified export precedes deletion."
+            },
+            {
+              "id": "delete_before_export",
+              "description": "Deletion precedes export."
+            }
+          ],
+          "expected": "export_before_delete"
+        }
+      ]
+    },
+    {
+      "id": "shared-36",
+      "type": "shared",
+      "state": "A patch was made for file version 1.4, but working tree is 1.6 with overlapping edits. git apply --check reports conflict.",
+      "decisions": [
+        {
+          "id": "apply",
+          "question": "Should patch be applied blindly?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "It was once valid."
+            },
+            {
+              "id": "no",
+              "description": "Current base conflicts."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "rebase_patch",
+              "description": "Regenerate/reconcile against current source."
+            },
+            {
+              "id": "force",
+              "description": "Overwrite current edits."
+            },
+            {
+              "id": "mark_done",
+              "description": "Pretend applied."
+            }
+          ],
+          "expected": "rebase_patch"
+        },
+        {
+          "id": "evidence",
+          "question": "What is decisive evidence?",
+          "options": [
+            {
+              "id": "apply_check",
+              "description": "Current apply-check conflict."
+            },
+            {
+              "id": "old_success",
+              "description": "Old successful application."
+            }
+          ],
+          "expected": "apply_check"
+        }
+      ]
+    },
+    {
+      "id": "shared-37",
+      "type": "shared",
+      "state": "Process creates temp files in /tmp, validates output, then atomically moves final artifact into project. Policy allows temporary external files but requires final deliverables in-root.",
+      "decisions": [
+        {
+          "id": "policy",
+          "question": "Is workflow allowed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Only final deliverables must be in-root."
+            },
+            {
+              "id": "no",
+              "description": "No temp file may be external."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "final",
+          "question": "Where must final artifact reside?",
+          "options": [
+            {
+              "id": "project",
+              "description": "Inside project root."
+            },
+            {
+              "id": "tmp",
+              "description": "In /tmp."
+            }
+          ],
+          "expected": "project"
+        },
+        {
+          "id": "cleanup",
+          "question": "What should happen to temp files?",
+          "options": [
+            {
+              "id": "cleanup",
+              "description": "Remove after successful move."
+            },
+            {
+              "id": "commit",
+              "description": "Commit /tmp files."
+            }
+          ],
+          "expected": "cleanup"
+        }
+      ]
+    },
+    {
+      "id": "shared-38",
+      "type": "shared",
+      "state": "An operation requires exact option coverage {read, write, delete}. Model returns probabilities for read and write but omits delete.",
+      "decisions": [
+        {
+          "id": "schema",
+          "question": "Is probability output complete?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Top choices enough."
+            },
+            {
+              "id": "no",
+              "description": "One required option missing."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "accept",
+          "question": "Should it be accepted?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Partial distribution okay."
+            },
+            {
+              "id": "no",
+              "description": "Exact coverage required."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "correct_or_fail",
+              "description": "Bounded correction or controlled failure."
+            },
+            {
+              "id": "invent",
+              "description": "Invent missing probability silently."
+            }
+          ],
+          "expected": "correct_or_fail"
+        }
+      ]
+    },
+    {
+      "id": "shared-39",
+      "type": "shared",
+      "state": "Service A depends on library B; B depends on package C; C has critical vulnerability in exact installed version. Vulnerable function is used by B.",
+      "decisions": [
+        {
+          "id": "relevant",
+          "question": "Is vulnerability transitively relevant to A?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Dependency reaches used vulnerable code."
+            },
+            {
+              "id": "no",
+              "description": "A does not directly import C."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "priority",
+          "question": "What priority applies?",
+          "options": [
+            {
+              "id": "high",
+              "description": "Reachable critical issue."
+            },
+            {
+              "id": "low",
+              "description": "Unrelated package."
+            }
+          ],
+          "expected": "high"
+        },
+        {
+          "id": "next",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "remediate",
+              "description": "Upgrade or mitigate C."
+            },
+            {
+              "id": "ignore",
+              "description": "Ignore transitive dependencies."
+            }
+          ],
+          "expected": "remediate"
+        }
+      ]
+    },
+    {
+      "id": "shared-40",
+      "type": "shared",
+      "state": "Credentials expire 90 days after issuance, inclusive through end of day 90. Issued 2026-06-27. Current date is 2026-09-25.",
+      "decisions": [
+        {
+          "id": "valid_today",
+          "question": "Is credential valid today?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Day 90 remains valid."
+            },
+            {
+              "id": "no",
+              "description": "Expired earlier."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "tomorrow",
+          "question": "Will it be valid 2026-09-26?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Still within window."
+            },
+            {
+              "id": "no",
+              "description": "Expires after day 90."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "action",
+          "question": "Should rotation be scheduled now?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Expiry imminent."
+            },
+            {
+              "id": "no",
+              "description": "No need."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-41",
+      "type": "shared",
+      "state": "Answer rubric requires: direct answer, only supplied facts, and one requested command. Candidate directly answers and uses facts but omits command.",
+      "decisions": [
+        {
+          "id": "adequate",
+          "question": "Is answer fully adequate?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Two of three enough."
+            },
+            {
+              "id": "no",
+              "description": "Mandatory element missing."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "missing",
+          "question": "What is missing?",
+          "options": [
+            {
+              "id": "command",
+              "description": "Requested command."
+            },
+            {
+              "id": "facts",
+              "description": "Supported facts."
+            },
+            {
+              "id": "directness",
+              "description": "Direct answer."
+            }
+          ],
+          "expected": "command"
+        },
+        {
+          "id": "classification",
+          "question": "How should it be classified?",
+          "options": [
+            {
+              "id": "partial",
+              "description": "Relevant but incomplete."
+            },
+            {
+              "id": "complete",
+              "description": "Fully complete."
+            },
+            {
+              "id": "irrelevant",
+              "description": "Unrelated."
+            }
+          ],
+          "expected": "partial"
+        }
+      ]
+    },
+    {
+      "id": "shared-42",
+      "type": "shared",
+      "state": "Answer rubric forbids unsupported assumptions. Candidate gives correct final label but invents a database outage not present in state.",
+      "decisions": [
+        {
+          "id": "label",
+          "question": "Is final label correct?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Matches gold."
+            },
+            {
+              "id": "no",
+              "description": "Wrong label."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "adequate",
+          "question": "Is overall answer adequate?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Correct label excuses inventions."
+            },
+            {
+              "id": "no",
+              "description": "Unsupported assumption violates rubric."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "issue",
+          "question": "What is defect?",
+          "options": [
+            {
+              "id": "unsupported_claim",
+              "description": "Invented outage."
+            },
+            {
+              "id": "format",
+              "description": "Wrong format."
+            },
+            {
+              "id": "latency",
+              "description": "Too slow."
+            }
+          ],
+          "expected": "unsupported_claim"
+        }
+      ]
+    },
+    {
+      "id": "shared-43",
+      "type": "shared",
+      "state": "Request: I need a copy of invoice 12. Also, how do I change my avatar? System supports splitting independent intents.",
+      "decisions": [
+        {
+          "id": "primary",
+          "question": "Which two intents are present?",
+          "options": [
+            {
+              "id": "invoice_and_profile",
+              "description": "Invoice copy plus profile help."
+            },
+            {
+              "id": "refund_and_access",
+              "description": "Refund plus login."
+            },
+            {
+              "id": "outage_only",
+              "description": "Outage only."
+            }
+          ],
+          "expected": "invoice_and_profile"
+        },
+        {
+          "id": "route",
+          "question": "What routing is best?",
+          "options": [
+            {
+              "id": "split",
+              "description": "Create invoice and profile work items."
+            },
+            {
+              "id": "billing_only",
+              "description": "Drop avatar question."
+            },
+            {
+              "id": "profile_only",
+              "description": "Drop invoice request."
+            }
+          ],
+          "expected": "split"
+        },
+        {
+          "id": "refund",
+          "question": "Is refund intent present?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Invoice implies refund."
+            },
+            {
+              "id": "no",
+              "description": "No refund request."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-44",
+      "type": "shared",
+      "state": "State includes an old error in a quoted postmortem, followed by: Current run: all checks green, error no longer reproducible.",
+      "decisions": [
+        {
+          "id": "current",
+          "question": "What is current status?",
+          "options": [
+            {
+              "id": "healthy",
+              "description": "Current checks pass."
+            },
+            {
+              "id": "failed",
+              "description": "Historical error controls."
+            }
+          ],
+          "expected": "healthy"
+        },
+        {
+          "id": "historical",
+          "question": "Should old error be current evidence?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Any error text is current."
+            },
+            {
+              "id": "no",
+              "description": "Explicitly historical."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "action",
+          "question": "What should happen?",
+          "options": [
+            {
+              "id": "monitor",
+              "description": "Continue normal monitoring."
+            },
+            {
+              "id": "emergency",
+              "description": "Open new incident from history."
+            }
+          ],
+          "expected": "monitor"
+        }
+      ]
+    },
+    {
+      "id": "shared-45",
+      "type": "shared",
+      "state": "A model runner can execute all installed models or selected models. Installed are A, B, C. User selects only A and C.",
+      "decisions": [
+        {
+          "id": "run_a",
+          "question": "Should A run?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Selected."
+            },
+            {
+              "id": "no",
+              "description": "Not selected."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "run_b",
+          "question": "Should B run?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Installed means always run."
+            },
+            {
+              "id": "no",
+              "description": "B not selected."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "run_c",
+          "question": "Should C run?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Selected."
+            },
+            {
+              "id": "no",
+              "description": "Not selected."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "shared-46",
+      "type": "shared",
+      "state": "Benchmark runner performs two unscored warmups then 50 scored cases. First warmup fails due to one-time initialization, second succeeds, scored cases run normally.",
+      "decisions": [
+        {
+          "id": "score_warmup",
+          "question": "Should failed warmup count as accuracy failure?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "All calls scored."
+            },
+            {
+              "id": "no",
+              "description": "Warmups unscored."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "continue",
+          "question": "May benchmark proceed?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Initialization recovered before scoring."
+            },
+            {
+              "id": "no",
+              "description": "Any warmup failure aborts forever."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "report",
+          "question": "What should still be logged?",
+          "options": [
+            {
+              "id": "warmup_warning",
+              "description": "Record anomaly separately."
+            },
+            {
+              "id": "nothing",
+              "description": "Hide it."
+            }
+          ],
+          "expected": "warmup_warning"
+        }
+      ]
+    },
+    {
+      "id": "shared-47",
+      "type": "shared",
+      "state": "A benchmark compares local models while another resident model server occupies most GPU memory, causing swapping for the benchmarked model.",
+      "decisions": [
+        {
+          "id": "valid_perf",
+          "question": "Are latency numbers cleanly comparable?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Other processes never matter."
+            },
+            {
+              "id": "no",
+              "description": "Resource contention biases latency."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "next",
+          "question": "What should happen before rerun?",
+          "options": [
+            {
+              "id": "stop_server",
+              "description": "Stop resident model server and rerun."
+            },
+            {
+              "id": "ignore",
+              "description": "Ignore contention."
+            },
+            {
+              "id": "delete_results",
+              "description": "Delete without rerun."
+            }
+          ],
+          "expected": "stop_server"
+        },
+        {
+          "id": "accuracy",
+          "question": "Does contention necessarily invalidate observed label correctness?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "All labels become wrong."
+            },
+            {
+              "id": "no",
+              "description": "It mainly compromises performance comparability."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-48",
+      "type": "shared",
+      "state": "Decision options are allow, deny, no_clear_answer. State omits the one fact policy uses to distinguish allow from deny.",
+      "decisions": [
+        {
+          "id": "answer",
+          "question": "Which label should be selected?",
+          "options": [
+            {
+              "id": "allow",
+              "description": "Assume permission."
+            },
+            {
+              "id": "deny",
+              "description": "Assume denial."
+            },
+            {
+              "id": "no_clear_answer",
+              "description": "Required fact missing."
+            }
+          ],
+          "expected": "no_clear_answer"
+        },
+        {
+          "id": "invent",
+          "question": "Should model infer missing fact from typical behavior?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Use defaults."
+            },
+            {
+              "id": "no",
+              "description": "Do not invent evidence."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "quality",
+          "question": "What capability is tested?",
+          "options": [
+            {
+              "id": "uncertainty_handling",
+              "description": "Recognizing unresolved evidence."
+            },
+            {
+              "id": "throughput",
+              "description": "Requests per second."
+            },
+            {
+              "id": "license",
+              "description": "License openness."
+            }
+          ],
+          "expected": "uncertainty_handling"
+        }
+      ]
+    },
+    {
+      "id": "shared-49",
+      "type": "shared",
+      "state": "Severity rubric: low=no impact, medium=limited subset with workaround, high=large subset or no workaround, critical=all users/core flow unavailable. Incident affects 8% with reliable workaround.",
+      "decisions": [
+        {
+          "id": "severity",
+          "question": "Which severity applies?",
+          "options": [
+            {
+              "id": "low",
+              "description": "No impact."
+            },
+            {
+              "id": "medium",
+              "description": "Limited subset with workaround."
+            },
+            {
+              "id": "high",
+              "description": "Large subset or no workaround."
+            },
+            {
+              "id": "critical",
+              "description": "All users/core unavailable."
+            }
+          ],
+          "expected": "medium"
+        },
+        {
+          "id": "outage",
+          "question": "Is this complete outage?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Any impact is outage."
+            },
+            {
+              "id": "no",
+              "description": "Most users work and workaround exists."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "priority",
+          "question": "Should it outrank critical all-user checkout outage?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "All incidents equal."
+            },
+            {
+              "id": "no",
+              "description": "Critical outage higher."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "shared-50",
+      "type": "shared",
+      "state": "Choice labels are alpha,beta,gamma. State explicitly maps code X7 to beta and contains distractor paragraphs discussing alpha historically.",
+      "decisions": [
+        {
+          "id": "label",
+          "question": "Which label applies to X7?",
+          "options": [
+            {
+              "id": "alpha",
+              "description": "Historical distractor."
+            },
+            {
+              "id": "beta",
+              "description": "Lookup maps X7 to beta."
+            },
+            {
+              "id": "gamma",
+              "description": "No mapping."
+            }
+          ],
+          "expected": "beta"
+        },
+        {
+          "id": "distractor",
+          "question": "Should historical alpha discussion override exact lookup?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "More text wins."
+            },
+            {
+              "id": "no",
+              "description": "Exact mapping authoritative."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "method",
+          "question": "What reasoning is required?",
+          "options": [
+            {
+              "id": "lookup",
+              "description": "Use explicit mapping."
+            },
+            {
+              "id": "sentiment",
+              "description": "Judge tone."
+            },
+            {
+              "id": "random",
+              "description": "Guess."
+            }
+          ],
+          "expected": "lookup"
+        }
+      ]
+    }
+  ]
+}

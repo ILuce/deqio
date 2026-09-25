@@ -131,8 +131,8 @@ def settings_from_data(
         raise RuntimeError(f"Configuration is missing fields: {missing}")
 
     engine = str(data["engine"]).lower().strip()
-    if engine not in {"semif", "kev", "decider", "laya", "von"}:
-        raise RuntimeError("engine must be one of: semif, kev, decider, laya, von")
+    if engine not in {"semif", "kev", "decider", "laya", "von", "nimble"}:
+        raise RuntimeError("engine must be one of: semif, kev, decider, laya, von, nimble")
     model_id = str(data["model_id"]).strip()
     if not model_id:
         raise RuntimeError("model_id must be a nonempty string")

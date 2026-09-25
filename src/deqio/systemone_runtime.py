@@ -254,6 +254,25 @@ class SystemOneRuntime:
             env["LAYA_MODELS"] = str(profile.get("laya_model", ""))
             return [str(python), "-m", "laya.serve"]
 
+        if engine == "nimble":
+            sidecar = Path(__file__).with_name("nimble_sidecar.py").resolve()
+            source_root = settings.runtime_dir / str(profile.get("source_key", "nimble-src"))
+            model_config = settings.runtime_dir / str(profile.get("model_config", "nimble-model.json"))
+            if not source_root.is_dir():
+                raise RuntimeError(f"Nimble source checkout is missing: {source_root}")
+            if not model_config.is_file():
+                raise RuntimeError(
+                    f"Nimble prepared model config is missing: {model_config}. "
+                    f"Run: uv run deqio models install {settings.model_id} --backend {settings.backend}"
+                )
+            return [
+                str(python), str(sidecar),
+                "--source-root", str(source_root),
+                "--model-config", str(model_config),
+                "--backend", settings.backend,
+                "--port", str(port),
+            ]
+
         if engine == "von":
             executable = _runtime_executable(env_dir, "von")
             if not executable.is_file():

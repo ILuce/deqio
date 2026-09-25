@@ -27,6 +27,7 @@ POST /v1/shared
 | Laya Multilingual 322M | ✓ | ✓ | ✓ |
 | Laya Typed Decisions 421M | ✓ | ✓ | ✓ |
 | Von | — | ✓ | ✓ |
+| Bespoke Nimble 9B | ✓ | — | ✓ |
 
 ## 1. Installation
 
@@ -336,6 +337,35 @@ curl -s \
 ```
 
 The decision API URL does not change when the active model changes.
+
+
+## Benchmarking installed models
+
+Deqio includes an editable starter suite in `benchmarks/basic.json`: **10 Noul**, **10 Choice**, and **10 Shared** requests. Stop `deqio serve` before benchmarking so the benchmark can load each model with the machine's memory available.
+
+Run it interactively and choose all installed models or selected profiles:
+
+```bash
+uv run deqio benchmark
+```
+
+Run every installed model compatible with the current machine:
+
+```bash
+uv run deqio benchmark --all
+```
+
+Or select profiles explicitly:
+
+```bash
+uv run deqio benchmark \
+  --model decider-0.8b:mps \
+  --model laya-typed-decisions:mlx
+```
+
+The console shows live PASS/FAIL and latency for every request. Full `results.jsonl` and `summary.json` files are written under `.deqio/benchmarks/<timestamp>/`. Add or edit cases in `benchmarks/basic.json` as the benchmark grows.
+
+> **Nimble note:** `Bespoke Nimble 9B` follows the upstream MLX/CUDA workflow. Its first installation downloads the adapter and pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
 
 For the complete request and response schemas, open:
 

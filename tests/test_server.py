@@ -539,3 +539,78 @@ def test_native_runtime_close_releases_model_references() -> None:
     assert runtime.tokenizer is None
     assert runtime.serial_scorer is None
     assert runtime.metadata == {}
+
+
+def test_catalog_contains_nimble_mlx_and_cuda_only() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    mlx = get_profile(catalog, "nimble-9b", "mlx")
+    cuda = get_profile(catalog, "nimble-9b", "cuda")
+    assert mlx["installer"] == "nimble"
+    assert mlx["nimble_backend"] == "mlx"
+    assert cuda["nimble_backend"] == "cuda"
+    with pytest.raises(RuntimeError, match="does not support backend"):
+        get_profile(catalog, "nimble-9b", "mps")
+
+
+def test_benchmark_starter_suite_has_ten_cases_per_request_type() -> None:
+    from deqio.benchmark import load_suite
+
+    suite = load_suite(Path("benchmarks/basic.json"))
+    counts = {kind: 0 for kind in ("noul", "choice", "shared")}
+    for case in suite["cases"]:
+        counts[case["type"]] += 1
+    assert counts == {"noul": 10, "choice": 10, "shared": 10}
+
+
+def test_benchmark_summary_tracks_case_and_decision_accuracy() -> None:
+    from deqio.benchmark import BenchResult, summarize
+
+    rows = [
+        BenchResult("a", "mlx", "x", "n1", "noul", True, "yes", "yes", 10.0, 1, 1, 0.9),
+        BenchResult("a", "mlx", "x", "c1", "choice", False, "a", "b", 20.0, 1, 0, 0.6),
+        BenchResult("a", "mlx", "x", "s1", "shared", False, ["a", "b"], ["a", "c"], 30.0, 2, 1),
+    ]
+    summary = summarize(rows)
+    assert summary["overall"]["cases"] == 3
+    assert summary["overall"]["passed_cases"] == 1
+    assert summary["overall"]["assertions"] == 4
+    assert summary["overall"]["correct"] == 2
+    assert summary["overall"]["decision_accuracy"] == 0.5
+    assert summary["overall"]["median_ms"] == 20.0
+
+
+def test_nimble_sidecar_builds_choice_schema_without_importing_runtime() -> None:
+    from deqio.nimble_sidecar import _choice_schema
+
+    field = _choice_schema({
+        "type": "choice",
+        "instructions": "Which team?",
+        "criteria": {"billing": "Payments", "technical": "Bugs"},
+    })
+    assert field["type"] == "enum"
+    assert field["choices"] == ["billing", "technical"]
+    assert field["choice_descriptions"]["billing"] == "Payments"
+
+
+def test_nimble_sidecar_normalizes_noul_and_choice_results() -> None:
+    from deqio.nimble_sidecar import _answers_from_result
+
+    schema = {
+        "binary": {"type": "boolean", "description": "Is it valid?"},
+        "route": {"type": "enum", "choices": ["billing", "technical"], "description": "Route it."},
+    }
+    kinds = {"binary": "noul", "route": "choice"}
+    result = {
+        "output": {"binary": True, "route": "billing"},
+        "fields": {
+            "binary": {"scores": {"false": 0.2, "true": 0.8}},
+            "route": {"scores": {"billing": 0.75, "technical": 0.25}},
+        },
+    }
+    answers = _answers_from_result(schema, kinds, result)
+    assert answers["binary"]["noul"] == pytest.approx(0.8)
+    assert answers["binary"]["confidence"] == pytest.approx(0.8)
+    assert answers["route"]["choice"] == "billing"
+    assert answers["route"]["probabilities"] == {"billing": 0.75, "technical": 0.25}

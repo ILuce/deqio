@@ -65,7 +65,95 @@ def _select_data(
     return apply_selection(data, model_entry, profile, backend)
 
 
+def _ensure_venv(env_dir: Path, python_version: str) -> Path:
+    python_path = _runtime_python(env_dir)
+    if not python_path.is_file():
+        env_dir.parent.mkdir(parents=True, exist_ok=True)
+        _run(["uv", "python", "install", python_version])
+        _run(["uv", "venv", str(env_dir), "--python", python_version])
+    return python_path
+
+
+def _checkout_nimble(runtime_root: Path, *, upgrade: bool) -> Path:
+    source_dir = runtime_root / "nimble-src"
+    if not (source_dir / ".git").is_dir():
+        if source_dir.exists():
+            raise RuntimeError(f"Nimble source path exists but is not a git checkout: {source_dir}")
+        _run(["git", "clone", "--depth", "1", "https://github.com/bespokelabsai/nimble.git", str(source_dir)])
+    elif upgrade:
+        _run(["git", "-C", str(source_dir), "pull", "--ff-only"])
+    return source_dir
+
+
+def _install_nimble(
+    config_path: Path,
+    data: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    upgrade: bool,
+) -> Path:
+    runtime_root = _runtime_root(config_path, data)
+    runtime_root.mkdir(parents=True, exist_ok=True)
+    source_dir = _checkout_nimble(runtime_root, upgrade=upgrade)
+    backend = str(profile.get("nimble_backend") or data.get("backend") or "")
+    if backend not in {"mlx", "cuda"}:
+        raise RuntimeError("Nimble supports mlx and cuda profiles in Deqio")
+
+    python_version = str(profile.get("python", "3.12"))
+    env_dir = runtime_root / str(profile.get("runtime_key", f"nimble-{backend}"))
+    python_path = _ensure_venv(env_dir, python_version)
+
+    if backend == "mlx":
+        _run([
+            "uv", "pip", "install", "--python", str(python_path),
+            "-r", str(source_dir / "requirements" / "mlx.txt"),
+            "fastapi>=0.110", "uvicorn[standard]>=0.27",
+        ])
+    else:
+        _run([
+            "uv", "pip", "install", "--python", str(python_path),
+            "torch==2.8.0", "--index-url", "https://download.pytorch.org/whl/cu128",
+        ])
+        _run([
+            "uv", "pip", "install", "--python", str(python_path),
+            "-r", str(source_dir / "requirements" / "training.txt"),
+            "fastapi>=0.110", "uvicorn[standard]>=0.27",
+        ])
+
+    prep_dir = runtime_root / "nimble-prep"
+    prep_python = _ensure_venv(prep_dir, python_version)
+    prep_command = ["uv", "pip", "install", "--python", str(prep_python)]
+    if upgrade:
+        prep_command.append("--upgrade")
+    prep_command.extend([
+        "torch==2.8.0",
+        "-r", str(source_dir / "requirements" / "training.txt"),
+        "huggingface-hub",
+    ])
+    _run(prep_command)
+
+    model_dir = Path(str(profile.get("model", "models/nimble-9b"))).expanduser()
+    if not model_dir.is_absolute():
+        model_dir = (config_path.parent / model_dir).resolve()
+    model_config = runtime_root / str(profile.get("model_config", "nimble-model.json"))
+    helper = Path(__file__).with_name("nimble_prepare.py").resolve()
+    prepare = [
+        str(prep_python), str(helper),
+        "--source-root", str(source_dir),
+        "--repo-id", str(profile.get("repo_id", "bespokelabs/Bespoke-Nimble-9B")),
+        "--output-dir", str(model_dir),
+        "--config", str(model_config),
+    ]
+    if upgrade:
+        prepare.append("--force")
+    _run(prepare)
+    return env_dir
+
+
 def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool) -> Path:
+    if profile.get("installer") == "nimble":
+        return _install_nimble(config_path, data, profile, upgrade=upgrade)
+
     runtime_key = profile.get("runtime_key")
     packages = profile.get("packages")
     if not runtime_key or not isinstance(packages, list) or not packages:
@@ -253,7 +341,10 @@ def cmd_install(args: argparse.Namespace) -> int:
     else:
         env_dir = _install_runtime(config_path, data, profile, upgrade=bool(args.upgrade))
         print(f"Runtime ready: {env_dir}")
-        print("Model weights are downloaded by the engine on first start unless already cached.")
+        if profile.get("installer") == "nimble":
+            print("Nimble source, runtime dependencies and prepared model weights are ready.")
+        else:
+            print("Model weights are downloaded by the engine on first start unless already cached.")
 
     mark_installed(
         config_path,

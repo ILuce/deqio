@@ -383,6 +383,39 @@
           ]
         }
       }
+    },
+    {
+      "id": "nimble-9b",
+      "engine": "nimble",
+      "label": "Bespoke Nimble 9B",
+      "description": "Bespoke Labs open Jev-style 9B model for one-pass typed decisions and probabilities.",
+      "source": "https://github.com/bespokelabsai/nimble",
+      "backends": {
+        "mlx": {
+          "model": "models/nimble-9b",
+          "model_revision": "upstream-latest",
+          "wire_model": "nimble-latest",
+          "runtime_key": "nimble-mlx",
+          "source_key": "nimble-src",
+          "model_config": "nimble-model.json",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+          "installer": "nimble",
+          "nimble_backend": "mlx",
+          "python": "3.12"
+        },
+        "cuda": {
+          "model": "models/nimble-9b",
+          "model_revision": "upstream-latest",
+          "wire_model": "nimble-latest",
+          "runtime_key": "nimble-cuda",
+          "source_key": "nimble-src",
+          "model_config": "nimble-model.json",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+          "installer": "nimble",
+          "nimble_backend": "cuda",
+          "python": "3.12"
+        }
+      }
     }
   ]
 }

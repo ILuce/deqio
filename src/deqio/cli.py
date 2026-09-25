@@ -5,6 +5,7 @@ import sys
 
 import uvicorn
 
+from . import benchmark as benchmark_runner
 from . import model_manager
 
 
@@ -35,18 +36,21 @@ def _print_help() -> None:
 Usage:
   deqio serve [--host HOST] [--port PORT]
   deqio models <command> [options]
+  deqio benchmark [--all | --model MODEL_ID:BACKEND]
   deqio status
 
 Commands:
   serve    Start the API and browser UI
-  models   Install, inspect, select, and update decision models
-  status   Show the currently selected model/runtime
+  models    Install, inspect, select, and update decision models
+  benchmark Run the editable local benchmark suite
+  status    Show the currently selected model/runtime
 
 Examples:
   deqio serve
   deqio models setup
   deqio models installed
   deqio models use
+  deqio benchmark --all
   deqio status
 """
     )
@@ -63,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         return _serve(rest)
     if command == "models":
         return model_manager.main(rest)
+    if command == "benchmark":
+        return benchmark_runner.main(rest)
     if command == "status":
         return model_manager.main(["status", *rest])
 
