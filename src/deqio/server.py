@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+
+from . import __version__
 from pydantic import BaseModel
 
 from .backends import BackendRuntime
@@ -427,7 +429,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Deqio Decision Server",
-    version="0.3.0",
+    version=__version__,
     lifespan=lifespan,
 )
 

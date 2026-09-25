@@ -504,3 +504,38 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     persisted = json.loads(config_path.read_text())
     assert persisted["model_id"] == "decider-2b"
     assert persisted["backend"] == "mps"
+
+def test_release_version_is_consistent() -> None:
+    import tomllib
+
+    from deqio import __version__
+    from deqio.server import app
+
+    project = tomllib.loads(Path("pyproject.toml").read_text())
+
+    assert __version__ == "0.1.0"
+    assert project["project"]["version"] == __version__
+    assert app.version == __version__
+
+
+def test_native_runtime_close_releases_model_references() -> None:
+    from types import SimpleNamespace
+
+    from deqio.backends import BackendRuntime
+
+    runtime = BackendRuntime(
+        settings=SimpleNamespace(backend="test", max_tokens=4096),
+        model=object(),
+        tokenizer=object(),
+        metadata={"test": True},
+        direct_score=lambda *args, **kwargs: {},
+        serial_factory=lambda *args, **kwargs: object(),
+        shared_score=lambda *args, **kwargs: ([], {}),
+    )
+
+    runtime.close()
+
+    assert runtime.model is None
+    assert runtime.tokenizer is None
+    assert runtime.serial_scorer is None
+    assert runtime.metadata == {}

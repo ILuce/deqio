@@ -1,6 +1,6 @@
 [project]
 name = "deqio"
-version = "0.3.0"
+version = "0.1.0"
 description = "Unified runtime for fast typed AI decisions across multiple decision engines"
 readme = "README.md"
 license = "MIT"

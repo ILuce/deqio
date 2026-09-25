@@ -185,4 +185,34 @@ class BackendRuntime:
         return details
 
     def close(self) -> None:
-        return None
+        """Release native model references before another runtime is loaded.
+
+        Live model switching calls ``close()`` before loading the replacement.
+        Dropping the model, tokenizer, metadata, and serial scorer here avoids
+        temporarily keeping two native models resident in accelerator/unified
+        memory during the switch. Allocator cleanup is best-effort so shutdown
+        cannot fail solely because a backend cache API is unavailable.
+        """
+        self.serial_scorer = None
+        self.model = None
+        self.tokenizer = None
+        self.metadata = {}
+        gc.collect()
+
+        try:
+            if self.name == "mlx":
+                import mlx.core as mx
+
+                mx.clear_cache()
+            elif self.name == "cuda":
+                import torch
+
+                torch.cuda.empty_cache()
+            elif self.name == "mps":
+                import torch
+
+                torch.mps.empty_cache()
+        except Exception:
+            # References are already dropped above. Cache cleanup is only an
+            # allocator hint and must not make model switching/shutdown fail.
+            pass
