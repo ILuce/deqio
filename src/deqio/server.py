@@ -18,6 +18,7 @@ from . import __version__
 from pydantic import BaseModel
 
 from .backends import BackendRuntime
+from .benchmark_store import list_benchmark_runs, read_benchmark_results, read_benchmark_summary
 from .catalog import apply_selection, get_model, get_profile, load_catalog, public_catalog
 from .config import (
     MODEL_SELECTION_ENV_VARS,
@@ -775,6 +776,37 @@ def activate_model(payload: ModelActivateRequest):
 def get_recent():
     with stats_lock:
         return list(recent_requests)
+
+
+@app.get("/v1/benchmarks")
+def get_benchmarks():
+    runs = list_benchmark_runs(SETTINGS.config_path)
+    return {
+        "available": bool(runs),
+        "latest": runs[0]["id"] if runs else None,
+        "runs": runs,
+    }
+
+
+@app.get("/v1/benchmarks/{run_id}/summary")
+def get_benchmark_summary(run_id: str):
+    try:
+        return read_benchmark_summary(SETTINGS.config_path, run_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.get("/v1/benchmarks/{run_id}/results")
+def get_benchmark_results(run_id: str):
+    try:
+        rows = read_benchmark_results(SETTINGS.config_path, run_id)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"run_id": run_id, "results": rows}
 
 
 @app.get("/ui", response_class=HTMLResponse)

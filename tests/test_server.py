@@ -554,14 +554,14 @@ def test_catalog_contains_nimble_mlx_and_cuda_only() -> None:
         get_profile(catalog, "nimble-9b", "mps")
 
 
-def test_benchmark_starter_suite_has_ten_cases_per_request_type() -> None:
+def test_benchmark_basic_suite_has_fifty_cases_per_request_type() -> None:
     from deqio.benchmark import load_suite
 
     suite = load_suite(Path("benchmarks/basic.json"))
     counts = {kind: 0 for kind in ("noul", "choice", "shared")}
     for case in suite["cases"]:
         counts[case["type"]] += 1
-    assert counts == {"noul": 10, "choice": 10, "shared": 10}
+    assert counts == {"noul": 50, "choice": 50, "shared": 50}
 
 
 def test_benchmark_summary_tracks_case_and_decision_accuracy() -> None:
@@ -614,3 +614,63 @@ def test_nimble_sidecar_normalizes_noul_and_choice_results() -> None:
     assert answers["binary"]["confidence"] == pytest.approx(0.8)
     assert answers["route"]["choice"] == "billing"
     assert answers["route"]["probabilities"] == {"billing": 0.75, "technical": 0.25}
+
+
+
+def test_benchmark_store_lists_and_reads_completed_runs(tmp_path: Path) -> None:
+    import json
+
+    from deqio.benchmark_store import list_benchmark_runs, read_benchmark_results, read_benchmark_summary
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    run_dir = tmp_path / ".deqio" / "benchmarks" / "20260925T120000Z"
+    run_dir.mkdir(parents=True)
+    summary = {
+        "schema_version": 1,
+        "created_at": "2026-09-25T12:00:00+00:00",
+        "suite_name": "deqio-basic-150",
+        "models": [{"model_id": "test", "backend": "mlx", "engine": "x", "load_ms": 12.0, "summary": {}}],
+    }
+    (run_dir / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    rows = [
+        {"model_id": "test", "backend": "mlx", "engine": "x", "case_id": "noul-01", "kind": "noul", "passed": True},
+        {"model_id": "test", "backend": "mlx", "engine": "x", "case_id": "choice-01", "kind": "choice", "passed": False},
+    ]
+    (run_dir / "results.jsonl").write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    runs = list_benchmark_runs(config_path)
+    assert len(runs) == 1
+    assert runs[0]["id"] == "20260925T120000Z"
+    assert runs[0]["suite_name"] == "deqio-basic-150"
+    assert runs[0]["models"] == 1
+    assert runs[0]["results"] == 2
+    assert runs[0]["has_summary"] is True
+    assert runs[0]["has_results"] is True
+    assert read_benchmark_summary(config_path, runs[0]["id"])["suite_name"] == "deqio-basic-150"
+    assert len(read_benchmark_results(config_path, runs[0]["id"])) == 2
+
+
+def test_benchmark_store_rejects_path_traversal(tmp_path: Path) -> None:
+    from deqio.benchmark_store import read_benchmark_summary
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(FileNotFoundError):
+        read_benchmark_summary(config_path, "../outside")
+
+
+def test_benchmark_routes_and_ui_are_exposed() -> None:
+    from deqio.server import app
+    from deqio.ui import DASHBOARD
+
+    routes = {route.path for route in app.routes}
+    assert "/v1/benchmarks" in routes
+    assert "/v1/benchmarks/{run_id}/summary" in routes
+    assert "/v1/benchmarks/{run_id}/results" in routes
+    assert 'id="benchmarkRunSelect"' in DASHBOARD
+    assert 'id="benchmarkSummaryRows"' in DASHBOARD
+    assert 'id="benchmarkResultRows"' in DASHBOARD
+    assert "Accuracy" in DASHBOARD
+    assert "Median latency" in DASHBOARD
+    assert "PASS + FAIL" in DASHBOARD

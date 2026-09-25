@@ -82,6 +82,13 @@ th, td { text-align: left; padding: 9px; border-bottom: 1px solid color-mix(in s
 th { opacity: .7; }
 .hidden { display: none !important; }
 .badge { padding: 5px 9px; border: 1px solid color-mix(in srgb, CanvasText 15%, transparent); border-radius: 999px; font-size: 12px; }
+.benchmark-controls { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.benchmark-run-grid { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 10px; align-items: end; }
+.benchmark-meta { font-size: 13px; opacity: .7; margin: 8px 0 14px; }
+.table-scroll { overflow: auto; }
+.result-pass { font-weight: 700; }
+.result-fail { font-weight: 700; color: #b23b3b; }
+.compact-pre { max-height: 360px; overflow: auto; }
 @media (max-width: 800px) {
     .grid { grid-template-columns: 1fr; }
     .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -89,6 +96,8 @@ th { opacity: .7; }
     .option-row .id { flex: 1 1 140px; }
     .option-row .desc { flex: 1 1 280px; }
     .prob-row { grid-template-columns: 100px 1fr 70px; }
+    .benchmark-controls { grid-template-columns: 1fr 1fr; }
+    .benchmark-run-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -217,11 +226,88 @@ The project has an existing unit test suite.</textarea>
   </div>
 </section>
 
+<section class="panel" id="benchmarkPanel">
+  <div class="toolbar" style="margin-bottom:12px">
+    <div>
+      <h2 style="margin-bottom:4px">Benchmark results</h2>
+      <div class="runtime-note">Reads completed benchmark runs from <code>.deqio/benchmarks/</code>. No benchmark is executed from the UI.</div>
+    </div>
+    <button id="refreshBenchmarks" type="button">Refresh</button>
+  </div>
+
+  <div id="benchmarkEmpty" class="runtime-note">Checking for benchmark runs...</div>
+  <div id="benchmarkContent" class="hidden">
+    <div class="benchmark-run-grid">
+      <div class="field" style="margin:0">
+        <label for="benchmarkRunSelect">Benchmark run</label>
+        <select id="benchmarkRunSelect"></select>
+      </div>
+      <span id="benchmarkRunBadge" class="badge">-</span>
+    </div>
+    <div id="benchmarkMeta" class="benchmark-meta"></div>
+
+    <div class="tabs">
+      <button class="benchmark-tab tab active" data-benchmark-view="summary" type="button">Summary</button>
+      <button class="benchmark-tab tab" data-benchmark-view="results" type="button">Results</button>
+    </div>
+
+    <div id="benchmarkSummaryView">
+      <div class="benchmark-controls">
+        <div><label for="benchmarkSummaryModel">Model</label><select id="benchmarkSummaryModel"></select></div>
+        <div><label for="benchmarkSummaryType">Type</label><select id="benchmarkSummaryType">
+          <option value="overall">Overall</option><option value="noul">Noul</option><option value="choice">Choice</option><option value="shared">Shared</option><option value="*">All rows</option>
+        </select></div>
+        <div><label for="benchmarkSummarySort">Sort by</label><select id="benchmarkSummarySort">
+          <option value="case_accuracy">Accuracy</option><option value="decision_accuracy">Decision accuracy</option><option value="mean_ms">Mean latency</option><option value="median_ms">Median latency</option><option value="p95_ms">P95 latency</option><option value="load_ms">Model load time</option><option value="cases">Cases</option>
+        </select></div>
+        <div><label for="benchmarkSummaryDirection">Order</label><select id="benchmarkSummaryDirection">
+          <option value="desc">Highest first</option><option value="asc">Lowest / fastest first</option>
+        </select></div>
+      </div>
+      <div id="benchmarkSummaryStatus" class="status"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Model</th><th>Engine</th><th>Type</th><th>Cases</th><th>Passed</th><th>Accuracy</th><th>Decision acc.</th><th>Mean</th><th>Median</th><th>P95</th><th>Load</th></tr></thead>
+          <tbody id="benchmarkSummaryRows"></tbody>
+        </table>
+      </div>
+      <details style="margin-top:14px"><summary>Raw summary.json</summary><pre id="benchmarkRawSummary" class="compact-pre" style="margin-top:10px"></pre></details>
+    </div>
+
+    <div id="benchmarkResultsView" class="hidden">
+      <div class="benchmark-controls">
+        <div><label for="benchmarkResultModel">Model</label><select id="benchmarkResultModel"></select></div>
+        <div><label for="benchmarkResultType">Type</label><select id="benchmarkResultType">
+          <option value="*">All types</option><option value="noul">Noul</option><option value="choice">Choice</option><option value="shared">Shared</option>
+        </select></div>
+        <div><label for="benchmarkResultStatus">Status</label><select id="benchmarkResultStatus">
+          <option value="*">PASS + FAIL</option><option value="pass">PASS</option><option value="fail">FAIL</option>
+        </select></div>
+        <div><label for="benchmarkResultSort">Sort</label><select id="benchmarkResultSort">
+          <option value="case_id:asc">Case ID</option><option value="latency_ms:asc">Latency: fastest</option><option value="latency_ms:desc">Latency: slowest</option><option value="top_probability:desc">Confidence: highest</option><option value="top_probability:asc">Confidence: lowest</option>
+        </select></div>
+      </div>
+      <div id="benchmarkResultsStatus" class="status"></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Case</th><th>Model</th><th>Engine</th><th>Type</th><th>Status</th><th>Expected</th><th>Actual</th><th>Confidence</th><th>Latency</th><th>Error</th></tr></thead>
+          <tbody id="benchmarkResultRows"></tbody>
+        </table>
+      </div>
+      <details style="margin-top:14px"><summary>Raw results.jsonl (parsed)</summary><pre id="benchmarkRawResults" class="compact-pre" style="margin-top:10px"></pre></details>
+    </div>
+  </div>
+</section>
+
 <script>
 let endpoint = 'noul';
 let sharedCounter = 0;
 let activeModelKey = '';
 let installedModels = [];
+let benchmarkRuns = [];
+let benchmarkSummary = null;
+let benchmarkResults = [];
+let benchmarkRunId = '';
 const endpointInitialized = new Set();
 
 const EXAMPLES = {
@@ -549,6 +635,242 @@ async function clearRuntimeCache() {
   }
 }
 
+function benchmarkProfileKey(row) {
+  return `${row.model_id}::${row.backend}`;
+}
+
+function formatBenchmarkValue(value) {
+  if (value == null) return '-';
+  if (Array.isArray(value) || typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function formatBenchmarkMs(value) {
+  return value == null ? '-' : `${Number(value).toFixed(1)} ms`;
+}
+
+function formatBenchmarkPercent(value) {
+  return value == null ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function setSelectOptions(select, rows, valueFor, labelFor, allLabel) {
+  const previous = select.value;
+  select.replaceChildren();
+  if (allLabel) {
+    const option = document.createElement('option');
+    option.value = '*';
+    option.textContent = allLabel;
+    select.appendChild(option);
+  }
+  rows.forEach(row => {
+    const option = document.createElement('option');
+    option.value = valueFor(row);
+    option.textContent = labelFor(row);
+    select.appendChild(option);
+  });
+  if ([...select.options].some(option => option.value === previous)) select.value = previous;
+}
+
+function flattenBenchmarkSummary(summary) {
+  const rows = [];
+  for (const model of summary?.models || []) {
+    for (const type of ['overall', 'noul', 'choice', 'shared']) {
+      const stats = model.summary?.[type];
+      if (!stats) continue;
+      rows.push({
+        model_id: model.model_id,
+        backend: model.backend,
+        engine: model.engine,
+        load_ms: model.load_ms,
+        type,
+        ...stats,
+      });
+    }
+  }
+  return rows;
+}
+
+function renderBenchmarkSummary() {
+  if (!benchmarkSummary) {
+    byId('benchmarkSummaryRows').innerHTML = '';
+    byId('benchmarkSummaryStatus').textContent = 'summary.json is not available for this run.';
+    return;
+  }
+  const model = byId('benchmarkSummaryModel').value;
+  const type = byId('benchmarkSummaryType').value;
+  const metric = byId('benchmarkSummarySort').value;
+  const direction = byId('benchmarkSummaryDirection').value;
+  let rows = flattenBenchmarkSummary(benchmarkSummary).filter(row =>
+    (model === '*' || benchmarkProfileKey(row) === model) && (type === '*' || row.type === type)
+  );
+  const multiplier = direction === 'asc' ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = a[metric];
+    const bv = b[metric];
+    if (av == null && bv == null) return benchmarkProfileKey(a).localeCompare(benchmarkProfileKey(b));
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * multiplier;
+    return String(av).localeCompare(String(bv)) * multiplier;
+  });
+  byId('benchmarkSummaryStatus').className = 'status';
+  byId('benchmarkSummaryStatus').textContent = `${rows.length} summary row${rows.length === 1 ? '' : 's'}.`;
+  byId('benchmarkSummaryRows').innerHTML = rows.map(row => `
+    <tr>
+      <td>${escapeHtml(`${row.model_id}:${row.backend}`)}</td>
+      <td>${escapeHtml(row.engine ?? '-')}</td>
+      <td>${escapeHtml(row.type === 'overall' ? 'all' : row.type)}</td>
+      <td>${escapeHtml(row.cases ?? '-')}</td>
+      <td>${escapeHtml(row.passed_cases ?? '-')}</td>
+      <td>${escapeHtml(formatBenchmarkPercent(row.case_accuracy))}</td>
+      <td>${escapeHtml(formatBenchmarkPercent(row.decision_accuracy))}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.mean_ms))}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.median_ms))}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.p95_ms))}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.load_ms))}</td>
+    </tr>`).join('');
+}
+
+function renderBenchmarkResults() {
+  const model = byId('benchmarkResultModel').value;
+  const type = byId('benchmarkResultType').value;
+  const status = byId('benchmarkResultStatus').value;
+  const [metric, direction] = byId('benchmarkResultSort').value.split(':');
+  let rows = benchmarkResults.filter(row =>
+    (model === '*' || benchmarkProfileKey(row) === model) &&
+    (type === '*' || row.kind === type) &&
+    (status === '*' || (status === 'pass' ? row.passed : !row.passed))
+  );
+  const multiplier = direction === 'asc' ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = a[metric];
+    const bv = b[metric];
+    if (av == null && bv == null) return String(a.case_id).localeCompare(String(b.case_id));
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * multiplier;
+    return String(av).localeCompare(String(bv)) * multiplier;
+  });
+  const failed = rows.filter(row => !row.passed).length;
+  byId('benchmarkResultsStatus').className = 'status';
+  byId('benchmarkResultsStatus').textContent = `${rows.length} result${rows.length === 1 ? '' : 's'} · ${failed} FAIL.`;
+  byId('benchmarkResultRows').innerHTML = rows.map(row => `
+    <tr>
+      <td>${escapeHtml(row.case_id ?? '-')}</td>
+      <td>${escapeHtml(`${row.model_id}:${row.backend}`)}</td>
+      <td>${escapeHtml(row.engine ?? '-')}</td>
+      <td>${escapeHtml(row.kind ?? '-')}</td>
+      <td class="${row.passed ? 'result-pass' : 'result-fail'}">${row.passed ? 'PASS' : 'FAIL'}</td>
+      <td>${escapeHtml(formatBenchmarkValue(row.expected))}</td>
+      <td>${escapeHtml(formatBenchmarkValue(row.actual))}</td>
+      <td>${escapeHtml(row.top_probability == null ? '-' : formatBenchmarkPercent(row.top_probability))}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.latency_ms))}</td>
+      <td>${escapeHtml(row.error ?? '-')}</td>
+    </tr>`).join('');
+}
+
+function populateBenchmarkFilters() {
+  const summaryModels = [];
+  const seenSummary = new Set();
+  for (const row of benchmarkSummary?.models || []) {
+    const key = benchmarkProfileKey(row);
+    if (!seenSummary.has(key)) { seenSummary.add(key); summaryModels.push(row); }
+  }
+  setSelectOptions(byId('benchmarkSummaryModel'), summaryModels, benchmarkProfileKey, row => `${row.model_id}:${row.backend}`, 'All models');
+
+  const resultModels = [];
+  const seenResults = new Set();
+  for (const row of benchmarkResults) {
+    const key = benchmarkProfileKey(row);
+    if (!seenResults.has(key)) { seenResults.add(key); resultModels.push(row); }
+  }
+  setSelectOptions(byId('benchmarkResultModel'), resultModels, benchmarkProfileKey, row => `${row.model_id}:${row.backend}`, 'All models');
+}
+
+async function loadBenchmarkRun(runId) {
+  const metadata = benchmarkRuns.find(run => run.id === runId);
+  if (!metadata) return;
+  benchmarkRunId = runId;
+  byId('benchmarkRunBadge').textContent = metadata.results ? `${metadata.results} results` : 'benchmark run';
+  byId('benchmarkMeta').textContent = `${metadata.suite_name || 'unknown suite'} · ${new Date(metadata.created_at).toLocaleString()} · ${metadata.models ?? '-'} model(s)`;
+  byId('benchmarkSummaryStatus').textContent = 'Loading summary...';
+  byId('benchmarkResultsStatus').textContent = 'Loading results...';
+
+  const loadOptional = async (url, available) => {
+    if (!available) return null;
+    const response = await fetch(url);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || JSON.stringify(body));
+    return body;
+  };
+
+  try {
+    const [summary, results] = await Promise.all([
+      loadOptional(`/v1/benchmarks/${encodeURIComponent(runId)}/summary`, metadata.has_summary),
+      loadOptional(`/v1/benchmarks/${encodeURIComponent(runId)}/results`, metadata.has_results),
+    ]);
+    benchmarkSummary = summary;
+    benchmarkResults = results?.results || [];
+    byId('benchmarkRawSummary').textContent = benchmarkSummary ? JSON.stringify(benchmarkSummary, null, 2) : 'summary.json not available';
+    byId('benchmarkRawResults').textContent = JSON.stringify(benchmarkResults, null, 2);
+    populateBenchmarkFilters();
+    renderBenchmarkSummary();
+    renderBenchmarkResults();
+  } catch (error) {
+    benchmarkSummary = null;
+    benchmarkResults = [];
+    byId('benchmarkSummaryStatus').textContent = error.message;
+    byId('benchmarkSummaryStatus').className = 'status error';
+    byId('benchmarkResultsStatus').textContent = error.message;
+    byId('benchmarkResultsStatus').className = 'status error';
+  }
+}
+
+async function refreshBenchmarks() {
+  const empty = byId('benchmarkEmpty');
+  const content = byId('benchmarkContent');
+  const select = byId('benchmarkRunSelect');
+  empty.textContent = 'Checking for benchmark runs...';
+  empty.className = 'runtime-note';
+  try {
+    const response = await fetch('/v1/benchmarks');
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || JSON.stringify(data));
+    benchmarkRuns = data.runs || [];
+    if (!benchmarkRuns.length) {
+      content.classList.add('hidden');
+      empty.classList.remove('hidden');
+      empty.textContent = 'No benchmark runs found. Run `uv run deqio benchmark` and refresh this section.';
+      return;
+    }
+
+    empty.classList.add('hidden');
+    content.classList.remove('hidden');
+    const previous = benchmarkRunId || select.value;
+    select.replaceChildren();
+    benchmarkRuns.forEach(run => {
+      const option = document.createElement('option');
+      option.value = run.id;
+      const created = new Date(run.created_at).toLocaleString();
+      option.textContent = `${created} · ${run.suite_name || run.id} · ${run.models ?? '-'} model(s)`;
+      select.appendChild(option);
+    });
+    select.value = benchmarkRuns.some(run => run.id === previous) ? previous : (data.latest || benchmarkRuns[0].id);
+    await loadBenchmarkRun(select.value);
+  } catch (error) {
+    content.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = `Could not read benchmark history: ${error.message}`;
+    empty.className = 'status error';
+  }
+}
+
+function setBenchmarkView(view) {
+  document.querySelectorAll('.benchmark-tab').forEach(button => button.classList.toggle('active', button.dataset.benchmarkView === view));
+  byId('benchmarkSummaryView').classList.toggle('hidden', view !== 'summary');
+  byId('benchmarkResultsView').classList.toggle('hidden', view !== 'results');
+}
+
 async function refreshHealth() {
   try {
     const health = await fetch('/health').then(r => r.json());
@@ -591,13 +913,20 @@ byId('sendRequest').addEventListener('click', sendRequest);
 byId('clearCache').addEventListener('click', clearRuntimeCache);
 byId('activateModel').addEventListener('click', activateSelectedModel);
 byId('modelSelect').addEventListener('change', () => { byId('activateModel').disabled = byId('modelSelect').value === activeModelKey; });
+byId('refreshBenchmarks').addEventListener('click', refreshBenchmarks);
+byId('benchmarkRunSelect').addEventListener('change', event => loadBenchmarkRun(event.target.value));
+document.querySelectorAll('.benchmark-tab').forEach(button => button.addEventListener('click', () => setBenchmarkView(button.dataset.benchmarkView)));
+['benchmarkSummaryModel', 'benchmarkSummaryType', 'benchmarkSummarySort', 'benchmarkSummaryDirection'].forEach(id => byId(id).addEventListener('change', renderBenchmarkSummary));
+['benchmarkResultModel', 'benchmarkResultType', 'benchmarkResultStatus', 'benchmarkResultSort'].forEach(id => byId(id).addEventListener('change', renderBenchmarkResults));
 document.addEventListener('input', updatePreview);
 document.addEventListener('change', updatePreview);
 
 setEndpoint('noul');
+setBenchmarkView('summary');
 refreshHealth();
 refreshStats();
 refreshModels();
+refreshBenchmarks();
 setInterval(refreshStats, 2000);
 </script>
 </body>
