@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gc
-import platform
 from collections.abc import Callable
 from typing import Any
 
@@ -9,7 +8,7 @@ from .config import Settings
 
 
 class BackendRuntime:
-    """One loaded SemIf backend with a stable server-facing scoring interface."""
+    """Stable server-facing scoring interface for a loaded decision runtime."""
 
     def __init__(
         self,
@@ -35,66 +34,12 @@ class BackendRuntime:
 
     @classmethod
     def load(cls, settings: Settings) -> "BackendRuntime":
-        if settings.engine != "semif":
-            from .systemone_runtime import SystemOneRuntime
+        # Every model engine, including SemIf, is executed through an isolated
+        # runtime. This keeps the PyPI package free of engine-specific VCS
+        # dependencies and gives all engines the same lifecycle semantics.
+        from .systemone_runtime import SystemOneRuntime
 
-            return SystemOneRuntime.load(settings)  # type: ignore[return-value]
-
-        if settings.backend == "mlx":
-            if platform.system() != "Darwin" or platform.machine() != "arm64":
-                raise RuntimeError("MLX backend requires macOS on Apple Silicon (Darwin arm64)")
-            model_path = settings.model
-            from pathlib import Path
-
-            if not Path(model_path).is_dir():
-                raise RuntimeError(
-                    f"MLX model directory does not exist: {model_path}. "
-                    "Download the configured model before starting the server."
-                )
-            from semif_phase1 import mlx_backend
-
-            model, tokenizer, metadata = mlx_backend.load_model(
-                model_path,
-                settings.model_revision,
-                bits=None,
-                cache_limit_mib=settings.mlx_cache_mib,
-            )
-            return cls(
-                settings=settings,
-                model=model,
-                tokenizer=tokenizer,
-                metadata=metadata,
-                direct_score=mlx_backend.score,
-                serial_factory=mlx_backend.SerialPrefixScorer,
-                shared_score=mlx_backend.score_shared,
-            )
-
-        if settings.backend in {"cuda", "mps"}:
-            if settings.backend == "mps" and (platform.system() != "Darwin" or platform.machine() != "arm64"):
-                raise RuntimeError("MPS backend requires macOS on Apple Silicon (Darwin arm64)")
-
-            from semif_phase1.core import load_causal_model
-            from semif_phase1.direct import score
-            from semif_phase1.serial import SerialPrefixScorer
-            from semif_phase1.shared import score_shared
-
-            model, tokenizer, metadata = load_causal_model(
-                settings.model,
-                settings.model_revision,
-                settings.backend,
-                settings.torch_dtype,
-            )
-            return cls(
-                settings=settings,
-                model=model,
-                tokenizer=tokenizer,
-                metadata=metadata,
-                direct_score=score,
-                serial_factory=SerialPrefixScorer,
-                shared_score=score_shared,
-            )
-
-        raise RuntimeError(f"Unsupported backend: {settings.backend}")
+        return SystemOneRuntime.load(settings)  # type: ignore[return-value]
 
     def _new_serial_scorer(self):
         return self._serial_factory(

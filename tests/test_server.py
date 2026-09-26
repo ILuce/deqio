@@ -674,3 +674,108 @@ def test_benchmark_routes_and_ui_are_exposed() -> None:
     assert "Accuracy" in DASHBOARD
     assert "Median latency" in DASHBOARD
     assert "PASS + FAIL" in DASHBOARD
+
+
+def test_default_workspace_bootstraps_from_packaged_assets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from deqio.config import read_config_data
+    from deqio.benchmark import load_suite
+    from deqio.catalog import load_catalog
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DEQIO_CONFIG", raising=False)
+
+    config_path, data = read_config_data()
+
+    assert config_path == (tmp_path / "config.json").resolve()
+    assert config_path.is_file()
+    assert (tmp_path / "models.json").is_file()
+    assert (tmp_path / "benchmarks" / "basic.json").is_file()
+    assert data["model_catalog"] == "models.json"
+    assert len(load_catalog(tmp_path / "models.json")["models"]) >= 1
+    suite = load_suite(tmp_path / "benchmarks" / "basic.json")
+    counts = {kind: 0 for kind in ("noul", "choice", "shared")}
+    for case in suite["cases"]:
+        counts[case["type"]] += 1
+    assert counts == {"noul": 50, "choice": 50, "shared": 50}
+
+
+def test_workspace_bootstrap_never_overwrites_existing_files(tmp_path: Path) -> None:
+    from deqio.workspace import ensure_workspace
+
+    custom = tmp_path / "models.json"
+    custom.write_text('{"custom": true}\n', encoding="utf-8")
+    ensure_workspace(tmp_path)
+    assert custom.read_text(encoding="utf-8") == '{"custom": true}\n'
+
+
+def test_semif_profiles_use_isolated_runtime() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    for backend in ("mlx", "mps", "cuda"):
+        profile = get_profile(catalog, "semif-qwen3.5-4b", backend)
+        assert profile["runtime_key"] == "semif"
+        assert any("github.com/TheoLeeCJ/SemIf.git" in package for package in profile["packages"])
+
+
+def test_backend_loader_routes_semif_through_systemone(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from deqio.backends import BackendRuntime
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    sentinel = object()
+    monkeypatch.setattr(SystemOneRuntime, "load", classmethod(lambda cls, settings: sentinel))
+    assert BackendRuntime.load(SimpleNamespace(engine="semif")) is sentinel
+
+
+def test_semif_sidecar_normalizes_noul_and_choice_without_runtime_import() -> None:
+    from deqio.semif_sidecar import _answer_from_raw
+
+    noul = _answer_from_raw(
+        "noul",
+        {"option_ids": ["yes", "no"], "probabilities": [0.75, 0.25]},
+    )
+    assert noul["noul"] == pytest.approx(0.75)
+    assert noul["confidence"] == pytest.approx(0.75)
+
+    choice = _answer_from_raw(
+        "choice",
+        {"option_ids": ["a", "b"], "probabilities": [0.2, 0.8]},
+    )
+    assert choice["choice"] == "b"
+    assert choice["probabilities"] == {"a": 0.2, "b": 0.8}
+
+
+def test_packaged_workspace_templates_are_current_and_self_consistent(tmp_path: Path) -> None:
+    import json
+    from importlib.resources import files
+
+    from deqio.workspace import ensure_workspace
+
+    package_data = files("deqio.data")
+    packaged_models = json.loads(package_data.joinpath("models.json").read_text(encoding="utf-8"))
+    repository_models = json.loads(Path("models.json").read_text(encoding="utf-8"))
+    assert packaged_models == repository_models
+
+    packaged_benchmark = json.loads(
+        package_data.joinpath("benchmarks").joinpath("basic.json").read_text(encoding="utf-8")
+    )
+    repository_benchmark = json.loads(Path("benchmarks/basic.json").read_text(encoding="utf-8"))
+    assert packaged_benchmark == repository_benchmark
+
+    # The repository-root config.json is local mutable state and is intentionally
+    # ignored by Git. It changes whenever the active model changes, so it must not
+    # be used as the golden source for the immutable PyPI workspace template.
+    packaged_config = json.loads(package_data.joinpath("config.json").read_text(encoding="utf-8"))
+    model_by_id = {str(item["id"]): item for item in packaged_models["models"]}
+    selected = model_by_id[packaged_config["model_id"]]
+    profile = selected["backends"][packaged_config["backend"]]
+
+    assert packaged_config["engine"] == selected["engine"]
+    assert packaged_config["model"] == profile["model"]
+    assert packaged_config["model_revision"] == profile.get("model_revision", selected["id"])
+
+    ensure_workspace(tmp_path)
+    bootstrapped_config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+    assert bootstrapped_config == packaged_config

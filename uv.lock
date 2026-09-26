@@ -1212,7 +1212,6 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
-    { name = "semif-phase1", extra = ["mlx"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1228,7 +1227,6 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "huggingface-hub" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "semif-phase1", extras = ["mlx"], git = "https://github.com/TheoLeeCJ/SemIf.git?rev=1f2dea3e25379f9dfc98cb83c324f00ab5deda37" },
     { name = "uvicorn", extras = ["standard"] },
 ]
 provides-extras = ["dev"]

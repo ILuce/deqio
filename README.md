@@ -31,6 +31,8 @@ POST /v1/shared
 
 ## 1. Installation
 
+The recommended installation is from **PyPI** with `uv tool`. Deqio keeps models, isolated runtimes, configuration, and benchmark results in the directory where you use it; the Python package itself stays small.
+
 ### macOS — Apple Silicon
 
 Deqio supports both **MLX** and **MPS** on Apple Silicon.
@@ -41,23 +43,23 @@ Deqio supports both **MLX** and **MPS** on Apple Silicon.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. Clone Deqio and enter the project:
+2. Install Deqio from PyPI:
 
 ```bash
-git clone https://github.com/ILuce/deqio.git
-cd deqio
+uv tool install deqio
 ```
 
-3. Install the project:
+3. Create a workspace and enter it:
 
 ```bash
-uv sync
+mkdir -p deqio-work
+cd deqio-work
 ```
 
-4. Choose a backend and model:
+4. Choose and install a backend/model:
 
 ```bash
-uv run deqio models setup
+deqio models setup
 ```
 
 On a Mac, the installer offers:
@@ -65,13 +67,15 @@ On a Mac, the installer offers:
 - `mlx` — recommended for models with native MLX support
 - `mps` — PyTorch on Apple Silicon, required by models such as Decider
 
+On first setup Deqio creates editable `config.json`, `models.json`, and `benchmarks/basic.json` files in this workspace. Model runtimes and weights are also kept outside the PyPI package.
+
 5. Start Deqio:
 
 ```bash
-uv run deqio serve
+deqio serve
 ```
 
-The first start of a model may download its weights.
+The first start of some models may download additional weights.
 
 ---
 
@@ -85,30 +89,30 @@ Deqio uses the **CUDA** backend on Linux.
 nvidia-smi
 ```
 
-2. Install `uv`:
+2. Install `uv` and Deqio:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install deqio
 ```
 
-3. Clone and install Deqio:
+3. Create a workspace:
 
 ```bash
-git clone https://github.com/ILuce/deqio.git
-cd deqio
-uv sync
+mkdir -p deqio-work
+cd deqio-work
 ```
 
-4. Choose a CUDA-compatible model:
+4. Choose and install a CUDA-compatible model:
 
 ```bash
-uv run deqio models setup
+deqio models setup
 ```
 
 5. Start Deqio:
 
 ```bash
-uv run deqio serve
+deqio serve
 ```
 
 ---
@@ -123,52 +127,66 @@ Deqio uses the **CUDA** backend on Windows.
 nvidia-smi
 ```
 
-2. Install `uv`:
+2. Install `uv` and Deqio:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv tool install deqio
 ```
 
-3. Clone and install Deqio:
+3. Create a workspace:
 
 ```powershell
-git clone https://github.com/ILuce/deqio.git
-cd deqio
-uv sync
+New-Item -ItemType Directory -Force deqio-work
+Set-Location deqio-work
 ```
 
-4. Choose a CUDA-compatible model:
+4. Choose and install a CUDA-compatible model:
 
 ```powershell
-uv run deqio models setup
+deqio models setup
 ```
 
 5. Start Deqio:
 
 ```powershell
-uv run deqio serve
+deqio serve
 ```
 
 ---
+
+### Install from source
+
+For development, clone the repository instead of installing the PyPI tool:
+
+```bash
+git clone https://github.com/ILuce/deqio.git
+cd deqio
+uv sync --extra dev
+uv run deqio models setup
+uv run deqio serve
+```
+
+When running from a source checkout, use `uv run deqio ...`; when installed from PyPI with `uv tool install deqio`, use `deqio ...` directly.
 
 ### Models you already installed
 
 List locally available models:
 
 ```bash
-uv run deqio models installed
+deqio models installed
 ```
 
 Choose another installed model before starting the server:
 
 ```bash
-uv run deqio models use
+deqio models use
 ```
 
 Show the current selection:
 
 ```bash
-uv run deqio status
+deqio status
 ```
 
 ## 2. Using Deqio from the UI
@@ -176,7 +194,7 @@ uv run deqio status
 Start the server:
 
 ```bash
-uv run deqio serve
+deqio serve
 ```
 
 Open:
@@ -235,7 +253,7 @@ Stop the server with `Ctrl+C`.
 Start Deqio once:
 
 ```bash
-uv run deqio serve
+deqio serve
 ```
 
 Base URL:
@@ -341,24 +359,24 @@ The decision API URL does not change when the active model changes.
 
 ## Benchmarking installed models
 
-Deqio includes an editable starter suite in `benchmarks/basic.json`: **10 Noul**, **10 Choice**, and **10 Shared** requests. Stop `deqio serve` before benchmarking so the benchmark can load each model with the machine's memory available.
+Deqio includes an editable starter suite in `benchmarks/basic.json`: **50 Noul**, **50 Choice**, and **50 Shared** requests. Stop `deqio serve` before benchmarking so the benchmark can load each model with the machine's memory available.
 
 Run it interactively and choose all installed models or selected profiles:
 
 ```bash
-uv run deqio benchmark
+deqio benchmark
 ```
 
 Run every installed model compatible with the current machine:
 
 ```bash
-uv run deqio benchmark --all
+deqio benchmark --all
 ```
 
 Or select profiles explicitly:
 
 ```bash
-uv run deqio benchmark \
+deqio benchmark \
   --model decider-0.8b:mps \
   --model laya-typed-decisions:mlx
 ```

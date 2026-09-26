@@ -22,4 +22,4 @@ TODO
 .model-runtimes/
 
 .deqio/
-config.json
+/config.json

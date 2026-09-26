@@ -402,7 +402,7 @@ async def lifespan(app: FastAPI):
 
     runtime = BackendRuntime.load(SETTINGS)
 
-    runtime_kind = "native" if SETTINGS.engine == "semif" else "sidecar"
+    runtime_kind = "sidecar"
     info(f"Runtime loaded: {runtime_kind}. Running warmup...")
 
     with inference_lock:

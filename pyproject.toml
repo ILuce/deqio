@@ -4,13 +4,29 @@ version = "0.1.0"
 description = "Unified runtime for fast typed AI decisions across multiple decision engines"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "huggingface-hub",
-    "semif-phase1[mlx]",
 ]
+keywords = ["ai", "llm", "decision", "jev", "system-one", "inference", "mlx", "mps", "cuda"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Repository = "https://github.com/ILuce/deqio"
+Issues = "https://github.com/ILuce/deqio/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -21,8 +37,12 @@ dev = [
 [project.scripts]
 deqio = "deqio.cli:main"
 
-[tool.uv.sources]
-semif-phase1 = { git = "https://github.com/TheoLeeCJ/SemIf.git", rev = "1f2dea3e25379f9dfc98cb83c324f00ab5deda37" }
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

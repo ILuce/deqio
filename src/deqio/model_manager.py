@@ -14,13 +14,17 @@ from huggingface_hub import hf_hub_download, snapshot_download
 from .catalog import SUPPORTED_BACKENDS, apply_selection, get_model, get_profile, load_catalog
 from .config import read_config_data, write_config_data
 from .installations import installed_profiles, mark_installed
+from .workspace import ensure_workspace
 
 
 ROOT = Path.cwd()
 
 
 def _config_path(value: str | None) -> Path:
-    return Path(value or os.environ.get("DEQIO_CONFIG") or "config.json").expanduser().resolve()
+    configured = value or os.environ.get("DEQIO_CONFIG")
+    if configured is not None:
+        return Path(configured).expanduser().resolve()
+    return ensure_workspace(Path.cwd())
 
 
 def _read_config(path: Path) -> dict[str, Any]:
@@ -336,15 +340,14 @@ def cmd_install(args: argparse.Namespace) -> int:
     entry = get_model(catalog, model_id)
     profile = get_profile(catalog, model_id, backend)
 
+    env_dir = _install_runtime(config_path, data, profile, upgrade=bool(args.upgrade))
+    print(f"Runtime ready: {env_dir}")
     if entry["engine"] == "semif":
         print(_install_native(config_path, profile))
+    elif profile.get("installer") == "nimble":
+        print("Nimble source, runtime dependencies and prepared model weights are ready.")
     else:
-        env_dir = _install_runtime(config_path, data, profile, upgrade=bool(args.upgrade))
-        print(f"Runtime ready: {env_dir}")
-        if profile.get("installer") == "nimble":
-            print("Nimble source, runtime dependencies and prepared model weights are ready.")
-        else:
-            print("Model weights are downloaded by the engine on first start unless already cached.")
+        print("Model weights are downloaded by the engine on first start unless already cached.")
 
     mark_installed(
         config_path,
@@ -376,18 +379,18 @@ def cmd_status(args: argparse.Namespace) -> int:
         "model": profile.get("model"),
         "installation": state,
     }
-    if entry["engine"] != "semif":
-        env_dir = _runtime_root(config_path, data) / str(profile["runtime_key"])
+    runtime_key = profile.get("runtime_key")
+    if runtime_key:
+        env_dir = _runtime_root(config_path, data) / str(runtime_key)
         result["runtime_dir"] = str(env_dir)
         result["runtime_installed"] = _runtime_python(env_dir).is_file()
-    else:
-        download = profile.get("download")
-        if isinstance(download, dict) and download.get("local_dir"):
-            local_dir = Path(str(download["local_dir"]))
-            if not local_dir.is_absolute():
-                local_dir = config_path.parent / local_dir
-            result["local_model_dir"] = str(local_dir.resolve())
-            result["local_model_present"] = local_dir.exists()
+    download = profile.get("download")
+    if isinstance(download, dict) and download.get("local_dir"):
+        local_dir = Path(str(download["local_dir"]))
+        if not local_dir.is_absolute():
+            local_dir = config_path.parent / local_dir
+        result["local_model_dir"] = str(local_dir.resolve())
+        result["local_model_present"] = local_dir.exists()
     print(json.dumps(result, indent=2))
     return 0
 

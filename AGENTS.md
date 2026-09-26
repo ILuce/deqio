@@ -37,15 +37,21 @@ SemIf remains the name of one supported upstream engine. Do not rename upstream 
 
 ## Runtime architecture
 
-The main environment contains Deqio and the native SemIf integration.
-
-Other engines live in isolated environments under:
+The main environment contains the Deqio core only. Every decision engine, including SemIf, runs in an isolated environment under:
 
 ```text
 .model-runtimes/<runtime-key>/
 ```
 
 This isolation is intentional. Independent engines can require conflicting PyTorch, Transformers, MLX, or accelerator versions.
+
+Keep runtime environments separate from local model checkpoints. Downloaded or prepared weights that Deqio manages explicitly live under:
+
+```text
+models/
+```
+
+For example, the SemIf MLX snapshot and prepared Nimble checkpoint use this directory. Do not move these weights into `.model-runtimes/`: runtime environments should be rebuildable without forcing large model downloads or checkpoint merges again.
 
 The model catalog is `models.json`.
 

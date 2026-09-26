@@ -160,12 +160,9 @@ def installed_profiles(
             explicit = isinstance(record, dict)
             active = model_id == active_model_id and str(backend) == active_backend
 
-            if engine == "semif":
-                runtime_ready = True
-            else:
-                runtime_key = profile.get("runtime_key")
-                env_dir = runtime_root / str(runtime_key) if runtime_key else runtime_root / "__missing__"
-                runtime_ready = bool(runtime_key) and _runtime_python(env_dir).is_file()
+            runtime_key = profile.get("runtime_key")
+            env_dir = runtime_root / str(runtime_key) if runtime_key else runtime_root / "__missing__"
+            runtime_ready = bool(runtime_key) and _runtime_python(env_dir).is_file()
 
             local_weights = _local_download_present(config_path, profile)
             model_source = profile.get("model")
@@ -173,10 +170,8 @@ def installed_profiles(
             weights_cached = local_weights or hf_cached
 
             download = profile.get("download")
-            if engine == "semif" and isinstance(download, dict) and download.get("local_dir"):
-                installed = local_weights
-            elif engine == "semif":
-                installed = explicit or weights_cached
+            if isinstance(download, dict) and download.get("local_dir"):
+                installed = runtime_ready and local_weights
             else:
                 installed = runtime_ready and (explicit or weights_cached)
             verified = bool(isinstance(record, dict) and record.get("verified_at")) and installed

@@ -227,6 +227,19 @@ class SystemOneRuntime:
         engine = settings.engine
         model = str(profile["model"])
 
+        if engine == "semif":
+            sidecar = Path(__file__).with_name("semif_sidecar.py").resolve()
+            return [
+                str(python), str(sidecar),
+                "--backend", settings.backend,
+                "--model", settings.model,
+                "--revision", settings.model_revision,
+                "--max-tokens", str(settings.max_tokens),
+                "--mlx-cache-mib", str(settings.mlx_cache_mib),
+                "--torch-dtype", settings.torch_dtype,
+                "--port", str(port),
+            ]
+
         if engine == "kev":
             if settings.backend in {"cuda", "mps"}:
                 env["KEV_BACKEND"] = "torch"
@@ -281,12 +294,16 @@ class SystemOneRuntime:
 
         raise RuntimeError(f"Unsupported external engine: {engine}")
 
-    def _request(self, state: Any, questions: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], float]:
+    def _request(
+        self, state: Any, questions: dict[str, Any], execution_mode: str | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any], float]:
         payload = {
             "model": str(self.profile.get("wire_model", self.settings.model)),
             "state": state,
             "questions": questions,
         }
+        if execution_mode:
+            payload["execution_mode"] = execution_mode
         started = time.perf_counter()
         response = _post_json(f"{self.base_url}/v1/systemone", payload)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
@@ -294,7 +311,6 @@ class SystemOneRuntime:
         return payload, response, latency_ms
 
     def score(self, row: dict[str, Any], mode: str) -> dict[str, Any]:
-        del mode  # External engines choose their own optimized resident execution path.
         question_id = "decision"
         criteria = {
             str(option["id"]): str(option.get("description", "")) or None
@@ -307,7 +323,7 @@ class SystemOneRuntime:
                 "criteria": criteria,
             }
         }
-        payload, response, latency_ms = self._request(row["state"], questions)
+        payload, response, latency_ms = self._request(row["state"], questions, mode)
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
             raise RuntimeError("External engine response is missing answers.decision")
@@ -320,7 +336,6 @@ class SystemOneRuntime:
         )
 
     def score_noul(self, row: dict[str, Any], mode: str) -> dict[str, Any]:
-        del mode
         question_id = "decision"
         questions = {
             question_id: {
@@ -328,7 +343,7 @@ class SystemOneRuntime:
                 "instructions": str(row["question"]),
             }
         }
-        payload, response, latency_ms = self._request(row["state"], questions)
+        payload, response, latency_ms = self._request(row["state"], questions, mode)
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
             raise RuntimeError("External engine response is missing answers.decision")
@@ -357,7 +372,7 @@ class SystemOneRuntime:
                 },
             }
 
-        payload, response, latency_ms = self._request(rows[0]["state"], questions)
+        payload, response, latency_ms = self._request(rows[0]["state"], questions, "shared")
         answers = response.get("answers")
         if not isinstance(answers, dict):
             raise RuntimeError("External engine response is missing answers")
@@ -382,6 +397,10 @@ class SystemOneRuntime:
         }
 
     def clear_cache(self) -> dict[str, Any]:
+        if self.engine == "semif":
+            result = _post_json(f"{self.base_url}/v1/cache/clear", {})
+            result.setdefault("model_loaded", True)
+            return result
         return {
             "engine": self.engine,
             "backend": self.name,

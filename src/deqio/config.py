@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .workspace import ensure_workspace
+
 
 DEFAULT_CONFIG_PATH = Path("config.json")
 ENV_OVERRIDES = {
@@ -68,8 +70,13 @@ def _resolve_model_source(value: str, base: Path, backend: str, engine: str) -> 
 
 
 def read_config_data(path: str | Path | None = None) -> tuple[Path, dict[str, Any]]:
-    configured = path or os.environ.get("DEQIO_CONFIG") or DEFAULT_CONFIG_PATH
-    config_path = Path(configured).expanduser().resolve()
+    configured = path or os.environ.get("DEQIO_CONFIG")
+    if configured is None:
+        config_path = (Path.cwd() / DEFAULT_CONFIG_PATH).resolve()
+        if not config_path.is_file():
+            config_path = ensure_workspace(Path.cwd())
+    else:
+        config_path = Path(configured).expanduser().resolve()
     if not config_path.is_file():
         raise RuntimeError(
             f"Configuration file does not exist: {config_path}. "
