@@ -23,6 +23,8 @@ ENV_OVERRIDES = {
     "DEQIO_RUNTIME_DIR": "runtime_dir",
     "DEQIO_MODEL_CATALOG": "model_catalog",
     "DEQIO_SIDECAR_STARTUP_SECONDS": "sidecar_startup_seconds",
+    "DEQIO_SIDECAR_PROCESS_READY_SECONDS": "sidecar_process_ready_seconds",
+    "DEQIO_HF_OFFLINE_RUNTIME": "hf_offline_runtime",
 }
 MODEL_SELECTION_ENV_VARS = (
     "DEQIO_ENGINE",
@@ -48,11 +50,20 @@ class Settings:
     runtime_dir: Path
     model_catalog: Path
     sidecar_startup_seconds: int
+    sidecar_process_ready_seconds: int
+    hf_offline_runtime: bool
 
 
 def _coerce_override(key: str, value: str) -> Any:
-    if key in {"max_tokens", "mlx_cache_mib", "sidecar_startup_seconds"}:
+    if key in {"max_tokens", "mlx_cache_mib", "sidecar_startup_seconds", "sidecar_process_ready_seconds"}:
         return int(value)
+    if key == "hf_offline_runtime":
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        raise ValueError(value)
     return value
 
 
@@ -119,7 +130,9 @@ def settings_from_data(
     data.setdefault("model_id", "semif-qwen3.5-4b")
     data.setdefault("runtime_dir", ".model-runtimes")
     data.setdefault("model_catalog", "models.json")
-    data.setdefault("sidecar_startup_seconds", 900)
+    data.setdefault("sidecar_startup_seconds", 1800)
+    data.setdefault("sidecar_process_ready_seconds", 300)
+    data.setdefault("hf_offline_runtime", True)
 
     required = {
         "engine",
@@ -138,8 +151,10 @@ def settings_from_data(
         raise RuntimeError(f"Configuration is missing fields: {missing}")
 
     engine = str(data["engine"]).lower().strip()
-    if engine not in {"semif", "kev", "decider", "laya", "von", "nimble"}:
-        raise RuntimeError("engine must be one of: semif, kev, decider, laya, von, nimble")
+    if engine not in {"semif", "kev", "jevk5", "open-jev", "clm", "decider", "laya", "von", "nimble"}:
+        raise RuntimeError(
+            "engine must be one of: semif, kev, jevk5, open-jev, clm, decider, laya, von, nimble"
+        )
     model_id = str(data["model_id"]).strip()
     if not model_id:
         raise RuntimeError("model_id must be a nonempty string")
@@ -152,14 +167,22 @@ def settings_from_data(
         max_tokens = int(data["max_tokens"])
         mlx_cache_mib = int(data["mlx_cache_mib"])
         sidecar_startup_seconds = int(data["sidecar_startup_seconds"])
+        sidecar_process_ready_seconds = int(data["sidecar_process_ready_seconds"])
     except (TypeError, ValueError) as error:
-        raise RuntimeError("max_tokens, mlx_cache_mib and sidecar_startup_seconds must be integers") from error
+        raise RuntimeError(
+            "max_tokens, mlx_cache_mib, sidecar_startup_seconds and sidecar_process_ready_seconds must be integers"
+        ) from error
     if max_tokens < 1:
         raise RuntimeError("max_tokens must be positive")
     if mlx_cache_mib < 0:
         raise RuntimeError("mlx_cache_mib must be nonnegative")
     if sidecar_startup_seconds < 1:
         raise RuntimeError("sidecar_startup_seconds must be positive")
+    if sidecar_process_ready_seconds < 1:
+        raise RuntimeError("sidecar_process_ready_seconds must be positive")
+    hf_offline_runtime = data["hf_offline_runtime"]
+    if not isinstance(hf_offline_runtime, bool):
+        raise RuntimeError("hf_offline_runtime must be a boolean")
 
     torch_dtype = str(data["torch_dtype"])
     if torch_dtype not in {"bfloat16", "float16", "float32"}:
@@ -197,6 +220,8 @@ def settings_from_data(
         runtime_dir=runtime_dir.resolve(),
         model_catalog=model_catalog.resolve(),
         sidecar_startup_seconds=sidecar_startup_seconds,
+        sidecar_process_ready_seconds=sidecar_process_ready_seconds,
+        hf_offline_runtime=hf_offline_runtime,
     )
 
 

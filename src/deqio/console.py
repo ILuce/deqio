@@ -61,8 +61,16 @@ def sidecar_start(*, engine: str, address: str) -> None:
     info(f"  logs      prefixed as [sidecar:{engine}]")
 
 
+def sidecar_process_ready(*, engine: str, address: str) -> None:
+    info(f"Internal sidecar process ready: engine={engine} address={address}")
+
+
+def sidecar_model_wait(*, engine: str, timeout_seconds: float) -> None:
+    info(f"Waiting for model readiness: engine={engine} timeout={timeout_seconds:.0f}s")
+
+
 def sidecar_ready(*, engine: str, address: str) -> None:
-    info(f"Internal sidecar ready: engine={engine} address={address}")
+    info(f"Internal model ready: engine={engine} address={address}")
 
 
 def server_ready(*, host: str = "127.0.0.1", port: int = 8787) -> None:

@@ -106,6 +106,7 @@ uv run deqio models list
 uv run deqio models installed
 uv run deqio models setup
 uv run deqio models use
+uv run deqio models delete
 uv run deqio models status
 uv run deqio status
 ```
@@ -130,6 +131,8 @@ DEQIO_TORCH_DTYPE
 DEQIO_RUNTIME_DIR
 DEQIO_MODEL_CATALOG
 DEQIO_SIDECAR_STARTUP_SECONDS
+DEQIO_SIDECAR_PROCESS_READY_SECONDS
+DEQIO_HF_OFFLINE_RUNTIME
 ```
 
 Keep project configuration under the `DEQIO_` namespace. `SemIf` remains the name of one upstream engine.
@@ -175,7 +178,15 @@ Every entry needs:
 
 Do not silently fall back from an unsupported backend to CPU or another backend.
 
-Installed-profile state is local machine state under `.deqio/` and must not be committed. Installation and activation are separate concerns: the live activation endpoint must never install packages or silently download a new runtime. It may only switch to a profile already detected as installed.
+Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
+
+`models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete.
+
+Model installation must run the host compatibility preflight. Catalogued memory requirements are conservative guardrails; direct install may expose an explicit force override, but interactive setup should not offer profiles below their minimum requirement.
+
+Installation and activation are separate concerns: the live activation endpoint must never install packages or silently download a new runtime. It may only switch to a profile already detected as installed.
+
+Sidecar process readiness and model readiness are distinct states. Opening the localhost port only proves the process is listening; a runtime is ready only after a typed-decision probe succeeds. Use the short process-ready timeout for the port and the longer configurable startup timeout for first model initialization.
 
 Live model switching must keep one resident model at a time. Unload the old runtime before loading the new one, block inference during the transition, persist `config.json` only after the new runtime passes warmup, and attempt to restore the previous runtime on failure.
 

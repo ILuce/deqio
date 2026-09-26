@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import threading
 import time
 from typing import Any
 
@@ -9,19 +10,34 @@ def build_app(model_id: str):
     import laya_mlx as laya
     from fastapi import FastAPI, HTTPException
 
-    agent = laya.load(model_id)
+    agent = None
+    load_lock = threading.Lock()
     app = FastAPI(title="deqio Laya MLX sidecar")
+
+    def ensure_agent():
+        nonlocal agent
+        if agent is not None:
+            return agent
+        with load_lock:
+            if agent is None:
+                agent = laya.load(model_id)
+        return agent
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "model": model_id, "engine": "laya_mlx"}
+        return {
+            "status": "ready" if agent is not None else "process-ready",
+            "model": model_id,
+            "engine": "laya_mlx",
+        }
 
     @app.post("/v1/systemone")
     def system_one(body: dict[str, Any]):
         if not isinstance(body, dict) or not isinstance(body.get("questions"), dict):
             raise HTTPException(status_code=422, detail="questions must be an object")
         started = time.perf_counter()
-        result = agent.predict(body.get("state"), body["questions"])
+        loaded_agent = ensure_agent()
+        result = loaded_agent.predict(body.get("state"), body["questions"])
         if not isinstance(result, dict):
             raise HTTPException(status_code=500, detail="Laya MLX returned an invalid result")
         result.setdefault("model", model_id)

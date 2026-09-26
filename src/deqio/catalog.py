@@ -68,6 +68,14 @@ def public_catalog(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                 "description": item.get("description"),
                 "source": item.get("source"),
                 "backends": sorted(profiles),
+                "profiles": {
+                    str(backend): {
+                        "min_memory_gib": profile.get("min_memory_gib"),
+                        "recommended_memory_gib": profile.get("recommended_memory_gib"),
+                    }
+                    for backend, profile in profiles.items()
+                    if isinstance(profile, dict)
+                },
             }
         )
     return rows

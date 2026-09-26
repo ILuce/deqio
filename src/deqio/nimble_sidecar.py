@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -103,19 +104,34 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
     if backend == "mlx":
         from nimble.scoring.parallel_scorer import ParallelScorer
 
-        scorer = ParallelScorer(**config)
+        scorer_factory = ParallelScorer
     elif backend == "cuda":
         from nimble.scoring.cuda_scorer import CudaCandidateScorer
 
-        scorer = CudaCandidateScorer(**config)
+        scorer_factory = CudaCandidateScorer
     else:
         raise RuntimeError(f"Unsupported Nimble backend: {backend}")
 
+    scorer = None
+    load_lock = threading.Lock()
     app = FastAPI(title="Deqio Nimble sidecar")
+
+    def ensure_scorer():
+        nonlocal scorer
+        if scorer is not None:
+            return scorer
+        with load_lock:
+            if scorer is None:
+                scorer = scorer_factory(**config)
+        return scorer
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "engine": "nimble", "backend": backend}
+        return {
+            "status": "ready" if scorer is not None else "process-ready",
+            "engine": "nimble",
+            "backend": backend,
+        }
 
     @app.post("/v1/systemone")
     def systemone(payload: dict[str, Any]):
@@ -144,10 +160,10 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
                 else:
                     raise ValueError(f"{qid}: unsupported question type {kind!r}")
 
-            result = scorer.score(state, schema)
+            result = ensure_scorer().score(state, schema)
             answers = _answers_from_result(schema, kinds, result)
             return {
-                "model": config.get("model_id", "bespokelabs/Bespoke-Nimble-9B"),
+                "model": config.get("model_id", "bespokelabs/Bespoke-Nimble-9B-v2"),
                 "answers": answers,
                 "latency_ms": (time.perf_counter() - started) * 1000.0,
                 "usage": {"input_tokens": 0},

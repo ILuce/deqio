@@ -62,6 +62,18 @@ def main() -> int:
             ["deqio", "models", "list"], cwd=work, env=env, check=True,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
+        compatible = subprocess.run(
+            ["deqio", "models", "list", "--compatible", "--json"],
+            cwd=work, env=env, check=True, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        compatible_payload = json.loads(compatible.stdout)
+        if not isinstance(compatible_payload.get("models"), list):
+            raise RuntimeError("deqio models list --compatible --json returned an invalid payload")
+        subprocess.run(
+            ["deqio", "models", "delete", "--help"], cwd=work, env=env, check=True,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
         subprocess.run(
             ["deqio", "serve", "--help"], cwd=work, env=env, check=True,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

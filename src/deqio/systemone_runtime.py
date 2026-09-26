@@ -14,7 +14,13 @@ from urllib.request import Request, urlopen
 
 from .catalog import get_model, get_profile, load_catalog
 from .config import Settings
-from .console import sidecar_ready, sidecar_start, start_sidecar_log_pump
+from .console import (
+    sidecar_model_wait,
+    sidecar_process_ready,
+    sidecar_ready,
+    sidecar_start,
+    start_sidecar_log_pump,
+)
 
 
 def _runtime_python(env_dir: Path) -> Path:
@@ -45,19 +51,28 @@ def _wait_for_port(port: int, process: subprocess.Popen[Any], timeout: float = 1
                 return
         except OSError:
             time.sleep(0.2)
-    raise RuntimeError(f"Timed out waiting for engine sidecar on port {port}")
+    raise RuntimeError(f"Timed out waiting {timeout:.1f}s for engine sidecar process on port {port}")
 
 
-def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _post_json(url: str, payload: dict[str, Any], *, timeout: float = 180.0) -> dict[str, Any]:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(url, data=body, headers={"content-type": "application/json"}, method="POST")
     try:
-        with urlopen(request, timeout=180) as response:
+        with urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"System One sidecar returned HTTP {error.code}: {detail}") from error
+    except (TimeoutError, socket.timeout) as error:
+        raise RuntimeError(
+            f"Timed out waiting for model response from {url} after {timeout:.1f}s"
+        ) from error
     except URLError as error:
+        reason = getattr(error, "reason", None)
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            raise RuntimeError(
+                f"Timed out waiting for model response from {url} after {timeout:.1f}s"
+            ) from error
         raise RuntimeError(f"System One sidecar is unavailable: {error}") from error
     if not isinstance(result, dict):
         raise RuntimeError("System One sidecar returned a non-object response")
@@ -164,6 +179,10 @@ class SystemOneRuntime:
         port = _free_port()
         env = os.environ.copy()
         command = cls._command(settings, profile, env_dir, python, port, env)
+        if settings.hf_offline_runtime:
+            env["HF_HUB_OFFLINE"] = "1"
+            env["TRANSFORMERS_OFFLINE"] = "1"
+            env["HF_HUB_DISABLE_TELEMETRY"] = "1"
         address = f"http://127.0.0.1:{port}"
         sidecar_start(engine=settings.engine, address=address)
         env["PYTHONUNBUFFERED"] = "1"
@@ -178,20 +197,17 @@ class SystemOneRuntime:
             bufsize=1,
         )
         log_thread = start_sidecar_log_pump(process, settings.engine)
+        runtime = cls(settings, entry, profile, process, port, log_thread)
         try:
-            _wait_for_port(port, process, timeout=float(settings.sidecar_startup_seconds))
+            _wait_for_port(port, process, timeout=float(settings.sidecar_process_ready_seconds))
+            sidecar_process_ready(engine=settings.engine, address=address)
+            sidecar_model_wait(engine=settings.engine, timeout_seconds=float(settings.sidecar_startup_seconds))
+            runtime._probe_model_ready(timeout=float(settings.sidecar_startup_seconds))
         except Exception:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-            if log_thread is not None:
-                log_thread.join(timeout=1)
+            runtime.close()
             raise
         sidecar_ready(engine=settings.engine, address=address)
-        return cls(settings, entry, profile, process, port, log_thread)
+        return runtime
 
     @staticmethod
     def _validate_accelerator(settings: Settings, python: Path) -> None:
@@ -247,6 +263,52 @@ class SystemOneRuntime:
                 env["KEV_BACKEND"] = "auto"
             return [str(python), "-m", "kev.serve", "--run", model, "--port", str(port)]
 
+        if engine == "jevk5":
+            if settings.backend != "cuda":
+                raise RuntimeError("JevK5's native Deqio profile requires CUDA")
+            return [
+                str(python), "-m", "jevk5.server",
+                "--model", model,
+                "--host", "127.0.0.1",
+                "--port", str(port),
+            ]
+
+        if engine == "open-jev":
+            if settings.backend != "cuda":
+                raise RuntimeError("Open-Jev's current Deqio profiles require CUDA")
+            return [
+                str(python), "-m", "jev.server",
+                "--checkpoint", settings.model,
+                "--device", "cuda:0",
+                "--max-length", str(profile.get("open_jev_max_length", 4096)),
+                "--batch-size", "1",
+                "--no-prefix-cache",
+                "--host", "127.0.0.1",
+                "--port", str(port),
+            ]
+
+        if engine == "clm":
+            if settings.backend != "cuda":
+                raise RuntimeError("CLM's current Deqio profile requires CUDA")
+            sidecar = Path(__file__).with_name("clm_sidecar.py").resolve()
+            checkpoint = Path(str(profile.get("clm_checkpoint", ""))).expanduser()
+            if not checkpoint.is_absolute():
+                checkpoint = (settings.config_path.parent / checkpoint).resolve()
+            if not checkpoint.is_file():
+                raise RuntimeError(
+                    f"CLM checkpoint is missing: {checkpoint}. "
+                    f"Run: uv run deqio models install {settings.model_id} --backend {settings.backend}"
+                )
+            return [
+                str(python), str(sidecar),
+                "--encoder-model", model,
+                "--embedding-model", str(profile.get("clm_embedding_model", "qwen3-8b")),
+                "--checkpoint", str(checkpoint),
+                "--max-tokens", str(profile.get("clm_max_tokens", 2048)),
+                "--gpu-memory-utilization", str(profile.get("clm_gpu_memory_utilization", 0.35)),
+                "--port", str(port),
+            ]
+
         if engine == "decider":
             env["DECIDER_MODEL"] = model
             env["DECIDER_DEVICE"] = "cuda" if settings.backend == "cuda" else "mps"
@@ -263,7 +325,8 @@ class SystemOneRuntime:
             env["LAYA_HOST"] = "127.0.0.1"
             env["LAYA_PORT"] = str(port)
             env["LAYA_DEVICE"] = settings.backend
-            env["LAYA_PRELOAD"] = "1"
+            # Bind the HTTP process first; the Deqio readiness probe loads the selected model.
+            env["LAYA_PRELOAD"] = "0"
             env["LAYA_MODELS"] = str(profile.get("laya_model", ""))
             return [str(python), "-m", "laya.serve"]
 
@@ -294,6 +357,26 @@ class SystemOneRuntime:
 
         raise RuntimeError(f"Unsupported external engine: {engine}")
 
+    def _probe_model_ready(self, *, timeout: float) -> None:
+        payload = {
+            "model": str(self.profile.get("wire_model", self.settings.model)),
+            "state": "Deqio startup readiness probe.",
+            "questions": {
+                "ready": {
+                    "type": "choice",
+                    "instructions": "Is the inference model loaded and able to answer a typed decision?",
+                    "criteria": {
+                        "ready": "The model can answer this request.",
+                        "not_ready": "The model cannot answer this request.",
+                    },
+                }
+            },
+        }
+        response = _post_json(f"{self.base_url}/v1/systemone", payload, timeout=timeout)
+        answers = response.get("answers")
+        if not isinstance(answers, dict) or not isinstance(answers.get("ready"), dict):
+            raise RuntimeError("Engine sidecar opened its port but did not pass the model-readiness probe")
+
     def _request(
         self, state: Any, questions: dict[str, Any], execution_mode: str | None = None
     ) -> tuple[dict[str, Any], dict[str, Any], float]:
@@ -305,7 +388,7 @@ class SystemOneRuntime:
         if execution_mode:
             payload["execution_mode"] = execution_mode
         started = time.perf_counter()
-        response = _post_json(f"{self.base_url}/v1/systemone", payload)
+        response = _post_json(f"{self.base_url}/v1/systemone", payload, timeout=180.0)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         latency_ms = float(response.get("latency_ms", elapsed_ms) or elapsed_ms)
         return payload, response, latency_ms

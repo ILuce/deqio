@@ -12,6 +12,53 @@ POST /v1/choice
 POST /v1/shared
 ```
 
+## Benchmark snapshot
+
+> **Apple Silicon macOS · 16.0 GiB unified memory**<br>
+> `deqio-basic-150` · **150 requests** · **250 scored decisions** · 50 Noul / 50 Choice / 50 Shared<br>
+> Results captured on **2026-09-26**. Higher accuracy is better; lower latency is better.
+
+**Highlights from this run**
+
+- **Highest overall accuracy:** Decider 4B / MPS — **95.3%** case accuracy, **97.2%** decision accuracy.
+- **Lowest median latency:** Laya Multilingual / MLX — **13.2 ms**.
+- **Perfect Noul + Choice accuracy:** Kev 4B / MLX — **100.0% / 100.0%**.
+
+| Model | Backend | Accuracy | Decision accuracy | Median | P95 |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| **Decider 4B** | MPS | **95.3%** | 97.2% | 435.7 ms | 1,358.6 ms |
+| **Kev 4B** | MLX | **92.7%** | 95.2% | 317.6 ms | 507.9 ms |
+| **Decider 2B** | MPS | **90.7%** | 94.0% | 185.3 ms | 524.5 ms |
+| **SemIf / Qwen3.5 4B** | MLX | **90.7%** | 93.6% | 552.3 ms | 997.0 ms |
+| Decider 0.8B | MPS | 84.0% | 88.8% | 292.2 ms | 376.8 ms |
+| Kev 0.8B | MLX | 77.3% | 84.4% | 60.2 ms | 96.9 ms |
+| Von | MPS | 64.0% | 72.8% | 61.0 ms | 104.5 ms |
+| Laya Typed Decisions 421M | MLX | 62.0% | 72.4% | 34.2 ms | 74.6 ms |
+| Laya English 421M | MLX | 54.7% | 66.8% | 34.5 ms | 74.9 ms |
+| Laya Multilingual 322M | MLX | 44.7% | 56.4% | 13.2 ms | 27.1 ms |
+
+*Sorted by overall case accuracy; ties are ordered by decision accuracy. A Shared case passes only when every expected decision in that request is correct, while decision accuracy scores each decision independently.*
+
+<details>
+<summary><strong>Per-type case accuracy</strong></summary>
+
+| Model | Backend | Noul | Choice | Shared |
+| --- | :---: | ---: | ---: | ---: |
+| Decider 4B | MPS | 100.0% | 98.0% | 88.0% |
+| Kev 4B | MLX | 100.0% | 100.0% | 78.0% |
+| Decider 2B | MPS | 94.0% | 94.0% | 84.0% |
+| SemIf / Qwen3.5 4B | MLX | 96.0% | 96.0% | 80.0% |
+| Decider 0.8B | MPS | 88.0% | 94.0% | 70.0% |
+| Kev 0.8B | MLX | 86.0% | 86.0% | 60.0% |
+| Von | MPS | 86.0% | 58.0% | 48.0% |
+| Laya Typed Decisions 421M | MLX | 74.0% | 78.0% | 34.0% |
+| Laya English 421M | MLX | 68.0% | 66.0% | 30.0% |
+| Laya Multilingual 322M | MLX | 62.0% | 48.0% | 24.0% |
+
+</details>
+
+> These are machine-specific results from one local run, not universal model rankings. Results can change with hardware, runtime versions, model revisions, and benchmark changes.
+
 ### Supported models
 
 | Model | MLX | MPS | CUDA |
@@ -20,6 +67,13 @@ POST /v1/shared
 | Kev 0.8B | ✓ | ✓ | ✓ |
 | Kev 4B | ✓ | ✓ | ✓ |
 | Kev 9B | ✓ | ✓ | ✓ |
+| Kev 27B | — | — | ✓ |
+| JevK5 4B | — | — | ✓ |
+| JevK5 9B | — | — | ✓ |
+| Open-Jev 2B | — | — | ✓ |
+| Open-Jev 9B | — | — | ✓ |
+| Open-Jev 27B v1.1 | — | — | ✓ |
+| CLM 8B | — | — | ✓ |
 | Decider 0.8B | — | ✓ | ✓ |
 | Decider 2B | — | ✓ | ✓ |
 | Decider 4B | — | ✓ | ✓ |
@@ -27,7 +81,7 @@ POST /v1/shared
 | Laya Multilingual 322M | ✓ | ✓ | ✓ |
 | Laya Typed Decisions 421M | ✓ | ✓ | ✓ |
 | Von | — | ✓ | ✓ |
-| Bespoke Nimble 9B | ✓ | — | ✓ |
+| Bespoke Nimble 9B v2 | ✓ | — | ✓ |
 
 ## 1. Installation
 
@@ -67,7 +121,9 @@ On a Mac, the installer offers:
 - `mlx` — recommended for models with native MLX support
 - `mps` — PyTorch on Apple Silicon, required by models such as Decider
 
-On first setup Deqio creates editable `config.json`, `models.json`, and `benchmarks/basic.json` files in this workspace. Model runtimes and weights are also kept outside the PyPI package.
+`models setup` detects host memory and hides profiles that do not meet the catalogued minimum for the selected backend. It installs the isolated runtime, downloads/prepares the model weights, starts the model once, and requires a real typed-decision readiness probe to pass before the profile is registered as installed.
+
+On first setup Deqio creates editable `config.json`, `models.json`, and `benchmarks/basic.json` files in this workspace. Model runtimes and weights are kept outside the PyPI package.
 
 5. Start Deqio:
 
@@ -75,7 +131,7 @@ On first setup Deqio creates editable `config.json`, `models.json`, and `benchma
 deqio serve
 ```
 
-The first start of some models may download additional weights.
+After setup succeeds, normal `serve` and benchmark starts use the local Hugging Face cache in offline mode. They do not intentionally contact Hugging Face or download missing weights; if cached artifacts are missing, reinstall/update the profile instead.
 
 ---
 
@@ -169,25 +225,57 @@ uv run deqio serve
 
 When running from a source checkout, use `uv run deqio ...`; when installed from PyPI with `uv tool install deqio`, use `deqio ...` directly.
 
-### Models you already installed
+### Model lifecycle
 
-List locally available models:
+Show models that are compatible with the current host:
+
+```bash
+deqio models list --compatible
+```
+
+For machine-readable host/memory information (useful for agents):
+
+```bash
+deqio models list --compatible --json
+```
+
+List locally installed profiles:
 
 ```bash
 deqio models installed
 ```
 
-Choose another installed model before starting the server:
+Choose another installed profile:
 
 ```bash
 deqio models use
 ```
+
+Delete an installed profile interactively:
+
+```bash
+deqio models delete
+```
+
+Or explicitly:
+
+```bash
+deqio models delete kev-4b --backend mlx --yes
+```
+
+Deqio removes workspace-owned model/runtime artifacts when they are no longer shared by another installed profile. The global Hugging Face cache is kept by default because other applications may use it. Add `--purge-cache` if you explicitly want Deqio to remove the profile's primary unshared Hub repository from that global cache.
 
 Show the current selection:
 
 ```bash
 deqio status
 ```
+
+Memory values in the catalog are conservative compatibility guardrails, not exact peak-memory guarantees. `models install ... --force` can bypass the guard for advanced users.
+
+Model startup has two separate readiness deadlines: the sidecar process must open its local API first (default 300 seconds), then the model must answer a typed readiness probe (new-workspace default 1800 seconds). Override them when needed with `DEQIO_SIDECAR_PROCESS_READY_SECONDS` and `DEQIO_SIDECAR_STARTUP_SECONDS`. `DEQIO_HF_OFFLINE_RUNTIME=false` can temporarily disable normal offline runtime mode for diagnostics; installation/update already enables network access automatically.
+
+Stop a running `deqio serve` process before deleting model/runtime files from the same workspace.
 
 ## 2. Using Deqio from the UI
 
@@ -383,7 +471,9 @@ deqio benchmark \
 
 The console shows live PASS/FAIL and latency for every request. Full `results.jsonl` and `summary.json` files are written under `.deqio/benchmarks/<timestamp>/`. Add or edit cases in `benchmarks/basic.json` as the benchmark grows.
 
-> **Nimble note:** `Bespoke Nimble 9B` follows the upstream MLX/CUDA workflow. Its first installation downloads the adapter and pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
+> **Nimble note:** `Bespoke Nimble 9B v2` follows the upstream MLX/CUDA workflow. Its first installation downloads the adapter and pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
+
+> **CUDA-only model note:** JevK5, Open-Jev and CLM use their upstream Linux/NVIDIA serving paths. CLM starts a local vLLM pooling encoder plus `clm-serve` inside one Deqio-managed sidecar. Kev 27B requires an 80 GB-class NVIDIA GPU.
 
 For the complete request and response schemas, open:
 

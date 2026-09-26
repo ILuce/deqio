@@ -165,12 +165,12 @@ def test_catalog_rejects_unsupported_backend() -> None:
 
 
 def test_model_manager_exposes_mlx_and_mps_on_apple_silicon(monkeypatch: pytest.MonkeyPatch) -> None:
-    import deqio.model_manager as model_manager
+    import deqio.hardware as hardware
 
-    monkeypatch.setattr(model_manager.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(model_manager.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(hardware.platform, "machine", lambda: "arm64")
 
-    assert model_manager._host_backends() == ("mlx", "mps")
+    assert hardware.host_backends() == ("mlx", "mps")
 
 
 def test_supported_backends_are_accelerator_only() -> None:
@@ -209,7 +209,9 @@ def test_config_defaults_new_multi_engine_fields(tmp_path: Path, monkeypatch: py
     assert settings.model_id == "semif-qwen3.5-4b"
     assert settings.runtime_dir == (tmp_path / ".model-runtimes").resolve()
     assert settings.model_catalog == (tmp_path / "models.json").resolve()
-    assert settings.sidecar_startup_seconds == 900
+    assert settings.sidecar_startup_seconds == 1800
+    assert settings.sidecar_process_ready_seconds == 300
+    assert settings.hf_offline_runtime is True
 
 
 def test_external_choice_response_normalization() -> None:
@@ -374,8 +376,14 @@ def test_installed_profiles_require_registry_or_local_evidence(
             }
         ]
     }
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
-    monkeypatch.setattr(installations, "host_backends", lambda: ("mps",))
+    from deqio.hardware import HostCapabilities
+
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"Mapika/decider-0.8b"})
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
+    )
 
     rows = installations.installed_profiles(
         config_path=config_path,
@@ -397,6 +405,177 @@ def test_installed_profiles_require_registry_or_local_evidence(
     )
     assert rows[0]["installed"] is True
     assert rows[0]["status"] == "active"
+
+
+
+def test_installed_profiles_accept_managed_local_model_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime_python = tmp_path / ".model-runtimes" / "semif" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    model_dir = tmp_path / "models" / "semif-qwen3.5-4b-mlx-4bit"
+    model_dir.mkdir(parents=True)
+    (model_dir / "config.json").write_text("{}")
+
+    catalog = {
+        "models": [
+            {
+                "id": "semif-qwen3.5-4b",
+                "engine": "semif",
+                "label": "SemIf / Qwen3.5 4B",
+                "backends": {
+                    "mlx": {
+                        "model": "models/semif-qwen3.5-4b-mlx-4bit",
+                        "runtime_key": "semif",
+                        "download": {
+                            "type": "snapshot",
+                            "repo_id": "vinci00/semif-qwen3.5-4b-mlx-4bit",
+                            "local_dir": "models/semif-qwen3.5-4b-mlx-4bit",
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None),
+    )
+
+    installations.mark_installed(config_path, "semif-qwen3.5-4b", "mlx", verified=True)
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+        active_model_id="semif-qwen3.5-4b",
+        active_backend="mlx",
+    )[0]
+
+    assert row["installed"] is True
+    assert row["verified"] is True
+    assert row["status"] == "active"
+    assert row["weights_cached"] is True
+
+
+def test_installed_profiles_use_declared_downloads_as_artifact_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime_python = tmp_path / ".model-runtimes" / "example" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    catalog = {
+        "models": [
+            {
+                "id": "runtime-alias-model",
+                "engine": "example",
+                "label": "Runtime Alias Model",
+                "backends": {
+                    "mps": {
+                        "model": "runtime-alias",
+                        "runtime_key": "example",
+                        "download": {
+                            "type": "file",
+                            "repo_id": "example/model-artifacts",
+                            "filename": "marker.pt",
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"example/model-artifacts"})
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None),
+    )
+
+    installations.mark_installed(config_path, "runtime-alias-model", "mps", verified=True)
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+        active_model_id=None,
+        active_backend=None,
+    )[0]
+
+    assert row["installed"] is True
+    assert row["verified"] is True
+    assert row["weights_cached"] is True
+    assert row["status"] == "verified"
+
+
+def test_models_setup_marks_installed_profiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import deqio.model_manager as manager
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"model_catalog": "models.json", "runtime_dir": ".model-runtimes"}))
+    (tmp_path / "models.json").write_text(
+        json.dumps(
+            {
+                "models": [
+                    {
+                        "id": "semif-qwen3.5-4b",
+                        "engine": "semif",
+                        "label": "SemIf / Qwen3.5 4B",
+                        "backends": {"mlx": {"model": "models/semif", "runtime_key": "semif"}},
+                    },
+                    {
+                        "id": "kev-0.8b",
+                        "engine": "kev",
+                        "label": "Kev 0.8B",
+                        "backends": {"mlx": {"model": "jaredpalmer/kev-0.8b", "runtime_key": "kev"}},
+                    },
+                ]
+            }
+        )
+    )
+    host = HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None)
+    monkeypatch.setattr(manager, "detect_host", lambda: host)
+    monkeypatch.setattr(manager, "host_backends", lambda: ["mlx"])
+    monkeypatch.setattr(
+        manager,
+        "profile_compatibility",
+        lambda backend, profile, host=None: {
+            "compatible": True,
+            "warning": None,
+            "minimum_memory_gib": None,
+            "reason": "compatible",
+        },
+    )
+    monkeypatch.setattr(
+        manager,
+        "_installation_rows",
+        lambda *args, **kwargs: [
+            {"model_id": "semif-qwen3.5-4b", "backend": "mlx", "installed": True}
+        ],
+    )
+    monkeypatch.setattr(manager, "_install_profile", lambda **kwargs: None)
+    monkeypatch.setattr(manager, "_write_config", lambda *args, **kwargs: None)
+    answers = iter(["1", "1"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+
+    assert manager.cmd_setup(type("Args", (), {"config": str(config_path)})()) == 0
+    output = capsys.readouterr().out
+
+    assert "1. [x] semif-qwen3.5-4b" in output
+    assert "2. [ ] kev-0.8b" in output
 
 
 def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> None:
@@ -513,7 +692,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.2.0"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -715,7 +894,7 @@ def test_semif_profiles_use_isolated_runtime() -> None:
     for backend in ("mlx", "mps", "cuda"):
         profile = get_profile(catalog, "semif-qwen3.5-4b", backend)
         assert profile["runtime_key"] == "semif"
-        assert any("github.com/TheoLeeCJ/SemIf.git" in package for package in profile["packages"])
+        assert any("github.com/TheoLeeCJ/SemIf-OpenJev.git" in package for package in profile["packages"])
 
 
 def test_backend_loader_routes_semif_through_systemone(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -779,3 +958,480 @@ def test_packaged_workspace_templates_are_current_and_self_consistent(tmp_path: 
     ensure_workspace(tmp_path)
     bootstrapped_config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
     assert bootstrapped_config == packaged_config
+
+
+def test_hardware_memory_preflight_blocks_kev_9b_on_16_gib_mac() -> None:
+    from deqio.hardware import HostCapabilities, profile_compatibility
+
+    profile = {"min_memory_gib": 22, "recommended_memory_gib": 32}
+    small = HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None)
+    large = HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None)
+
+    blocked = profile_compatibility("mlx", profile, host=small)
+    allowed = profile_compatibility("mlx", profile, host=large)
+
+    assert blocked["compatible"] is False
+    assert "22.0 GiB" in blocked["reason"]
+    assert allowed["compatible"] is True
+
+
+def test_kev_4b_mlx_is_compatible_with_16_gib_apple_silicon() -> None:
+    from deqio.hardware import HostCapabilities, profile_compatibility
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    profile = get_profile(catalog, "kev-4b", "mlx")
+    host = HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None)
+
+    result = profile_compatibility("mlx", profile, host=host)
+
+    assert profile["min_memory_gib"] == 12
+    assert profile["recommended_memory_gib"] == 16
+    assert result["available_memory_gib"] == 12.0
+    assert result["compatible"] is True
+
+
+def test_installed_registry_does_not_leak_shared_kev_runtime_across_backends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime_python = tmp_path / ".model-runtimes" / "kev" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    catalog = {
+        "models": [
+            {
+                "id": "kev-0.8b",
+                "engine": "kev",
+                "label": "Kev 0.8B",
+                "backends": {
+                    "mlx": {"model": "jaredpalmer/kev-0.8b", "runtime_key": "kev"},
+                    "mps": {"model": "jaredpalmer/kev-0.8b", "runtime_key": "kev"},
+                },
+            }
+        ]
+    }
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"jaredpalmer/kev-0.8b"})
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
+    )
+
+    installations.mark_installed(config_path, "kev-0.8b", "mlx", verified=True)
+    rows = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+        active_model_id="kev-0.8b",
+        active_backend="mlx",
+    )
+    by_backend = {row["backend"]: row for row in rows}
+
+    assert by_backend["mlx"]["installed"] is True
+    assert by_backend["mps"]["installed"] is False
+    assert by_backend["mps"]["status"] == "unregistered"
+
+
+def test_install_profile_registers_only_after_model_ready_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+    from deqio.installations import load_registry, profile_key
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    catalog = {
+        "models": [
+            {
+                "id": "demo",
+                "engine": "kev",
+                "label": "Demo",
+                "backends": {
+                    "mlx": {
+                        "model": "owner/demo",
+                        "runtime_key": "demo-runtime",
+                        "packages": ["demo"],
+                    }
+                },
+            }
+        ]
+    }
+    calls: list[str] = []
+    runtime = tmp_path / ".model-runtimes" / "demo-runtime"
+    monkeypatch.setattr(manager, "_preflight_profile", lambda *a, **k: {"compatible": True})
+    monkeypatch.setattr(manager, "_install_runtime", lambda *a, **k: runtime)
+    monkeypatch.setattr(manager, "_prefetch_declared_weights", lambda *a, **k: "cached")
+    monkeypatch.setattr(manager, "_verify_model_ready", lambda *a, **k: calls.append("ready"))
+
+    manager._install_profile(
+        config_path=config_path,
+        data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+        model_id="demo",
+        backend="mlx",
+        upgrade=False,
+        force=False,
+    )
+
+    assert calls == ["ready"]
+    record = load_registry(config_path)["profiles"][profile_key("demo", "mlx")]
+    assert "verified_at" in record
+
+
+def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.systemone_runtime as runtime_module
+    from deqio.config import settings_from_data
+
+    catalog_path = tmp_path / "models.json"
+    catalog_path.write_text(json.dumps({
+        "models": [{
+            "id": "demo",
+            "engine": "kev",
+            "backends": {"mlx": {"model": "owner/demo", "runtime_key": "kev", "wire_model": "demo"}},
+        }]
+    }))
+    python = tmp_path / ".model-runtimes" / "kev" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("")
+    settings = settings_from_data(
+        tmp_path / "config.json",
+        {
+            "engine": "kev",
+            "model_id": "demo",
+            "backend": "mlx",
+            "model": "owner/demo",
+            "model_revision": "demo",
+            "model_catalog": str(catalog_path),
+            "runtime_dir": str(tmp_path / ".model-runtimes"),
+            "max_tokens": 4096,
+            "mlx_cache_mib": 256,
+            "log": str(tmp_path / "requests.jsonl"),
+            "torch_dtype": "bfloat16",
+            "sidecar_process_ready_seconds": 17,
+            "sidecar_startup_seconds": 321,
+            "hf_offline_runtime": True,
+        },
+        apply_environment=False,
+    )
+
+    class DummyProcess:
+        stdout = None
+        returncode = None
+        def poll(self): return None
+        def terminate(self): self.returncode = 0
+        def wait(self, timeout=None): self.returncode = 0; return 0
+        def kill(self): self.returncode = -9
+
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(runtime_module.SystemOneRuntime, "_validate_accelerator", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(runtime_module.SystemOneRuntime, "_command", staticmethod(lambda *a, **k: ["demo"]))
+    monkeypatch.setattr(runtime_module, "_free_port", lambda: 12345)
+    monkeypatch.setattr(runtime_module, "_wait_for_port", lambda port, process, timeout: observed.update(port_timeout=timeout))
+    monkeypatch.setattr(runtime_module, "start_sidecar_log_pump", lambda *a, **k: None)
+    monkeypatch.setattr(
+        runtime_module.subprocess,
+        "Popen",
+        lambda *a, **k: (observed.update(env=k["env"]) or DummyProcess()),
+    )
+    monkeypatch.setattr(
+        runtime_module.SystemOneRuntime,
+        "_probe_model_ready",
+        lambda self, timeout: observed.update(model_timeout=timeout),
+    )
+
+    runtime = runtime_module.SystemOneRuntime.load(settings)
+    runtime.close()
+
+    assert observed["port_timeout"] == 17.0
+    assert observed["model_timeout"] == 321.0
+    env = observed["env"]
+    assert isinstance(env, dict)
+    assert env["HF_HUB_OFFLINE"] == "1"
+    assert env["TRANSFORMERS_OFFLINE"] == "1"
+
+
+def test_model_manager_parser_exposes_delete_and_force_install() -> None:
+    from deqio.model_manager import build_parser
+
+    parser = build_parser()
+    delete = parser.parse_args(["delete", "kev-4b", "--backend", "mlx", "--yes"])
+    install = parser.parse_args(["install", "kev-9b", "--backend", "mlx", "--force"])
+
+    assert delete.command == "delete"
+    assert delete.model_id == "kev-4b"
+    assert delete.yes is True
+    assert install.command == "install"
+    assert install.force is True
+
+
+def test_public_catalog_exposes_profile_memory_guardrails() -> None:
+    from deqio.catalog import public_catalog
+
+    rows = public_catalog({
+        "models": [{
+            "id": "demo",
+            "engine": "kev",
+            "label": "Demo",
+            "backends": {
+                "mlx": {
+                    "model": "owner/demo",
+                    "min_memory_gib": 12,
+                    "recommended_memory_gib": 16,
+                }
+            },
+        }]
+    })
+
+    assert rows[0]["backends"] == ["mlx"]
+    assert rows[0]["profiles"]["mlx"] == {
+        "min_memory_gib": 12,
+        "recommended_memory_gib": 16,
+    }
+
+
+def test_systemone_timeout_reports_model_ready_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.systemone_runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "urlopen", lambda *a, **k: (_ for _ in ()).throw(TimeoutError()))
+
+    with pytest.raises(RuntimeError, match=r"Timed out waiting for model response.*12\.5s"):
+        runtime_module._post_json(
+            "http://127.0.0.1:12345/v1/systemone",
+            {"state": "probe"},
+            timeout=12.5,
+        )
+
+
+def test_delete_cleanup_preserves_shared_runtime_until_last_profile(tmp_path: Path) -> None:
+    import deqio.model_manager as manager
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    data = {"runtime_dir": ".model-runtimes"}
+    runtime_dir = tmp_path / ".model-runtimes" / "kev"
+    runtime_dir.mkdir(parents=True)
+    (runtime_dir / "marker").write_text("shared")
+
+    catalog = {
+        "models": [
+            {
+                "id": "kev-a",
+                "engine": "kev",
+                "backends": {"mlx": {"model": "owner/kev-a", "runtime_key": "kev"}},
+            },
+            {
+                "id": "kev-b",
+                "engine": "kev",
+                "backends": {"mlx": {"model": "owner/kev-b", "runtime_key": "kev"}},
+            },
+        ]
+    }
+    first = catalog["models"][0]["backends"]["mlx"]
+    second = catalog["models"][1]["backends"]["mlx"]
+
+    manager._cleanup_profile_artifacts(
+        config_path=config_path,
+        data=data,
+        catalog=catalog,
+        profile=first,
+        remaining_keys={"kev-b::mlx"},
+        purge_cache=False,
+    )
+    assert runtime_dir.is_dir()
+
+    manager._cleanup_profile_artifacts(
+        config_path=config_path,
+        data=data,
+        catalog=catalog,
+        profile=second,
+        remaining_keys=set(),
+        purge_cache=False,
+    )
+    assert not runtime_dir.exists()
+
+
+def test_catalog_contains_new_decision_families_and_nimble_v2() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+
+    assert get_profile(catalog, "kev-27b", "cuda")["model"] == "jaredpalmer/kev-27b"
+    assert get_profile(catalog, "jevk5-4b", "cuda")["model"] == "alibiserikbay/JevK5"
+    assert get_profile(catalog, "jevk5-9b", "cuda")["model"] == "alibiserikbay/JevK5-9B"
+    assert get_profile(catalog, "open-jev-2b", "cuda")["model"].endswith("open-jev-2b/package/checkpoint")
+    assert get_profile(catalog, "open-jev-9b", "cuda")["model"].endswith("open-jev-9b/package/checkpoint")
+    assert get_profile(catalog, "open-jev-27b-v1.1", "cuda")["model"].endswith(
+        "open-jev-27b-v1.1/package/checkpoint"
+    )
+    assert get_profile(catalog, "clm-8b", "cuda")["clm_checkpoint"] == "models/clm-8b/CLM_v0.1-8B.pt"
+    assert get_profile(catalog, "clm-8b", "cuda")["packages"] == [
+        "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git"
+    ]
+    assert get_profile(catalog, "nimble-9b", "mlx")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B-v2"
+    assert get_profile(catalog, "nimble-9b", "cuda")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B-v2"
+
+    for model_id in ("kev-27b", "jevk5-4b", "jevk5-9b", "open-jev-2b", "open-jev-9b", "open-jev-27b-v1.1", "clm-8b"):
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "mps")
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "mlx")
+
+
+def test_prefetch_declared_weights_fetches_every_declared_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_snapshot(**kwargs):
+        calls.append(("snapshot", dict(kwargs)))
+        return "/cache/snapshot"
+
+    def fake_file(*, filename, **kwargs):
+        calls.append(("file", {"filename": filename, **kwargs}))
+        return "/cache/file"
+
+    monkeypatch.setattr(manager, "snapshot_download", fake_snapshot)
+    monkeypatch.setattr(manager, "hf_hub_download", fake_file)
+
+    profile = {
+        "model": "Qwen/Qwen3-8B",
+        "model_revision": "upstream-latest",
+        "downloads": [
+            {"type": "snapshot", "repo_id": "Qwen/Qwen3-8B"},
+            {
+                "type": "file",
+                "repo_id": "Contrastive-LM/CLM-v0.1-8B",
+                "filename": "CLM_v0.1-8B.pt",
+                "local_dir": "models/clm-8b",
+            },
+        ],
+    }
+
+    message = manager._prefetch_declared_weights(tmp_path / "config.json", profile)
+
+    assert [kind for kind, _ in calls] == ["snapshot", "file"]
+    assert calls[1][1]["local_dir"] == str((tmp_path / "models" / "clm-8b").resolve())
+    assert "Qwen/Qwen3-8B" in message
+    assert "CLM_v0.1-8B.pt" in message
+
+
+def test_nimble_v1_preparation_is_not_reported_as_v2_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime = tmp_path / ".model-runtimes" / "nimble-mlx"
+    runtime_python = runtime / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    model_dir = tmp_path / "models" / "nimble-9b"
+    model_dir.mkdir(parents=True)
+    (model_dir / "READY.json").write_text("{}")
+    nimble_config = tmp_path / ".model-runtimes" / "nimble-model.json"
+    nimble_config.write_text(json.dumps({"model_id": "bespokelabs/Bespoke-Nimble-9B"}))
+
+    profile = {
+        "model": "models/nimble-9b",
+        "runtime_key": "nimble-mlx",
+        "model_config": "nimble-model.json",
+        "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+        "installer": "nimble",
+    }
+    catalog = {"models": [{"id": "nimble-9b", "engine": "nimble", "backends": {"mlx": profile}}]}
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
+    )
+    installations.mark_installed(config_path, "nimble-9b", "mlx", verified=True)
+
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+    )[0]
+
+    assert row["installed"] is False
+    assert row["status"] == "weights-missing"
+
+
+def test_systemone_commands_for_new_native_sidecars(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    python = tmp_path / "python"
+    env_dir = tmp_path / "runtime"
+    env: dict[str, str] = {}
+
+    jevk5 = SimpleNamespace(engine="jevk5", backend="cuda")
+    command = SystemOneRuntime._command(
+        jevk5, {"model": "alibiserikbay/JevK5"}, env_dir, python, 9010, env
+    )
+    assert command[-4:] == ["--host", "127.0.0.1", "--port", "9010"]
+    assert "jevk5.server" in command
+
+    open_model = tmp_path / "models" / "open-jev" / "package" / "checkpoint"
+    open_model.mkdir(parents=True)
+    openjev = SimpleNamespace(engine="open-jev", backend="cuda", model=str(open_model))
+    command = SystemOneRuntime._command(
+        openjev,
+        {"model": "./models/open-jev/package/checkpoint", "open_jev_max_length": 4096},
+        env_dir,
+        python,
+        9011,
+        {},
+    )
+    assert "jev.server" in command
+    assert command[command.index("--checkpoint") + 1] == str(open_model)
+    assert command[command.index("--device") + 1] == "cuda:0"
+
+    clm_checkpoint = tmp_path / "models" / "clm-8b" / "CLM_v0.1-8B.pt"
+    clm_checkpoint.parent.mkdir(parents=True)
+    clm_checkpoint.write_bytes(b"head")
+    clm = SimpleNamespace(
+        engine="clm",
+        backend="cuda",
+        config_path=tmp_path / "config.json",
+        model_id="clm-8b",
+    )
+    command = SystemOneRuntime._command(
+        clm,
+        {
+            "model": "Qwen/Qwen3-8B",
+            "clm_checkpoint": "models/clm-8b/CLM_v0.1-8B.pt",
+            "clm_embedding_model": "qwen3-8b",
+            "clm_max_tokens": 2048,
+            "clm_gpu_memory_utilization": 0.35,
+        },
+        env_dir,
+        python,
+        9012,
+        {},
+    )
+    assert command[1].endswith("clm_sidecar.py")
+    assert command[command.index("--checkpoint") + 1] == str(clm_checkpoint.resolve())
+    assert command[command.index("--encoder-model") + 1] == "Qwen/Qwen3-8B"
+
+
+def test_cuda_only_profiles_can_restrict_the_supported_operating_system() -> None:
+    from deqio.hardware import HostCapabilities, profile_compatibility
+
+    profile = {"systems": ["Linux"], "min_memory_gib": 1}
+    windows = HostCapabilities("Windows", "AMD64", ("cuda",), 32.0, 24.0)
+    linux = HostCapabilities("Linux", "x86_64", ("cuda",), 32.0, 24.0)
+
+    assert profile_compatibility("cuda", profile, host=windows)["compatible"] is False
+    assert profile_compatibility("cuda", profile, host=linux)["compatible"] is True

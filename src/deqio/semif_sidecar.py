@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import threading
 import time
 from typing import Any
 
@@ -61,44 +62,68 @@ def build_app(
 ):
     from fastapi import FastAPI, HTTPException
 
-    if backend == "mlx":
-        from semif_phase1 import mlx_backend
+    app = FastAPI(title="Deqio SemIf sidecar")
+    load_lock = threading.Lock()
+    model = None
+    tokenizer = None
+    metadata: dict[str, Any] | None = None
+    serial_factory = None
+    direct_score = None
+    shared_score = None
+    serial = None
 
-        model, tokenizer, metadata = mlx_backend.load_model(
-            model_id,
-            revision,
-            bits=None,
-            cache_limit_mib=mlx_cache_mib,
-        )
-        serial_factory = mlx_backend.SerialPrefixScorer
-        direct_score = mlx_backend.score
-        shared_score = mlx_backend.score_shared
-    elif backend in {"mps", "cuda"}:
-        from semif_phase1.core import load_causal_model
-        from semif_phase1.direct import score as direct_score
-        from semif_phase1.serial import SerialPrefixScorer
-        from semif_phase1.shared import score_shared
+    def ensure_loaded() -> None:
+        nonlocal model, tokenizer, metadata, serial_factory, direct_score, shared_score, serial
+        if serial is not None:
+            return
+        with load_lock:
+            if serial is not None:
+                return
+            if backend == "mlx":
+                from semif_phase1 import mlx_backend
 
-        model, tokenizer, metadata = load_causal_model(model_id, revision, backend, torch_dtype)
-        serial_factory = SerialPrefixScorer
-    else:
-        raise RuntimeError(f"Unsupported SemIf backend: {backend}")
+                model, tokenizer, metadata = mlx_backend.load_model(
+                    model_id,
+                    revision,
+                    bits=None,
+                    cache_limit_mib=mlx_cache_mib,
+                )
+                serial_factory = mlx_backend.SerialPrefixScorer
+                direct_score = mlx_backend.score
+                shared_score = mlx_backend.score_shared
+            elif backend in {"mps", "cuda"}:
+                from semif_phase1.core import load_causal_model
+                from semif_phase1.direct import score as torch_direct_score
+                from semif_phase1.serial import SerialPrefixScorer
+                from semif_phase1.shared import score_shared as torch_shared_score
+
+                model, tokenizer, metadata = load_causal_model(model_id, revision, backend, torch_dtype)
+                serial_factory = SerialPrefixScorer
+                direct_score = torch_direct_score
+                shared_score = torch_shared_score
+            else:
+                raise RuntimeError(f"Unsupported SemIf backend: {backend}")
+            serial = serial_factory(model, tokenizer, metadata, max_tokens)
 
     def new_serial():
+        ensure_loaded()
         return serial_factory(model, tokenizer, metadata, max_tokens)
-
-    serial = new_serial()
-    app = FastAPI(title="Deqio SemIf sidecar")
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "engine": "semif", "backend": backend, "model": model_id}
+        return {
+            "status": "ready" if serial is not None else "process-ready",
+            "engine": "semif",
+            "backend": backend,
+            "model": model_id,
+        }
 
     @app.post("/v1/cache/clear")
     def clear_cache():
         nonlocal serial
         import gc
 
+        ensure_loaded()
         serial = new_serial()
         gc.collect()
         details: dict[str, Any] = {"engine": "semif", "backend": backend, "prefix_cache": "cleared"}
@@ -127,6 +152,7 @@ def build_app(
     def systemone(payload: dict[str, Any]):
         started = time.perf_counter()
         try:
+            ensure_loaded()
             questions = payload.get("questions")
             if not isinstance(questions, dict) or not questions:
                 raise ValueError("questions must be a nonempty object")

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from huggingface_hub import scan_cache_dir
 
-from .catalog import SUPPORTED_BACKENDS
+from .hardware import detect_host, profile_compatibility
 
 
 STATE_DIR_NAME = ".deqio"
@@ -73,14 +72,17 @@ def mark_installed(
     _write_registry(config_path, data)
 
 
-def host_backends() -> tuple[str, ...]:
-    system = platform.system()
-    machine = platform.machine().lower()
-    if system == "Darwin" and machine == "arm64":
-        return ("mlx", "mps")
-    if system in {"Linux", "Windows"}:
-        return ("cuda",)
-    return SUPPORTED_BACKENDS
+
+
+def unmark_installed(config_path: Path, model_id: str, backend: str) -> dict[str, Any] | None:
+    data = load_registry(config_path)
+    profiles = data.setdefault("profiles", {})
+    if not isinstance(profiles, dict):
+        return None
+    removed = profiles.pop(profile_key(model_id, backend), None)
+    _write_registry(config_path, data)
+    return removed if isinstance(removed, dict) else None
+
 
 
 def _runtime_python(env_dir: Path) -> Path:
@@ -104,11 +106,21 @@ def _cached_hf_repos() -> set[str]:
         return set()
 
 
-def _local_download_present(config_path: Path, profile: dict[str, Any]) -> bool:
+def _declared_downloads(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
     download = profile.get("download")
-    if not isinstance(download, dict) or not download.get("local_dir"):
+    if isinstance(download, dict):
+        result.append(download)
+    downloads = profile.get("downloads")
+    if isinstance(downloads, list):
+        result.extend(item for item in downloads if isinstance(item, dict))
+    return result
+
+
+def _local_dir_present(config_path: Path, value: Any) -> bool:
+    if not isinstance(value, str) or not value:
         return False
-    path = Path(str(download["local_dir"])).expanduser()
+    path = Path(value).expanduser()
     if not path.is_absolute():
         path = config_path.parent / path
     if not path.is_dir():
@@ -119,10 +131,79 @@ def _local_download_present(config_path: Path, profile: dict[str, Any]) -> bool:
         return False
 
 
+def _local_model_present(config_path: Path, profile: dict[str, Any]) -> bool:
+    value = profile.get("model")
+    if not isinstance(value, str) or _looks_like_hf_repo(value):
+        return False
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = config_path.parent / path
+    if not path.exists():
+        return False
+    if path.is_file():
+        return True
+    try:
+        return any(item.is_file() and item.name != ".gitkeep" for item in path.rglob("*"))
+    except OSError:
+        return False
+
+
+def _looks_like_local_model_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return value.startswith(("./", "../", "~/", "/", "models/"))
+
+
+def _artifact_ready(config_path: Path, profile: dict[str, Any], hf_repos: set[str]) -> tuple[bool, bool]:
+    """Validate the artifacts that provision this exact profile.
+
+    Explicit ``download``/``downloads`` declarations are the artifact contract.
+    ``profile["model"]`` is not necessarily an artifact locator: some engines use
+    a runtime-facing alias there (for example ``von``).  When downloads are
+    declared, validate them and only additionally validate ``model`` when it is
+    an explicit local path.  Without declared downloads, ``model`` remains the
+    fallback artifact locator for Hub-backed and managed-local profiles.
+    """
+    checks: list[bool] = []
+    downloads = _declared_downloads(profile)
+    for download in downloads:
+        local_dir = download.get("local_dir")
+        if local_dir:
+            checks.append(_local_dir_present(config_path, local_dir))
+        elif _looks_like_hf_repo(download.get("repo_id")):
+            checks.append(str(download["repo_id"]) in hf_repos)
+
+    model = profile.get("model")
+    if downloads:
+        if _looks_like_local_model_path(model):
+            checks.append(_local_model_present(config_path, profile))
+    elif _looks_like_hf_repo(model):
+        checks.append(str(model) in hf_repos)
+    elif _looks_like_local_model_path(model):
+        checks.append(_local_model_present(config_path, profile))
+
+    return (all(checks) if checks else True), bool(checks)
+
+
+def _nimble_profile_matches(runtime_root: Path, profile: dict[str, Any]) -> bool:
+    if profile.get("installer") != "nimble":
+        return True
+    expected = profile.get("repo_id")
+    config_name = str(profile.get("model_config", "nimble-model.json"))
+    path = runtime_root / config_name
+    if not expected or not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return data.get("model_id") == expected
+
+
 def _looks_like_hf_repo(value: Any) -> bool:
     if not isinstance(value, str):
         return False
-    if value.startswith(("./", "../", "~", "/")):
+    if value.startswith(("./", "../", "~", "/", "models/")):
         return False
     return value.count("/") == 1 and " " not in value
 
@@ -135,12 +216,18 @@ def installed_profiles(
     active_model_id: str | None = None,
     active_backend: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Return local installation state without making network requests."""
+    """Return local installation state without making network requests.
+
+    The registry is authoritative per ``model_id::backend``. A shared runtime
+    directory or a shared Hugging Face cache entry must never make a different
+    backend appear installed. Filesystem/cache checks only validate the exact
+    registered profile.
+    """
     registry = load_registry(config_path)
     records = registry.get("profiles", {}) if isinstance(registry, dict) else {}
     hf_repos = _cached_hf_repos()
     runtime_root = _runtime_root(config_path, config_data)
-    compatible = set(host_backends())
+    host = detect_host()
     rows: list[dict[str, Any]] = []
 
     for entry in catalog.get("models", []):
@@ -155,26 +242,23 @@ def installed_profiles(
         for backend, profile in profiles.items():
             if not isinstance(profile, dict):
                 continue
-            key = profile_key(model_id, str(backend))
+            backend = str(backend)
+            key = profile_key(model_id, backend)
             record = records.get(key) if isinstance(records, dict) else None
             explicit = isinstance(record, dict)
-            active = model_id == active_model_id and str(backend) == active_backend
+            active = model_id == active_model_id and backend == active_backend
 
             runtime_key = profile.get("runtime_key")
             env_dir = runtime_root / str(runtime_key) if runtime_key else runtime_root / "__missing__"
             runtime_ready = bool(runtime_key) and _runtime_python(env_dir).is_file()
 
-            local_weights = _local_download_present(config_path, profile)
-            model_source = profile.get("model")
-            hf_cached = bool(_looks_like_hf_repo(model_source) and str(model_source) in hf_repos)
-            weights_cached = local_weights or hf_cached
+            artifact_ready, has_declared_artifact = _artifact_ready(config_path, profile, hf_repos)
+            artifact_ready = artifact_ready and _nimble_profile_matches(runtime_root, profile)
+            weights_cached = artifact_ready if has_declared_artifact else False
 
-            download = profile.get("download")
-            if isinstance(download, dict) and download.get("local_dir"):
-                installed = runtime_ready and local_weights
-            else:
-                installed = runtime_ready and (explicit or weights_cached)
-            verified = bool(isinstance(record, dict) and record.get("verified_at")) and installed
+            installed = explicit and runtime_ready and artifact_ready
+            verified = bool(explicit and record.get("verified_at")) and installed
+            compatibility = profile_compatibility(backend, profile, host=host)
 
             if active and installed:
                 status = "active"
@@ -184,8 +268,12 @@ def installed_profiles(
                 status = "verified"
             elif installed:
                 status = "installed"
-            elif runtime_ready:
-                status = "runtime-only"
+            elif explicit and not runtime_ready:
+                status = "runtime-missing"
+            elif explicit and not artifact_ready:
+                status = "weights-missing"
+            elif runtime_ready or weights_cached:
+                status = "unregistered"
             else:
                 status = "not-installed"
 
@@ -194,14 +282,16 @@ def installed_profiles(
                     "model_id": model_id,
                     "label": str(entry.get("label", model_id)),
                     "engine": engine,
-                    "backend": str(backend),
-                    "model": model_source,
+                    "backend": backend,
+                    "model": profile.get("model"),
                     "installed": installed,
+                    "registered": explicit,
                     "verified": verified,
                     "active": active,
                     "runtime_ready": runtime_ready,
                     "weights_cached": weights_cached,
-                    "host_compatible": str(backend) in compatible,
+                    "host_compatible": bool(compatibility["compatible"]),
+                    "compatibility": compatibility,
                     "status": status,
                 }
             )

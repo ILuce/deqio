@@ -6,7 +6,7 @@
       "engine": "semif",
       "label": "SemIf / Qwen3.5 4B",
       "description": "SemIf option-logit readout over Qwen3.5-4B. This is the original runtime supported by Deqio.",
-      "source": "https://github.com/TheoLeeCJ/SemIf",
+      "source": "https://github.com/TheoLeeCJ/SemIf-OpenJev",
       "backends": {
         "mlx": {
           "model": "models/semif-qwen3.5-4b-mlx-4bit",
@@ -19,10 +19,12 @@
           "runtime_key": "semif",
           "python": "3.12",
           "packages": [
-            "semif-phase1[mlx] @ git+https://github.com/TheoLeeCJ/SemIf.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
+            "semif-phase1[mlx] @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 6,
+          "recommended_memory_gib": 8
         },
         "cuda": {
           "model": "Qwen/Qwen3.5-4B",
@@ -30,10 +32,12 @@
           "runtime_key": "semif",
           "python": "3.12",
           "packages": [
-            "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
+            "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 11,
+          "recommended_memory_gib": 16
         },
         "mps": {
           "model": "Qwen/Qwen3.5-4B",
@@ -41,10 +45,12 @@
           "runtime_key": "semif",
           "python": "3.12",
           "packages": [
-            "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
+            "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 11,
+          "recommended_memory_gib": 16
         }
       }
     },
@@ -62,7 +68,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 8
         },
         "cuda": {
           "model": "jaredpalmer/kev-0.8b",
@@ -71,7 +79,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 8
         },
         "mps": {
           "model": "jaredpalmer/kev-0.8b",
@@ -80,7 +90,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 8
         }
       }
     },
@@ -98,7 +110,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 12,
+          "recommended_memory_gib": 16
         },
         "cuda": {
           "model": "jaredpalmer/kev-4b",
@@ -107,7 +121,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 14,
+          "recommended_memory_gib": 32
         },
         "mps": {
           "model": "jaredpalmer/kev-4b",
@@ -116,7 +132,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 14,
+          "recommended_memory_gib": 32
         }
       }
     },
@@ -134,7 +152,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 22,
+          "recommended_memory_gib": 32
         },
         "cuda": {
           "model": "jaredpalmer/kev-9b",
@@ -143,7 +163,9 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 22,
+          "recommended_memory_gib": 32
         },
         "mps": {
           "model": "jaredpalmer/kev-9b",
@@ -152,7 +174,233 @@
           "python": "3.12",
           "packages": [
             "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
-          ]
+          ],
+          "min_memory_gib": 22,
+          "recommended_memory_gib": 32
+        }
+      }
+    },
+    {
+      "id": "kev-27b",
+      "engine": "kev",
+      "label": "Kev 27B",
+      "description": "Largest Kev decision checkpoint, based on Qwen3.8-27B and intended for 80 GB data-centre NVIDIA GPUs.",
+      "source": "https://github.com/jaredpalmer/kev",
+      "backends": {
+        "cuda": {
+          "model": "jaredpalmer/kev-27b",
+          "wire_model": "kev-latest",
+          "runtime_key": "kev",
+          "python": "3.12",
+          "packages": [
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+          ],
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 66,
+          "recommended_memory_gib": 80
+        }
+      }
+    },
+    {
+      "id": "jevk5-4b",
+      "engine": "jevk5",
+      "label": "JevK5 4B",
+      "description": "JevK5 v0.3 open-weight decision model with a TypeSafe-style /v1/systemone server.",
+      "source": "https://github.com/allebee/jevk5",
+      "backends": {
+        "cuda": {
+          "model": "alibiserikbay/JevK5",
+          "model_revision": "upstream-latest",
+          "wire_model": "alibiserikbay/JevK5",
+          "runtime_key": "jevk5",
+          "python": "3.12",
+          "packages": [
+            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git"
+          ],
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 9,
+          "recommended_memory_gib": 12
+        }
+      }
+    },
+    {
+      "id": "jevk5-9b",
+      "engine": "jevk5",
+      "label": "JevK5 9B",
+      "description": "JevK5-9B v0.3.3, the larger JevK5 decision checkpoint for CUDA GPUs.",
+      "source": "https://github.com/allebee/jevk5",
+      "backends": {
+        "cuda": {
+          "model": "alibiserikbay/JevK5-9B",
+          "model_revision": "upstream-latest",
+          "wire_model": "alibiserikbay/JevK5-9B",
+          "runtime_key": "jevk5",
+          "python": "3.12",
+          "packages": [
+            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git"
+          ],
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 19,
+          "recommended_memory_gib": 24
+        }
+      }
+    },
+    {
+      "id": "open-jev-2b",
+      "engine": "open-jev",
+      "label": "Open-Jev 2B",
+      "description": "Open-Jev 2B LoRA adapter plus scalar decision head, served through the Open-Jev /v1/systemone runtime.",
+      "source": "https://github.com/Zefan-Cai/Open-Jev",
+      "backends": {
+        "cuda": {
+          "model": "./models/open-jev-2b/package/checkpoint",
+          "model_revision": "0c7aa498b1627be8da4acf34c863ff0ee0a92785",
+          "wire_model": "ZefanCai/Open-Jev-2B",
+          "runtime_key": "open-jev",
+          "python": "3.12",
+          "packages": [
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+          ],
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "ZefanCai/Open-Jev-2B",
+              "revision": "0c7aa498b1627be8da4acf34c863ff0ee0a92785",
+              "local_dir": "models/open-jev-2b"
+            },
+            {
+              "type": "snapshot",
+              "repo_id": "Qwen/Qwen3.5-2B",
+              "revision": "15852e8c16360a2fea060d615a32b45270f8a8fc"
+            }
+          ],
+          "open_jev_max_length": 4096,
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 8,
+          "recommended_memory_gib": 12
+        }
+      }
+    },
+    {
+      "id": "open-jev-9b",
+      "engine": "open-jev",
+      "label": "Open-Jev 9B",
+      "description": "Open-Jev 9B LoRA adapter plus scalar decision head for Qwen3.5-9B.",
+      "source": "https://github.com/Zefan-Cai/Open-Jev",
+      "backends": {
+        "cuda": {
+          "model": "./models/open-jev-9b/package/checkpoint",
+          "model_revision": "47e966881e489511c0c7f5633a9e1960a676a551",
+          "wire_model": "ZefanCai/Open-Jev-9B",
+          "runtime_key": "open-jev",
+          "python": "3.12",
+          "packages": [
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+          ],
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "ZefanCai/Open-Jev-9B",
+              "revision": "47e966881e489511c0c7f5633a9e1960a676a551",
+              "local_dir": "models/open-jev-9b"
+            },
+            {
+              "type": "snapshot",
+              "repo_id": "Qwen/Qwen3.5-9B",
+              "revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a"
+            }
+          ],
+          "open_jev_max_length": 4096,
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 22,
+          "recommended_memory_gib": 32
+        }
+      }
+    },
+    {
+      "id": "open-jev-27b-v1.1",
+      "engine": "open-jev",
+      "label": "Open-Jev 27B v1.1",
+      "description": "Open-Jev 27B v1.1 adapter and scalar decision head for the Qwen3.8-27B text backbone.",
+      "source": "https://github.com/Zefan-Cai/Open-Jev",
+      "backends": {
+        "cuda": {
+          "model": "./models/open-jev-27b-v1.1/package/checkpoint",
+          "model_revision": "upstream-latest",
+          "wire_model": "ZefanCai/Open-Jev-27B-v1.1",
+          "runtime_key": "open-jev",
+          "python": "3.12",
+          "packages": [
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+          ],
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "ZefanCai/Open-Jev-27B-v1.1",
+              "local_dir": "models/open-jev-27b-v1.1"
+            },
+            {
+              "type": "snapshot",
+              "repo_id": "Qwen/Qwen3.8-27B",
+              "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+            }
+          ],
+          "open_jev_max_length": 4096,
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 66,
+          "recommended_memory_gib": 80
+        }
+      }
+    },
+    {
+      "id": "clm-8b",
+      "engine": "clm",
+      "label": "CLM 8B",
+      "description": "Contrastive Language Model 8B System One server using a frozen Qwen3-8B encoder and the CLM v0.1 projection heads.",
+      "source": "https://github.com/Contrastive-LM/CLM",
+      "backends": {
+        "cuda": {
+          "model": "Qwen/Qwen3-8B",
+          "model_revision": "upstream-latest",
+          "wire_model": "clm-latest",
+          "runtime_key": "clm",
+          "python": "3.12",
+          "packages": [
+            "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git"
+          ],
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Qwen/Qwen3-8B"
+            },
+            {
+              "type": "file",
+              "repo_id": "Contrastive-LM/CLM-v0.1-8B",
+              "filename": "CLM_v0.1-8B.pt",
+              "local_dir": "models/clm-8b"
+            }
+          ],
+          "clm_checkpoint": "models/clm-8b/CLM_v0.1-8B.pt",
+          "clm_embedding_model": "qwen3-8b",
+          "clm_max_tokens": 2048,
+          "clm_gpu_memory_utilization": 0.35,
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 20,
+          "recommended_memory_gib": 24
         }
       }
     },
@@ -170,7 +418,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 3,
+          "recommended_memory_gib": 8
         },
         "mps": {
           "model": "Mapika/decider-0.8b",
@@ -179,7 +429,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 3,
+          "recommended_memory_gib": 8
         }
       }
     },
@@ -197,7 +449,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 6,
+          "recommended_memory_gib": 12
         },
         "mps": {
           "model": "Mapika/decider-2b",
@@ -206,7 +460,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 6,
+          "recommended_memory_gib": 12
         }
       }
     },
@@ -224,7 +480,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 11,
+          "recommended_memory_gib": 16
         },
         "mps": {
           "model": "Mapika/decider-4b",
@@ -233,7 +491,9 @@
           "python": "3.12",
           "packages": [
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
-          ]
+          ],
+          "min_memory_gib": 11,
+          "recommended_memory_gib": 16
         }
       }
     },
@@ -254,7 +514,9 @@
             "laya-mlx",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "cuda": {
           "model": "convaiinnovations/laya",
@@ -267,7 +529,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "mps": {
           "model": "convaiinnovations/laya",
@@ -280,7 +544,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         }
       }
     },
@@ -301,7 +567,9 @@
             "laya-mlx",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "cuda": {
           "model": "convaiinnovations/laya-multilingual",
@@ -314,7 +582,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "mps": {
           "model": "convaiinnovations/laya-multilingual",
@@ -327,7 +597,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         }
       }
     },
@@ -348,7 +620,9 @@
             "laya-mlx",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "cuda": {
           "model": "convaiinnovations/laya-typed-decisions",
@@ -361,7 +635,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "mps": {
           "model": "convaiinnovations/laya-typed-decisions",
@@ -374,7 +650,9 @@
             "laya @ git+https://github.com/NandhaKishorM/laya.git",
             "fastapi>=0.110",
             "uvicorn[standard]>=0.28"
-          ]
+          ],
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         }
       }
     },
@@ -392,7 +670,14 @@
           "python": "3.12",
           "packages": [
             "von-sdk @ git+https://github.com/wfzyx/von.git"
-          ]
+          ],
+          "download": {
+            "type": "file",
+            "repo_id": "wfzyx/von",
+            "filename": "option_marker.pt"
+          },
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         },
         "mps": {
           "model": "von",
@@ -401,40 +686,51 @@
           "python": "3.12",
           "packages": [
             "von-sdk @ git+https://github.com/wfzyx/von.git"
-          ]
+          ],
+          "download": {
+            "type": "file",
+            "repo_id": "wfzyx/von",
+            "filename": "option_marker.pt"
+          },
+          "min_memory_gib": 2,
+          "recommended_memory_gib": 4
         }
       }
     },
     {
       "id": "nimble-9b",
       "engine": "nimble",
-      "label": "Bespoke Nimble 9B",
-      "description": "Bespoke Labs open Jev-style 9B model for one-pass typed decisions and probabilities.",
+      "label": "Bespoke Nimble 9B v2",
+      "description": "Bespoke Labs Nimble 9B v2 decision model with calibrated one-pass typed probabilities.",
       "source": "https://github.com/bespokelabsai/nimble",
       "backends": {
         "mlx": {
           "model": "models/nimble-9b",
           "model_revision": "upstream-latest",
-          "wire_model": "nimble-latest",
+          "wire_model": "nimble-v2",
           "runtime_key": "nimble-mlx",
           "source_key": "nimble-src",
           "model_config": "nimble-model.json",
-          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
           "installer": "nimble",
           "nimble_backend": "mlx",
-          "python": "3.12"
+          "python": "3.12",
+          "min_memory_gib": 20,
+          "recommended_memory_gib": 32
         },
         "cuda": {
           "model": "models/nimble-9b",
           "model_revision": "upstream-latest",
-          "wire_model": "nimble-latest",
+          "wire_model": "nimble-v2",
           "runtime_key": "nimble-cuda",
           "source_key": "nimble-src",
           "model_config": "nimble-model.json",
-          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
           "installer": "nimble",
           "nimble_backend": "cuda",
-          "python": "3.12"
+          "python": "3.12",
+          "min_memory_gib": 20,
+          "recommended_memory_gib": 32
         }
       }
     }

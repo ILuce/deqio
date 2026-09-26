@@ -10,5 +10,7 @@
   "mlx_cache_mib": 256,
   "log": "logs/requests.jsonl",
   "torch_dtype": "bfloat16",
-  "sidecar_startup_seconds": 900
+  "sidecar_startup_seconds": 1800,
+  "sidecar_process_ready_seconds": 300,
+  "hf_offline_runtime": true
 }

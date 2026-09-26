@@ -1207,7 +1207,7 @@ wheels = [
 
 [[package]]
 name = "deqio"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -1234,7 +1234,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "semif-phase1"
 version = "0.1.0"
-source = { git = "https://github.com/TheoLeeCJ/SemIf.git?rev=1f2dea3e25379f9dfc98cb83c324f00ab5deda37#1f2dea3e25379f9dfc98cb83c324f00ab5deda37" }
+source = { git = "https://github.com/TheoLeeCJ/SemIf-OpenJev.git?rev=1f2dea3e25379f9dfc98cb83c324f00ab5deda37#1f2dea3e25379f9dfc98cb83c324f00ab5deda37" }
 dependencies = [
     { name = "accelerate" },
     { name = "huggingface-hub" },

@@ -48,8 +48,10 @@ Commands:
 Examples:
   deqio serve
   deqio models setup
+  deqio models list --compatible
   deqio models installed
   deqio models use
+  deqio models delete
   deqio benchmark --all
   deqio status
 """
