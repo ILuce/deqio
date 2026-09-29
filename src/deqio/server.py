@@ -213,7 +213,111 @@ def percentile(values: list[float], p: float) -> float | None:
     return ordered[index]
 
 
-def format_result(result: dict) -> dict:
+def _runtime_identity_snapshot(target: BackendRuntime, settings_snapshot: Settings) -> dict[str, Any]:
+    snapshot = getattr(target, "identity_snapshot", None)
+    if callable(snapshot):
+        value = snapshot()
+        if isinstance(value, dict):
+            return value
+    return {
+        "deqio_version": __version__,
+        "runtime_instance_id": getattr(target, "runtime_instance_id", None),
+        "engine": settings_snapshot.engine,
+        "model_id": settings_snapshot.model_id,
+        "backend": settings_snapshot.backend,
+        "model": settings_snapshot.model,
+        "requested_revision": settings_snapshot.model_revision,
+        "artifacts": [],
+        "artifact_revisions_resolved": False,
+        "installation_verified_at": None,
+    }
+
+
+def _attestation_sha(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _bind_result_provenance(
+    response: dict[str, Any],
+    raw_result: dict[str, Any],
+    runtime_identity: dict[str, Any],
+) -> dict[str, Any]:
+    score = raw_result.get("score_provenance")
+    if not isinstance(score, dict):
+        score = {
+            "kind": "unknown",
+            "source": "runtime",
+            "synthetic": None,
+            "normalized": None,
+            "transforms": [],
+            "raw_logits_available": bool(response.get("option_logits")),
+            "calibration": "unknown",
+        }
+    binding = {
+        "request_id": response.get("id"),
+        "prompt_sha256": response.get("prompt_sha256"),
+        "decision": response.get("decision"),
+        "probabilities": response.get("probabilities"),
+        "runtime": runtime_identity,
+        "score": score,
+    }
+    complete = bool(
+        runtime_identity.get("runtime_instance_id")
+        and runtime_identity.get("artifact_revisions_resolved")
+        and score.get("kind") != "unknown"
+    )
+    response["provenance"] = {
+        "schema_version": 1,
+        "runtime": runtime_identity,
+        "score": score,
+        "attestation": {
+            "kind": "deqio-local-response",
+            "signed": False,
+            "complete": complete,
+            "sha256": _attestation_sha(binding),
+        },
+    }
+    return response
+
+
+def _shared_provenance(
+    results: list[dict[str, Any]], runtime_identity: dict[str, Any]
+) -> dict[str, Any]:
+    result_hashes = [
+        result.get("provenance", {}).get("attestation", {}).get("sha256")
+        for result in results
+    ]
+    complete = bool(results) and all(
+        result.get("provenance", {}).get("attestation", {}).get("complete") is True
+        for result in results
+    )
+    score = {
+        "kind": "shared_batch",
+        "source": "results[*].provenance.score",
+        "result_count": len(results),
+    }
+    binding = {
+        "runtime": runtime_identity,
+        "result_attestations": result_hashes,
+        "score": score,
+    }
+    return {
+        "schema_version": 1,
+        "runtime": runtime_identity,
+        "score": score,
+        "attestation": {
+            "kind": "deqio-local-shared-response",
+            "signed": False,
+            "complete": complete,
+            "sha256": _attestation_sha(binding),
+        },
+    }
+
+
+def format_result(
+    result: dict, *, runtime_identity: dict[str, Any] | None = None
+) -> dict:
     probabilities = {
         option_id: float(probability)
         for option_id, probability in zip(
@@ -251,7 +355,7 @@ def format_result(result: dict) -> dict:
     if "cache_hit" in result:
         timing["cache_hit"] = bool(result["cache_hit"])
 
-    return {
+    response = {
         "id": result["id"],
         "decision": decision,
         "probabilities": probabilities,
@@ -262,6 +366,9 @@ def format_result(result: dict) -> dict:
         "prompt_sha256": result["prompt_sha256"],
         "probability_status": result["probability_status"],
     }
+    if runtime_identity is not None:
+        return _bind_result_provenance(response, result, runtime_identity)
+    return response
 
 
 def format_shared_timing(timing: dict) -> dict:
@@ -305,6 +412,9 @@ def record_event(
         "input_tokens": result.get("input_tokens"),
         "cache_hit": result.get("timing", {}).get("cache_hit"),
         "decisions": decisions,
+        "runtime_instance_id": (result.get("provenance") or {}).get("runtime", {}).get("runtime_instance_id"),
+        "score_kind": (result.get("provenance") or {}).get("score", {}).get("kind"),
+        "attestation_sha256": (result.get("provenance") or {}).get("attestation", {}).get("sha256"),
     }
 
     with stats_lock:
@@ -355,7 +465,9 @@ def run_decision(request: DecisionRequest, *, endpoint: str = "/v1/choice") -> d
     try:
         with inference_lock:
             settings_snapshot = SETTINGS
-            raw = _runtime().score(row, request.mode)
+            runtime_snapshot = _runtime()
+            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            raw = runtime_snapshot.score(row, request.mode)
 
     except Exception as exc:
         with stats_lock:
@@ -367,7 +479,7 @@ def run_decision(request: DecisionRequest, *, endpoint: str = "/v1/choice") -> d
             detail=str(exc),
         ) from exc
 
-    result = format_result(raw)
+    result = format_result(raw, runtime_identity=runtime_identity)
 
     record_event(
         request_id=request_id,
@@ -415,6 +527,9 @@ async def lifespan(app: FastAPI):
         verified=True,
         source="startup",
     )
+    refresh_identity = getattr(runtime, "refresh_identity", None)
+    if callable(refresh_identity):
+        refresh_identity()
     started_at = time.time()
 
     server_ready()
@@ -448,6 +563,9 @@ def root():
 @app.get("/health")
 def health():
     status = "switching" if switching_runtime else ("ok" if runtime is not None else "starting")
+    runtime_identity = (
+        _runtime_identity_snapshot(runtime, SETTINGS) if runtime is not None else None
+    )
     return {
         "status": status,
         "engine": SETTINGS.engine,
@@ -458,6 +576,9 @@ def health():
         "max_tokens": SETTINGS.max_tokens,
         "mlx_cache_mib": SETTINGS.mlx_cache_mib,
         "config": str(SETTINGS.config_path),
+        "runtime_instance_id": (runtime_identity or {}).get("runtime_instance_id"),
+        "provenance_schema_version": 1,
+        "artifact_revisions_resolved": (runtime_identity or {}).get("artifact_revisions_resolved", False),
     }
 
 
@@ -479,14 +600,16 @@ def noul(payload: NoulRequest):
     try:
         with inference_lock:
             settings_snapshot = SETTINGS
-            raw = _runtime().score_noul(row, payload.mode)
+            runtime_snapshot = _runtime()
+            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            raw = runtime_snapshot.score_noul(row, payload.mode)
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=400)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    result = format_result(raw)
+    result = format_result(raw, runtime_identity=runtime_identity)
     record_event(
         request_id=request_id,
         mode=payload.mode,
@@ -528,7 +651,9 @@ def shared(payload: SharedRequest):
     try:
         with inference_lock:
             settings_snapshot = SETTINGS
-            raw_results, timing = _runtime().score_shared(rows)
+            runtime_snapshot = _runtime()
+            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            raw_results, timing = runtime_snapshot.score_shared(rows)
 
     except Exception as exc:
         with stats_lock:
@@ -541,9 +666,10 @@ def shared(payload: SharedRequest):
         ) from exc
 
     results = [
-        format_result(raw)
+        format_result(raw, runtime_identity=runtime_identity)
         for raw in raw_results
     ]
+    batch_provenance = _shared_provenance(results, runtime_identity)
 
     shared_timing = format_shared_timing(timing)
     batch_ms = shared_timing.get("total_ms")
@@ -558,6 +684,7 @@ def shared(payload: SharedRequest):
             "total_ms": batch_ms,
             "batch_size": len(results),
         },
+        "provenance": batch_provenance,
     }
 
     record_event(
@@ -574,6 +701,7 @@ def shared(payload: SharedRequest):
     return {
         "results": results,
         "shared_timing": shared_timing,
+        "provenance": batch_provenance,
     }
 
 
@@ -676,8 +804,7 @@ def activate_model(payload: ModelActivateRequest):
         raise HTTPException(
             status_code=409,
             detail=(
-                f"Model profile is not installed. Run: uv run deqio models install {payload.model_id} "
-                f"--backend {payload.backend}"
+                "Model profile is not installed. Run: deqio models setup"
             ),
         )
     if payload.model_id == SETTINGS.model_id and payload.backend == SETTINGS.backend:
@@ -758,6 +885,9 @@ def activate_model(payload: ModelActivateRequest):
                 verified=True,
                 source="activate",
             )
+            refresh_identity = getattr(runtime, "refresh_identity", None)
+            if callable(refresh_identity):
+                refresh_identity()
         except Exception as registry_error:
             info(f"Warning: could not update local installed-model registry: {registry_error}")
         _reset_session_metrics()

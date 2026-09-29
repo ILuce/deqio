@@ -98,18 +98,24 @@ uv venv
 uv pip install --python ...
 ```
 
-The public CLI is:
+The installed public CLI is:
 
 ```bash
-uv run deqio serve
-uv run deqio models list
-uv run deqio models installed
-uv run deqio models setup
-uv run deqio models use
-uv run deqio models delete
-uv run deqio models status
-uv run deqio status
+deqio serve
+deqio models list
+deqio models installed
+deqio models setup
+deqio models use
+deqio models delete
+deqio models status
+deqio status
+deqio --version
+deqio version
 ```
+
+From a source checkout, prefix these commands with `uv run`. User-facing runtime errors and help text for the installed tool should use `deqio ...`, not `uv run deqio ...`. Missing model/runtime guidance should point users to `deqio models setup`.
+
+Every interactive terminal selection must offer `q` as a non-error exit path. `quit` and `exit` may be accepted as aliases.
 
 ## Configuration
 
@@ -162,6 +168,12 @@ POST /v1/models/activate
 
 External engines should be normalized to the same response shape. If an engine does not expose raw logits, return an empty `option_logits` object. Never fabricate logits from probabilities and label them as raw logits.
 
+Decision responses expose Decision Provenance / Attestation v1 under `provenance`. The model/runtime identity must be captured under the same inference lock as the score so a live model switch cannot pair a result with the wrong model identity. Provenance must include the loaded runtime instance ID, engine, model ID, backend, model source, recorded artifact revisions, and structured score provenance.
+
+Score provenance must distinguish engine-reported probabilities from Deqio transforms or synthetic fallbacks. In particular, one-hot probabilities synthesized from a choice-only engine response must be marked synthetic and must never be presented as native model confidence. Renormalization/clamping must be explicit transforms. Calibration remains engine-specific and must not be inferred by Deqio.
+
+Attestation v1 is a local unsigned response binding. Its digest binds the decision result, prompt hash, runtime identity, and score provenance, but it is not a cryptographic signature or remote trust proof. `complete` may only be true when runtime identity, resolved model artifact revisions, and score provenance are all available. `/v1/shared` must preserve per-result provenance and expose a batch-level binding to the same runtime instance.
+
 ## Model catalog rules
 
 `models.json` is the source of truth for selectable models.
@@ -179,6 +191,8 @@ Every entry needs:
 Do not silently fall back from an unsupported backend to CPU or another backend.
 
 Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
+
+Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata.
 
 `models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete.
 
@@ -241,6 +255,7 @@ Changes to model management must also verify:
 uv run deqio models list
 uv run deqio models installed
 uv run deqio status
+uv run deqio --version
 ```
 
 Changes to serving must verify:

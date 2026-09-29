@@ -7,13 +7,17 @@ import socket
 import platform
 import subprocess
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from . import __version__
 from .catalog import get_model, get_profile, load_catalog
 from .config import Settings
+from .installations import installation_record
 from .console import (
     sidecar_model_wait,
     sidecar_process_ready,
@@ -84,16 +88,36 @@ def _sha(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _normalise_probabilities(answer: dict[str, Any], option_ids: list[str]) -> list[float]:
+def _normalise_probabilities(
+    answer: dict[str, Any], option_ids: list[str]
+) -> tuple[list[float], dict[str, Any]]:
     values = answer.get("probabilities")
     if isinstance(values, dict):
         probs = [float(values.get(option_id, 0.0)) for option_id in option_ids]
         total = sum(probs)
         if total > 0:
-            return [value / total for value in probs]
+            normalized = abs(total - 1.0) > 1e-6
+            output = [value / total for value in probs]
+            return output, {
+                "kind": "engine_probability",
+                "source": "engine.probabilities",
+                "synthetic": False,
+                "normalized": normalized,
+                "transforms": ["renormalized"] if normalized else [],
+                "raw_logits_available": False,
+                "calibration": "unspecified",
+            }
     choice = answer.get("choice")
     if choice in option_ids:
-        return [1.0 if option_id == choice else 0.0 for option_id in option_ids]
+        return [1.0 if option_id == choice else 0.0 for option_id in option_ids], {
+            "kind": "synthetic_one_hot",
+            "source": "engine.choice",
+            "synthetic": True,
+            "normalized": False,
+            "transforms": ["one_hot_fallback"],
+            "raw_logits_available": False,
+            "calibration": "not-applicable",
+        }
     raise RuntimeError("External engine did not return choice probabilities")
 
 
@@ -101,8 +125,17 @@ def _choice_raw(
     *, row: dict[str, Any], answer: dict[str, Any], response: dict[str, Any], payload: dict[str, Any], latency_ms: float
 ) -> dict[str, Any]:
     option_ids = [str(option["id"]) for option in row["options"]]
-    probabilities = _normalise_probabilities(answer, option_ids)
+    probabilities, score_provenance = _normalise_probabilities(answer, option_ids)
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    probability_status = (
+        "synthetic one-hot probabilities derived from the engine choice; not a model confidence score"
+        if score_provenance["synthetic"]
+        else (
+            "probabilities reported by the selected System One engine and renormalized by Deqio; raw option logits unavailable"
+            if score_provenance["normalized"]
+            else "probabilities reported by the selected System One engine; raw option logits unavailable"
+        )
+    )
     return {
         "id": row["id"],
         "option_ids": option_ids,
@@ -110,15 +143,17 @@ def _choice_raw(
         "input_tokens": int(usage.get("input_tokens", 0) or 0),
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
-        "probability_status": "probabilities reported by the selected System One engine; raw option logits unavailable",
+        "probability_status": probability_status,
+        "score_provenance": score_provenance,
     }
 
 
 def _noul_raw(
     *, row: dict[str, Any], answer: dict[str, Any], response: dict[str, Any], payload: dict[str, Any], latency_ms: float
 ) -> dict[str, Any]:
-    p_yes = float(answer.get("noul"))
-    p_yes = max(0.0, min(1.0, p_yes))
+    raw_p_yes = float(answer.get("noul"))
+    p_yes = max(0.0, min(1.0, raw_p_yes))
+    clamped = p_yes != raw_p_yes
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
     return {
         "id": row["id"],
@@ -127,7 +162,46 @@ def _noul_raw(
         "input_tokens": int(usage.get("input_tokens", 0) or 0),
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
-        "probability_status": "native Noul probability reported by the selected System One engine",
+        "probability_status": (
+            "native Noul probability reported by the selected System One engine and clamped to [0, 1]"
+            if clamped
+            else "native Noul probability reported by the selected System One engine"
+        ),
+        "score_provenance": {
+            "kind": "engine_probability",
+            "source": "engine.noul",
+            "synthetic": False,
+            "normalized": False,
+            "transforms": ["clamped_to_unit_interval"] if clamped else [],
+            "raw_logits_available": False,
+            "calibration": "unspecified",
+        },
+    }
+
+
+def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: str) -> dict[str, Any]:
+    record = installation_record(settings.config_path, settings.model_id, settings.backend) or {}
+    artifacts = record.get("artifacts") if isinstance(record.get("artifacts"), list) else []
+    resolved = bool(artifacts) and all(
+        (
+            bool(item.get("resolved_revision"))
+            if item.get("source") == "huggingface"
+            else bool(item.get("sha256") or item.get("resolved_revision"))
+        )
+        for item in artifacts
+        if isinstance(item, dict)
+    )
+    return {
+        "deqio_version": __version__,
+        "runtime_instance_id": instance_id,
+        "engine": settings.engine,
+        "model_id": settings.model_id,
+        "backend": settings.backend,
+        "model": profile.get("model", settings.model),
+        "requested_revision": profile.get("model_revision"),
+        "artifacts": deepcopy(artifacts),
+        "artifact_revisions_resolved": bool(resolved),
+        "installation_verified_at": record.get("verified_at"),
     }
 
 
@@ -152,6 +226,16 @@ class SystemOneRuntime:
         self.engine = settings.engine
         self.base_url = f"http://127.0.0.1:{port}"
         self._log_thread = log_thread
+        self.runtime_instance_id = uuid4().hex
+        self._identity = _runtime_identity(settings, profile, self.runtime_instance_id)
+
+    def identity_snapshot(self) -> dict[str, Any]:
+        """Return immutable request-facing identity for this loaded runtime instance."""
+        return deepcopy(self._identity)
+
+    def refresh_identity(self) -> None:
+        """Refresh installation metadata without changing this runtime instance identity."""
+        self._identity = _runtime_identity(self.settings, self.profile, self.runtime_instance_id)
 
     @classmethod
     def load(cls, settings: Settings) -> "SystemOneRuntime":
@@ -171,7 +255,7 @@ class SystemOneRuntime:
         if not python.is_file():
             raise RuntimeError(
                 f"Runtime for {settings.model_id} is not installed. Run: "
-                f"uv run deqio models install {settings.model_id} --backend {settings.backend}"
+                f"deqio models setup"
             )
 
         cls._validate_accelerator(settings, python)
@@ -297,7 +381,7 @@ class SystemOneRuntime:
             if not checkpoint.is_file():
                 raise RuntimeError(
                     f"CLM checkpoint is missing: {checkpoint}. "
-                    f"Run: uv run deqio models install {settings.model_id} --backend {settings.backend}"
+                    f"Run: deqio models setup"
                 )
             return [
                 str(python), str(sidecar),
@@ -339,7 +423,7 @@ class SystemOneRuntime:
             if not model_config.is_file():
                 raise RuntimeError(
                     f"Nimble prepared model config is missing: {model_config}. "
-                    f"Run: uv run deqio models install {settings.model_id} --backend {settings.backend}"
+                    f"Run: deqio models setup"
                 )
             return [
                 str(python), str(sidecar),

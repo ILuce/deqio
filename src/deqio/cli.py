@@ -5,6 +5,7 @@ import sys
 
 import uvicorn
 
+from . import __version__
 from . import benchmark as benchmark_runner
 from . import model_manager
 
@@ -38,12 +39,15 @@ Usage:
   deqio models <command> [options]
   deqio benchmark [--all | --model MODEL_ID:BACKEND]
   deqio status
+  deqio version
+  deqio --version
 
 Commands:
-  serve    Start the API and browser UI
-  models    Install, inspect, select, and update decision models
-  benchmark Run the editable local benchmark suite
-  status    Show the currently selected model/runtime
+  serve      Start the API and browser UI
+  models     Install, inspect, select, and update decision models
+  benchmark  Run the editable local benchmark suite
+  status     Show the currently selected model/runtime
+  version    Show the installed Deqio version
 
 Examples:
   deqio serve
@@ -54,6 +58,7 @@ Examples:
   deqio models delete
   deqio benchmark --all
   deqio status
+  deqio --version
 """
     )
 
@@ -62,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help", "help"}:
         _print_help()
+        return 0
+    if args[0] in {"-V", "--version", "version"}:
+        print(f"deqio {__version__}")
         return 0
 
     command, rest = args[0], args[1:]

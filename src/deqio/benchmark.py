@@ -179,7 +179,9 @@ def _installed(config_path: Path, config_data: dict[str, Any], catalog: dict[str
     ) if row["installed"] and row["host_compatible"]]
 
 
-def _select_profiles(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[dict[str, Any]]:
+def _select_profiles(
+    rows: list[dict[str, Any]], args: argparse.Namespace
+) -> list[dict[str, Any]] | None:
     if not rows:
         raise RuntimeError("No installed model profiles are available on this host")
     if args.all:
@@ -200,7 +202,10 @@ def _select_profiles(rows: list[dict[str, Any]], args: argparse.Namespace) -> li
     for index, row in enumerate(rows, start=1):
         print(f"  {index}. {row['label']} — {row['backend']} ({row['engine']})")
     print("  A. all installed profiles")
-    value = input("Select models [A or comma-separated numbers]: ").strip().lower()
+    print("  Q. quit")
+    value = input("Select models [A, comma-separated numbers, or q]: ").strip().lower()
+    if value in {"q", "quit", "exit"}:
+        return None
     if value in {"", "a", "all"}:
         return rows
     indexes = []
@@ -246,6 +251,9 @@ def run(args: argparse.Namespace) -> int:
     suite_path = Path(args.suite).expanduser().resolve()
     suite = load_suite(suite_path)
     profiles = _select_profiles(_installed(config_path, config_data, catalog), args)
+    if profiles is None:
+        print("Cancelled.")
+        return 0
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = Path(args.output).expanduser().resolve() if args.output else (config_path.parent / ".deqio" / "benchmarks" / stamp)

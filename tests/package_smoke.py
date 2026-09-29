@@ -58,6 +58,13 @@ def main() -> int:
         if "Deqio" not in help_result.stdout:
             raise RuntimeError("deqio --help did not execute from the installed distribution")
 
+        version_result = subprocess.run(
+            ["deqio", "--version"], cwd=work, env=env, check=True,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if version_result.stdout.strip() != f"deqio {deqio.__version__}":
+            raise RuntimeError("deqio --version did not report the installed package version")
+
         subprocess.run(
             ["deqio", "models", "list"], cwd=work, env=env, check=True,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

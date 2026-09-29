@@ -12,6 +12,14 @@ POST /v1/choice
 POST /v1/shared
 ```
 
+Check the installed Deqio version with either:
+
+```bash
+deqio --version
+# or
+deqio version
+```
+
 ## Benchmark snapshot
 
 > **Apple Silicon macOS · 16.0 GiB unified memory**<br>
@@ -251,6 +259,14 @@ Choose another installed profile:
 deqio models use
 ```
 
+Interactive CLI menus always accept `q` (also `quit` / `exit`) to leave without making a selection.
+
+Update an installed model/runtime profile and refresh its recorded artifact revisions:
+
+```bash
+deqio models update MODEL_ID --backend BACKEND
+```
+
 Delete an installed profile interactively:
 
 ```bash
@@ -352,6 +368,59 @@ http://127.0.0.1:8787
 
 The UI is not involved when your application calls the API directly.
 
+### Decision Provenance / Attestation v1
+
+Starting with Deqio `0.2.1`, every decision response includes a `provenance` object captured from the same loaded runtime instance that produced the score. It identifies the engine/model/backend, the runtime instance, recorded model artifact revisions, and how the returned probabilities were obtained.
+
+The score metadata distinguishes values reported by the engine from values transformed by Deqio. For example, a choice-only upstream response that Deqio expands to `1.0 / 0.0` is explicitly marked as `synthetic_one_hot`; it must not be interpreted as 100% model confidence. Renormalization and Noul clamping are also reported as transforms.
+
+A response contains a local attestation digest binding the request result to its runtime and score provenance:
+
+```json
+{
+  "provenance": {
+    "schema_version": 1,
+    "runtime": {
+      "deqio_version": "0.2.1",
+      "runtime_instance_id": "...",
+      "engine": "decider",
+      "model_id": "decider-4b",
+      "backend": "mps",
+      "model": "Mapika/decider-4b",
+      "requested_revision": null,
+      "artifacts": [
+        {
+          "source": "huggingface",
+          "repo_id": "Mapika/decider-4b",
+          "requested_revision": null,
+          "resolved_revision": "<commit-sha>"
+        }
+      ],
+      "artifact_revisions_resolved": true
+    },
+    "score": {
+      "kind": "engine_probability",
+      "source": "engine.probabilities",
+      "synthetic": false,
+      "normalized": false,
+      "transforms": [],
+      "raw_logits_available": false,
+      "calibration": "unspecified"
+    },
+    "attestation": {
+      "kind": "deqio-local-response",
+      "signed": false,
+      "complete": true,
+      "sha256": "..."
+    }
+  }
+}
+```
+
+The attestation is a **local, unsigned integrity/correlation binding**, not a cryptographic signature or remote trust proof. `complete: true` means the response has a runtime instance identity, resolved model artifact revisions, and known score provenance. Profiles installed before Deqio 0.2.1 may initially report `complete: false`; run `deqio models update MODEL_ID --backend BACKEND` to refresh installation metadata and resolved artifact revisions.
+
+`/v1/shared` returns provenance for every result plus a batch-level provenance object that binds the result attestations to the same runtime instance. `/health` exposes `runtime_instance_id`, `provenance_schema_version`, and whether artifact revisions are resolved.
+
 ### Noul
 
 ```bash
@@ -364,7 +433,7 @@ curl -s \
   }'
 ```
 
-Typical response:
+Typical response (abridged):
 
 ```json
 {
@@ -372,6 +441,25 @@ Typical response:
   "probabilities": {
     "yes": 0.97,
     "no": 0.03
+  },
+  "provenance": {
+    "schema_version": 1,
+    "runtime": {
+      "engine": "decider",
+      "model_id": "decider-4b",
+      "backend": "mps",
+      "runtime_instance_id": "..."
+    },
+    "score": {
+      "kind": "engine_probability",
+      "source": "engine.noul",
+      "synthetic": false
+    },
+    "attestation": {
+      "signed": false,
+      "complete": true,
+      "sha256": "..."
+    }
   }
 }
 ```

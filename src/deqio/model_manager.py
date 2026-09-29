@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import hf_hub_download, scan_cache_dir, snapshot_download
+from huggingface_hub import HfApi, hf_hub_download, scan_cache_dir, snapshot_download
 
 from .catalog import SUPPORTED_BACKENDS, apply_selection, get_model, get_profile, load_catalog
 from .backends import BackendRuntime
@@ -20,6 +20,26 @@ from .workspace import ensure_workspace
 
 
 ROOT = Path.cwd()
+
+
+
+
+def _prompt_index(label: str, count: int) -> int | None:
+    value = input(f"{label} [1-{count}, q]: ").strip().lower()
+    if value in {"q", "quit", "exit"}:
+        return None
+    try:
+        index = int(value) - 1
+    except ValueError as error:
+        raise RuntimeError("Invalid selection; enter a number or q to quit") from error
+    if index not in range(count):
+        raise RuntimeError("Invalid selection")
+    return index
+
+
+def _cancelled() -> int:
+    print("Cancelled.")
+    return 0
 
 
 def _config_path(value: str | None) -> Path:
@@ -245,6 +265,110 @@ def _prefetch_declared_weights(config_path: Path, profile: dict[str, Any]) -> st
     return "Model artifact is already local/prepared; no Hub prefetch required."
 
 
+
+
+def _resolved_hf_revision(repo_id: str, requested_revision: Any) -> str | None:
+    """Resolve a Hub revision to an immutable commit SHA without making install fail if metadata lookup fails."""
+    requested = None if requested_revision in (None, "", "upstream-latest") else str(requested_revision)
+    if requested and requested.startswith("local-"):
+        requested = None
+    if requested and len(requested) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in requested):
+        return requested.lower()
+    try:
+        info = HfApi().model_info(repo_id, revision=requested)
+    except Exception:
+        return None
+    sha = getattr(info, "sha", None)
+    return str(sha) if sha else None
+
+
+def _artifact_attestation(config_path: Path, data: dict[str, Any], profile: dict[str, Any]) -> list[dict[str, Any]]:
+    """Describe the exact model artifacts prepared during the network-enabled install/update phase."""
+    artifacts: list[dict[str, Any]] = []
+    downloads = _declared_downloads(profile)
+    for download in downloads:
+        repo_id = str(download.get("repo_id", ""))
+        if not repo_id:
+            continue
+        requested = download.get("revision")
+        if requested in (None, ""):
+            candidate = profile.get("model_revision")
+            if candidate and not str(candidate).startswith("local-"):
+                requested = candidate
+        row: dict[str, Any] = {
+            "source": "huggingface",
+            "repo_id": repo_id,
+            "requested_revision": requested if requested not in ("",) else None,
+            "resolved_revision": _resolved_hf_revision(repo_id, requested),
+        }
+        if download.get("filename"):
+            row["filename"] = str(download["filename"])
+        if download.get("local_dir"):
+            row["local_dir"] = str(download["local_dir"])
+        artifacts.append(row)
+
+    if profile.get("installer") == "nimble":
+        runtime_root = _runtime_root(config_path, data)
+        config_path_value = runtime_root / str(profile.get("model_config", "nimble-model.json"))
+        model_id = str(profile.get("repo_id", ""))
+        resolved_revision = None
+        if config_path_value.is_file():
+            try:
+                prepared = json.loads(config_path_value.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                prepared = {}
+            model_id = str(prepared.get("model_id") or model_id)
+            resolved_revision = prepared.get("revision")
+        if model_id:
+            artifacts.append({
+                "source": "huggingface",
+                "role": "nimble-adapter",
+                "repo_id": model_id,
+                "requested_revision": profile.get("model_revision"),
+                "resolved_revision": str(resolved_revision) if resolved_revision else _resolved_hf_revision(model_id, profile.get("model_revision")),
+            })
+
+        model_dir = Path(str(profile.get("model", "models/nimble-9b"))).expanduser()
+        if not model_dir.is_absolute():
+            model_dir = (config_path.parent / model_dir).resolve()
+        contract_path = model_dir / "schema_config.json"
+        if contract_path.is_file():
+            try:
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                contract = {}
+            base_model = contract.get("model")
+            base_revision = contract.get("revision")
+            if isinstance(base_model, str) and base_model:
+                artifacts.append({
+                    "source": "huggingface",
+                    "role": "base-model",
+                    "repo_id": base_model,
+                    "requested_revision": base_revision,
+                    "resolved_revision": str(base_revision) if base_revision else None,
+                })
+        return artifacts
+
+    if not downloads:
+        model = profile.get("model")
+        if _looks_like_hf_repo(model):
+            requested = profile.get("model_revision")
+            artifacts.append({
+                "source": "huggingface",
+                "repo_id": str(model),
+                "requested_revision": requested,
+                "resolved_revision": _resolved_hf_revision(str(model), requested),
+            })
+        elif isinstance(model, str) and model:
+            artifacts.append({
+                "source": "local",
+                "path": model,
+                "requested_revision": profile.get("model_revision"),
+                "resolved_revision": None,
+            })
+    return artifacts
+
+
 def _preflight_profile(
     model_id: str,
     backend: str,
@@ -313,12 +437,14 @@ def _install_profile(
         print(_prefetch_declared_weights(config_path, profile))
 
     _verify_model_ready(config_path, data, entry, profile, backend)
+    artifacts = _artifact_attestation(config_path, data, profile)
     mark_installed(
         config_path,
         model_id,
         backend,
         verified=True,
         source="update" if upgrade else "install",
+        artifacts=artifacts,
     )
     print(f"Installed and verified profile: {model_id} / {backend}")
 
@@ -465,10 +591,9 @@ def cmd_use(args: argparse.Namespace) -> int:
         for index, row in enumerate(rows, start=1):
             active = " [active]" if row["active"] else ""
             print(f"  {index}. {row['label']} — {row['backend']} ({row['engine']}){active}")
-        value = input(f"Select profile [1-{len(rows)}]: ").strip()
-        index = int(value) - 1
-        if index not in range(len(rows)):
-            raise RuntimeError("Invalid model selection")
+        index = _prompt_index("Select profile", len(rows))
+        if index is None:
+            return _cancelled()
         selected = rows[index]
 
     entry = get_model(catalog, str(selected["model_id"]))
@@ -662,16 +787,19 @@ def cmd_delete(args: argparse.Namespace) -> int:
         for index, row in enumerate(rows, start=1):
             active = " [active]" if row["active"] else ""
             print(f"  {index}. {row['label']} — {row['backend']} ({row['engine']}){active}")
-        value = input(f"Select profile to delete [1-{len(rows)}]: ").strip()
-        index = int(value) - 1
-        if index not in range(len(rows)):
-            raise RuntimeError("Invalid model selection")
+        index = _prompt_index("Select profile to delete", len(rows))
+        if index is None:
+            return _cancelled()
         selected = rows[index]
 
     model_id = str(selected["model_id"])
     backend = str(selected["backend"])
     if not args.yes:
-        answer = input(f"Delete {model_id} / {backend} from this Deqio workspace? [y/N]: ").strip().lower()
+        answer = input(
+            f"Delete {model_id} / {backend} from this Deqio workspace? [y/N/q]: "
+        ).strip().lower()
+        if answer in {"q", "quit", "exit"}:
+            return _cancelled()
         if answer not in {"y", "yes"}:
             print("Delete cancelled.")
             return 0
@@ -770,9 +898,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
         backend_rows.append((backend, count))
     for index, (backend, count) in enumerate(backend_rows, start=1):
         print(f"  {index}. {backend} ({count} compatible models)")
-    backend_index = int(input(f"Select backend [1-{len(available_backends)}]: ").strip()) - 1
-    if backend_index not in range(len(available_backends)):
-        raise RuntimeError("Invalid backend selection")
+    backend_index = _prompt_index("Select backend", len(available_backends))
+    if backend_index is None:
+        return _cancelled()
     backend = available_backends[backend_index]
 
     compatible: list[tuple[dict[str, Any], dict[str, Any]]] = []
@@ -806,9 +934,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
         for item, check in unavailable:
             print(f"  - {item['id']}: {check['reason']}")
 
-    model_index = int(input(f"Select model [1-{len(compatible)}]: ").strip()) - 1
-    if model_index not in range(len(compatible)):
-        raise RuntimeError("Invalid model selection")
+    model_index = _prompt_index("Select model", len(compatible))
+    if model_index is None:
+        return _cancelled()
     entry = compatible[model_index][0]
     profile = get_profile(catalog, str(entry["id"]), backend)
 

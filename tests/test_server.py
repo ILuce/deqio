@@ -692,7 +692,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.2.1"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1067,6 +1067,11 @@ def test_install_profile_registers_only_after_model_ready_verification(
     monkeypatch.setattr(manager, "_install_runtime", lambda *a, **k: runtime)
     monkeypatch.setattr(manager, "_prefetch_declared_weights", lambda *a, **k: "cached")
     monkeypatch.setattr(manager, "_verify_model_ready", lambda *a, **k: calls.append("ready"))
+    monkeypatch.setattr(
+        manager,
+        "_artifact_attestation",
+        lambda *a, **k: [{"source": "huggingface", "repo_id": "owner/demo", "resolved_revision": "a" * 40}],
+    )
 
     manager._install_profile(
         config_path=config_path,
@@ -1081,6 +1086,7 @@ def test_install_profile_registers_only_after_model_ready_verification(
     assert calls == ["ready"]
     record = load_registry(config_path)["profiles"][profile_key("demo", "mlx")]
     assert "verified_at" in record
+    assert record["artifacts"][0]["resolved_revision"] == "a" * 40
 
 
 def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline_runtime(
@@ -1435,3 +1441,327 @@ def test_cuda_only_profiles_can_restrict_the_supported_operating_system() -> Non
 
     assert profile_compatibility("cuda", profile, host=windows)["compatible"] is False
     assert profile_compatibility("cuda", profile, host=linux)["compatible"] is True
+
+
+def test_cli_version_commands_report_release_version(capsys: pytest.CaptureFixture[str]) -> None:
+    from deqio import __version__
+    from deqio.cli import main
+
+    assert main(["--version"]) == 0
+    assert capsys.readouterr().out.strip() == f"deqio {__version__}"
+    assert main(["version"]) == 0
+    assert capsys.readouterr().out.strip() == f"deqio {__version__}"
+
+
+def test_model_manager_interactive_prompt_accepts_q(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.model_manager as manager
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "q")
+    assert manager._prompt_index("Select model", 3) is None
+
+
+def test_benchmark_interactive_selection_accepts_q(monkeypatch: pytest.MonkeyPatch) -> None:
+    import argparse
+    import deqio.benchmark as benchmark
+
+    rows = [{"label": "Demo", "backend": "mlx", "engine": "demo"}]
+    monkeypatch.setattr("builtins.input", lambda prompt="": "q")
+    selected = benchmark._select_profiles(rows, argparse.Namespace(all=False, model=None))
+    assert selected is None
+
+
+def test_external_choice_score_provenance_marks_synthetic_one_hot() -> None:
+    from deqio.systemone_runtime import _choice_raw
+
+    row = {
+        "id": "route",
+        "state": "charged twice",
+        "question": "Which team?",
+        "options": [
+            {"id": "billing", "description": "payments"},
+            {"id": "technical", "description": "bugs"},
+        ],
+    }
+    raw = _choice_raw(
+        row=row,
+        answer={"choice": "billing"},
+        response={},
+        payload={"state": row["state"], "questions": {}},
+        latency_ms=1.0,
+    )
+
+    assert raw["probabilities"] == [1.0, 0.0]
+    assert raw["score_provenance"]["kind"] == "synthetic_one_hot"
+    assert raw["score_provenance"]["source"] == "engine.choice"
+    assert raw["score_provenance"]["synthetic"] is True
+    assert raw["score_provenance"]["transforms"] == ["one_hot_fallback"]
+    assert "not a model confidence score" in raw["probability_status"]
+
+
+def test_external_choice_score_provenance_records_renormalization() -> None:
+    from deqio.systemone_runtime import _choice_raw
+
+    row = {
+        "id": "route",
+        "state": "charged twice",
+        "question": "Which team?",
+        "options": [
+            {"id": "billing", "description": "payments"},
+            {"id": "technical", "description": "bugs"},
+        ],
+    }
+    raw = _choice_raw(
+        row=row,
+        answer={"choice": "billing", "probabilities": {"billing": 8.0, "technical": 2.0}},
+        response={},
+        payload={"state": row["state"], "questions": {}},
+        latency_ms=1.0,
+    )
+
+    assert raw["probabilities"] == [0.8, 0.2]
+    assert raw["score_provenance"]["kind"] == "engine_probability"
+    assert raw["score_provenance"]["normalized"] is True
+    assert raw["score_provenance"]["transforms"] == ["renormalized"]
+
+
+def test_format_result_binds_decision_provenance_and_local_attestation() -> None:
+    from deqio.server import format_result
+
+    identity = {
+        "deqio_version": "0.2.1",
+        "runtime_instance_id": "runtime-123",
+        "engine": "decider",
+        "model_id": "decider-4b",
+        "backend": "mps",
+        "model": "Mapika/decider-4b",
+        "requested_revision": None,
+        "artifacts": [{
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-4b",
+            "resolved_revision": "a" * 40,
+        }],
+        "artifact_revisions_resolved": True,
+        "installation_verified_at": "2026-09-29T00:00:00+00:00",
+    }
+    raw = {
+        "id": "req-1",
+        "option_ids": ["yes", "no"],
+        "probabilities": [0.8, 0.2],
+        "input_tokens": 42,
+        "total_seconds": 0.1,
+        "prompt_sha256": "prompt",
+        "probability_status": "native",
+        "score_provenance": {
+            "kind": "engine_probability",
+            "source": "engine.probabilities",
+            "synthetic": False,
+            "normalized": False,
+            "transforms": [],
+            "raw_logits_available": False,
+            "calibration": "unspecified",
+        },
+    }
+
+    result = format_result(raw, runtime_identity=identity)
+
+    assert result["provenance"]["schema_version"] == 1
+    assert result["provenance"]["runtime"]["runtime_instance_id"] == "runtime-123"
+    assert result["provenance"]["score"]["source"] == "engine.probabilities"
+    assert result["provenance"]["attestation"]["signed"] is False
+    assert result["provenance"]["attestation"]["complete"] is True
+    assert len(result["provenance"]["attestation"]["sha256"]) == 64
+
+
+def test_runtime_identity_reads_resolved_installation_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deqio.config import settings_from_data
+    from deqio.installations import mark_installed
+    from deqio.systemone_runtime import _runtime_identity
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    catalog_path = tmp_path / "models.json"
+    catalog_path.write_text('{"models": []}')
+    settings = settings_from_data(
+        config_path,
+        {
+            "engine": "kev",
+            "model_id": "kev-0.8b",
+            "backend": "mlx",
+            "model": "jaredpalmer/kev-0.8b",
+            "model_revision": "kev-0.8b",
+            "model_catalog": str(catalog_path),
+            "runtime_dir": str(tmp_path / ".model-runtimes"),
+            "max_tokens": 4096,
+            "mlx_cache_mib": 256,
+            "log": str(tmp_path / "requests.jsonl"),
+            "torch_dtype": "bfloat16",
+            "sidecar_startup_seconds": 900,
+            "hf_offline_runtime": True,
+        },
+        apply_environment=False,
+    )
+    artifacts = [{
+        "source": "huggingface",
+        "repo_id": "jaredpalmer/kev-0.8b",
+        "requested_revision": None,
+        "resolved_revision": "b" * 40,
+    }]
+    mark_installed(config_path, "kev-0.8b", "mlx", verified=True, artifacts=artifacts)
+
+    identity = _runtime_identity(settings, {"model": "jaredpalmer/kev-0.8b"}, "runtime-abc")
+
+    assert identity["runtime_instance_id"] == "runtime-abc"
+    assert identity["artifacts"] == artifacts
+    assert identity["artifact_revisions_resolved"] is True
+    assert identity["installation_verified_at"] is not None
+
+
+def test_decision_provenance_uses_captured_runtime_identity_not_later_global_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.server as server
+    from deqio.config import settings_from_data
+
+    def make_settings(model_id: str, model: str):
+        return settings_from_data(
+            tmp_path / "config.json",
+            {
+                "engine": "kev",
+                "model_id": model_id,
+                "backend": "mlx",
+                "model": model,
+                "model_revision": model_id,
+                "model_catalog": str(tmp_path / "models.json"),
+                "runtime_dir": str(tmp_path / ".model-runtimes"),
+                "max_tokens": 4096,
+                "mlx_cache_mib": 256,
+                "log": str(tmp_path / "requests.jsonl"),
+                "torch_dtype": "bfloat16",
+                "sidecar_startup_seconds": 900,
+                "hf_offline_runtime": True,
+            },
+            apply_environment=False,
+        )
+
+    (tmp_path / "config.json").write_text("{}")
+    (tmp_path / "models.json").write_text('{"models": []}')
+    old_settings = make_settings("kev-0.8b", "jaredpalmer/kev-0.8b")
+    new_settings = make_settings("kev-4b", "jaredpalmer/kev-4b")
+
+    class FakeRuntime:
+        runtime_instance_id = "old-runtime"
+
+        def identity_snapshot(self):
+            return {
+                "deqio_version": "0.2.1",
+                "runtime_instance_id": "old-runtime",
+                "engine": "kev",
+                "model_id": "kev-0.8b",
+                "backend": "mlx",
+                "model": "jaredpalmer/kev-0.8b",
+                "requested_revision": None,
+                "artifacts": [{"source": "huggingface", "resolved_revision": "c" * 40}],
+                "artifact_revisions_resolved": True,
+                "installation_verified_at": "2026-09-29T00:00:00+00:00",
+            }
+
+        def score(self, row, mode):
+            server.SETTINGS = new_settings
+            return {
+                "id": row["id"],
+                "option_ids": ["a", "b"],
+                "probabilities": [0.75, 0.25],
+                "input_tokens": 1,
+                "total_seconds": 0.001,
+                "prompt_sha256": "prompt",
+                "probability_status": "native",
+                "score_provenance": {
+                    "kind": "engine_probability",
+                    "source": "engine.probabilities",
+                    "synthetic": False,
+                    "normalized": False,
+                    "transforms": [],
+                    "raw_logits_available": False,
+                    "calibration": "unspecified",
+                },
+            }
+
+    monkeypatch.setattr(server, "SETTINGS", old_settings)
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "log_request_success", lambda *a, **k: None)
+
+    result = server.run_decision(server.DecisionRequest(
+        id="req-atomic",
+        state="state",
+        question="choose",
+        options=[server.Option(id="a", description="A"), server.Option(id="b", description="B")],
+    ))
+
+    assert server.SETTINGS.model_id == "kev-4b"
+    assert result["provenance"]["runtime"]["model_id"] == "kev-0.8b"
+    assert result["provenance"]["runtime"]["runtime_instance_id"] == "old-runtime"
+
+
+def test_missing_runtime_error_points_to_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from deqio.config import settings_from_data
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    catalog_path = tmp_path / "models.json"
+    catalog_path.write_text(json.dumps({
+        "models": [{
+            "id": "demo",
+            "engine": "kev",
+            "backends": {"mlx": {"model": "owner/demo", "runtime_key": "kev"}},
+        }]
+    }))
+    settings = settings_from_data(
+        tmp_path / "config.json",
+        {
+            "engine": "kev",
+            "model_id": "demo",
+            "backend": "mlx",
+            "model": "owner/demo",
+            "model_revision": "demo",
+            "model_catalog": str(catalog_path),
+            "runtime_dir": str(tmp_path / ".model-runtimes"),
+            "max_tokens": 4096,
+            "mlx_cache_mib": 256,
+            "log": str(tmp_path / "requests.jsonl"),
+            "torch_dtype": "bfloat16",
+            "sidecar_startup_seconds": 900,
+            "hf_offline_runtime": True,
+        },
+        apply_environment=False,
+    )
+
+    with pytest.raises(RuntimeError, match="deqio models setup") as error:
+        SystemOneRuntime.load(settings)
+    assert "uv run" not in str(error.value)
+
+
+def test_shared_provenance_binds_per_result_attestations() -> None:
+    from deqio.server import _shared_provenance
+
+    runtime_identity = {
+        "runtime_instance_id": "runtime-shared",
+        "artifact_revisions_resolved": True,
+    }
+    results = [
+        {"provenance": {"attestation": {"complete": True, "sha256": "a" * 64}}},
+        {"provenance": {"attestation": {"complete": True, "sha256": "b" * 64}}},
+    ]
+
+    provenance = _shared_provenance(results, runtime_identity)
+
+    assert provenance["runtime"]["runtime_instance_id"] == "runtime-shared"
+    assert provenance["score"] == {
+        "kind": "shared_batch",
+        "source": "results[*].provenance.score",
+        "result_count": 2,
+    }
+    assert provenance["attestation"]["complete"] is True
+    assert len(provenance["attestation"]["sha256"]) == 64

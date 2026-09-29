@@ -840,7 +840,7 @@ async function refreshBenchmarks() {
     if (!benchmarkRuns.length) {
       content.classList.add('hidden');
       empty.classList.remove('hidden');
-      empty.textContent = 'No benchmark runs found. Run `uv run deqio benchmark` and refresh this section.';
+      empty.textContent = 'No benchmark runs found. Run `deqio benchmark` and refresh this section.';
       return;
     }
 

@@ -51,6 +51,7 @@ def mark_installed(
     *,
     verified: bool = False,
     source: str = "install",
+    artifacts: list[dict[str, Any]] | None = None,
 ) -> None:
     data = load_registry(config_path)
     profiles = data.setdefault("profiles", {})
@@ -68,9 +69,21 @@ def mark_installed(
     )
     if verified:
         record["verified_at"] = now
+    if artifacts is not None:
+        record["artifacts"] = artifacts
     profiles[key] = record
     _write_registry(config_path, data)
 
+
+
+def installation_record(config_path: Path, model_id: str, backend: str) -> dict[str, Any] | None:
+    """Return a copy of one profile's local installation record, if present."""
+    data = load_registry(config_path)
+    profiles = data.get("profiles", {}) if isinstance(data, dict) else {}
+    if not isinstance(profiles, dict):
+        return None
+    record = profiles.get(profile_key(model_id, backend))
+    return dict(record) if isinstance(record, dict) else None
 
 
 
