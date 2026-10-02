@@ -129,7 +129,15 @@ On a Mac, the installer offers:
 - `mlx` — recommended for models with native MLX support
 - `mps` — PyTorch on Apple Silicon, required by models such as Decider
 
-`models setup` detects host memory and hides profiles that do not meet the catalogued minimum for the selected backend. It installs the isolated runtime, downloads/prepares the model weights, starts the model once, and requires a real typed-decision readiness probe to pass before the profile is registered as installed.
+`models setup` detects host memory and hides profiles that do not meet the catalogued minimum for the selected backend. After selecting a model it also asks for the **maximum input token budget** for that profile. The chosen value is stored with the installed profile and restored when that model/backend is selected again. The installer then installs the isolated runtime, downloads/prepares the model weights, starts the model once, and requires a real typed-decision readiness probe to pass before the profile is registered as installed.
+
+For non-interactive provisioning, pass the same value explicitly:
+
+```bash
+deqio models install MODEL_ID --backend BACKEND --max-input-tokens 8192
+```
+
+This value is the Deqio-configured input budget for that installed profile. A backend/model may have a stricter effective limit; Deqio never treats the configured number alone as proof that an input reached the model intact.
 
 On first setup Deqio creates editable `config.json`, `models.json`, and `benchmarks/basic.json` files in this workspace. Model runtimes and weights are kept outside the PyPI package.
 
@@ -420,6 +428,50 @@ A response contains a local attestation digest binding the request result to its
 The attestation is a **local, unsigned integrity/correlation binding**, not a cryptographic signature or remote trust proof. `complete: true` means the response has a runtime instance identity, resolved model artifact revisions, and known score provenance. Profiles installed before Deqio 0.2.1 may initially report `complete: false`; run `deqio models update MODEL_ID --backend BACKEND` to refresh installation metadata and resolved artifact revisions.
 
 `/v1/shared` returns provenance for every result plus a batch-level provenance object that binds the result attestations to the same runtime instance. `/health` exposes `runtime_instance_id`, `provenance_schema_version`, and whether artifact revisions are resolved.
+
+### Negotiated input-completeness contract
+
+Clients that need an explicit statement about whether the complete declared input reached the model boundary can opt in with:
+
+```text
+Deqio-Contract: input-completeness-v1
+```
+
+and include an `input_policy` in the request:
+
+```json
+{
+  "input_policy": {
+    "require_complete": true,
+    "overflow": "reject"
+  }
+}
+```
+
+The contract is intentionally **fail-closed**. Deqio hashes the exact HTTP request bytes before FastAPI body parsing, rejects duplicate JSON keys and unknown contract versions, validates decision/option IDs, and binds the resulting `input_receipt` into response attestation schema v2. A strict request is rejected before inference when the active backend cannot prove model-boundary completeness. Deqio does not silently truncate, silently downgrade the contract, or turn missing token usage into a synthetic zero.
+
+Current external System-One sidecars do not expose enough model-boundary instrumentation to prove exact rendered token IDs, masks, and cache consumption. For those runtimes a strict `require_complete: true` request therefore returns `input_completeness_unavailable` with `inference_performed: false`. A negotiated non-strict request may still run, but its receipt is explicitly `status: "unknown"`; `unknown` is never promoted to `complete` merely because no truncation error was reported.
+
+Example negotiated request:
+
+```bash
+curl -s \
+  -X POST http://127.0.0.1:8787/v1/choice \
+  -H 'Content-Type: application/json' \
+  -H 'Deqio-Contract: input-completeness-v1' \
+  -d '{
+    "id": "route-17",
+    "state": "Full state used for the decision",
+    "question": "Which route should be selected?",
+    "options": [
+      {"id": "a", "description": "Route A"},
+      {"id": "b", "description": "Route B"}
+    ],
+    "input_policy": {"require_complete": false, "overflow": "reject"}
+  }'
+```
+
+Clients that do not send `Deqio-Contract` keep the existing response schema and behavior. The negotiated contract is additive and versioned independently from the normal decision API.
 
 ### Noul
 

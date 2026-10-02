@@ -12,7 +12,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import __version__
 from pydantic import BaseModel
@@ -42,6 +42,18 @@ from .console import (
     warmup_ok,
 )
 from .installations import installed_profiles, mark_installed
+from .input_contract import (
+    INPUT_ATTESTATION_SCHEMA_VERSION,
+    INPUT_COMPLETENESS_V1,
+    DuplicateJSONKeyError,
+    InputContractContext,
+    UnsupportedInputContractError,
+    decision_input_stub,
+    parse_contract_header,
+    sha256_bytes,
+    unknown_input_receipt,
+    validate_json_without_duplicate_keys,
+)
 from .ui import DASHBOARD
 
 
@@ -90,12 +102,18 @@ class Option(BaseModel):
     description: str
 
 
+class InputPolicy(BaseModel):
+    require_complete: bool = False
+    overflow: Literal["reject"] = "reject"
+
+
 class DecisionRequest(BaseModel):
     state: State
     question: str
     options: list[Option]
     id: str | None = None
     mode: Literal["direct", "serial"] = "serial"
+    input_policy: InputPolicy | None = None
 
 
 class NoulRequest(BaseModel):
@@ -103,6 +121,7 @@ class NoulRequest(BaseModel):
     question: str
     id: str | None = None
     mode: Literal["direct", "serial"] = "serial"
+    input_policy: InputPolicy | None = None
 
 
 class SharedDecision(BaseModel):
@@ -114,6 +133,7 @@ class SharedDecision(BaseModel):
 class SharedRequest(BaseModel):
     state: State
     decisions: list[SharedDecision]
+    input_policy: InputPolicy | None = None
 
 
 class ModelActivateRequest(BaseModel):
@@ -124,6 +144,172 @@ class ModelActivateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+class InputContractHTTPError(Exception):
+    def __init__(self, code: str, *, status_code: int = 422, **details: Any) -> None:
+        super().__init__(code)
+        self.status_code = status_code
+        self.payload = {"code": code, **details}
+
+
+def _option_ids(options: list[Option]) -> list[str]:
+    return [str(option.id) for option in options]
+
+
+def _validate_unique_ids(values: list[str], *, label: str) -> None:
+    if len(values) != len(set(values)):
+        raise InputContractHTTPError(
+            "duplicate_id",
+            field=label,
+            inference_performed=False,
+        )
+
+
+async def _input_contract_context(
+    http_request: Request,
+    *,
+    policy: InputPolicy | None,
+    request_id: str | None,
+    decision_ids: list[str],
+    option_sets: list[list[str]],
+) -> InputContractContext | None:
+    try:
+        version = parse_contract_header(http_request.headers.get("deqio-contract"))
+    except UnsupportedInputContractError as error:
+        raise InputContractHTTPError(
+            "unsupported_contract",
+            contract=str(error),
+            supported=[INPUT_COMPLETENESS_V1],
+            inference_performed=False,
+        ) from error
+    if version is None:
+        return None
+
+    raw_body = getattr(http_request.state, "input_contract_raw_body", None)
+    request_body_sha256 = getattr(http_request.state, "input_contract_request_body_sha256", None)
+    if raw_body is None or request_body_sha256 is None:
+        # Fallback for direct unit calls that do not pass through ASGI middleware.
+        raw_body = await http_request.body()
+        request_body_sha256 = sha256_bytes(raw_body)
+        try:
+            validate_json_without_duplicate_keys(raw_body)
+        except DuplicateJSONKeyError as error:
+            raise InputContractHTTPError(
+                "duplicate_json_key",
+                request_id=request_id,
+                request_body_sha256=request_body_sha256,
+                detail=str(error),
+                inference_performed=False,
+            ) from error
+        except ValueError as error:
+            raise InputContractHTTPError(
+                "invalid_request_body",
+                request_id=request_id,
+                request_body_sha256=request_body_sha256,
+                detail=str(error),
+                inference_performed=False,
+            ) from error
+
+    if policy is None:
+        raise InputContractHTTPError(
+            "input_policy_required",
+            request_id=request_id,
+            request_body_sha256=request_body_sha256,
+            inference_performed=False,
+        )
+    if request_id is None and len(decision_ids) == 1:
+        raise InputContractHTTPError(
+            "request_id_required",
+            request_body_sha256=request_body_sha256,
+            inference_performed=False,
+        )
+    _validate_unique_ids(decision_ids, label="decision_ids")
+    for option_ids in option_sets:
+        _validate_unique_ids(option_ids, label="option_ids")
+
+    return InputContractContext(
+        version=version,
+        request_body_sha256=request_body_sha256,
+        require_complete=bool(policy.require_complete),
+        overflow=policy.overflow,
+    )
+
+
+def _ensure_contract_capability(
+    target: BackendRuntime,
+    context: InputContractContext | None,
+    *,
+    request_id: str,
+) -> None:
+    if context is None or not context.require_complete:
+        return
+    capability_fn = getattr(target, "input_completeness_capability", None)
+    capability = capability_fn() if callable(capability_fn) else {"status": "unavailable"}
+    if not isinstance(capability, dict) or capability.get("status") != "complete":
+        raise InputContractHTTPError(
+            "input_completeness_unavailable",
+            request_id=request_id,
+            request_body_sha256=context.request_body_sha256,
+            reason=(capability or {}).get("reason", "backend_model_input_not_instrumented")
+            if isinstance(capability, dict)
+            else "backend_model_input_not_instrumented",
+            inference_performed=False,
+        )
+
+
+def _unknown_receipt_for_result(
+    *,
+    context: InputContractContext,
+    runtime_identity: dict[str, Any],
+    raw_result: dict[str, Any],
+    settings_snapshot: Settings,
+    decision_id: str,
+    option_ids: list[str],
+    components: list[str],
+) -> dict[str, Any]:
+    input_tokens = raw_result.get("input_tokens")
+    return unknown_input_receipt(
+        context=context,
+        runtime_identity=runtime_identity,
+        engine_payload_sha256=raw_result.get("engine_payload_sha256"),
+        input_limit_tokens=settings_snapshot.max_tokens,
+        decision_inputs=[
+            decision_input_stub(
+                decision_id=decision_id, option_ids=option_ids, components=components
+            )
+        ],
+        input_tokens=int(input_tokens) if isinstance(input_tokens, int) else None,
+        input_tokens_source=str(raw_result.get("input_tokens_source") or "unknown"),
+    )
+
+
+def _unknown_shared_receipt(
+    *,
+    context: InputContractContext,
+    runtime_identity: dict[str, Any],
+    raw_results: list[dict[str, Any]],
+    settings_snapshot: Settings,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    first = raw_results[0] if raw_results else {}
+    tokens = first.get("input_tokens")
+    return unknown_input_receipt(
+        context=context,
+        runtime_identity=runtime_identity,
+        engine_payload_sha256=first.get("engine_payload_sha256"),
+        input_limit_tokens=settings_snapshot.max_tokens,
+        decision_inputs=[
+            decision_input_stub(
+                decision_id=str(row["id"]),
+                option_ids=[str(option["id"]) for option in row["options"]],
+                components=["state", "question", "options"],
+            )
+            for row in rows
+        ],
+        input_tokens=int(tokens) if isinstance(tokens, int) else None,
+        input_tokens_source=str(first.get("input_tokens_source") or "unknown"),
+    )
 
 
 def _runtime() -> BackendRuntime:
@@ -242,6 +428,8 @@ def _bind_result_provenance(
     response: dict[str, Any],
     raw_result: dict[str, Any],
     runtime_identity: dict[str, Any],
+    *,
+    input_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     score = raw_result.get("score_provenance")
     if not isinstance(score, dict):
@@ -262,17 +450,22 @@ def _bind_result_provenance(
         "runtime": runtime_identity,
         "score": score,
     }
+    if input_receipt is not None:
+        binding["input_receipt"] = input_receipt
     complete = bool(
         runtime_identity.get("runtime_instance_id")
         and runtime_identity.get("artifact_revisions_resolved")
         and score.get("kind") != "unknown"
+        and (input_receipt is None or input_receipt.get("status") == "complete")
     )
     response["provenance"] = {
-        "schema_version": 1,
+        "schema_version": INPUT_ATTESTATION_SCHEMA_VERSION if input_receipt is not None else 1,
         "runtime": runtime_identity,
         "score": score,
         "attestation": {
-            "kind": "deqio-local-response",
+            "kind": (
+                "deqio-local-response-v2" if input_receipt is not None else "deqio-local-response"
+            ),
             "signed": False,
             "complete": complete,
             "sha256": _attestation_sha(binding),
@@ -282,7 +475,10 @@ def _bind_result_provenance(
 
 
 def _shared_provenance(
-    results: list[dict[str, Any]], runtime_identity: dict[str, Any]
+    results: list[dict[str, Any]],
+    runtime_identity: dict[str, Any],
+    *,
+    input_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result_hashes = [
         result.get("provenance", {}).get("attestation", {}).get("sha256")
@@ -302,12 +498,19 @@ def _shared_provenance(
         "result_attestations": result_hashes,
         "score": score,
     }
+    if input_receipt is not None:
+        binding["input_receipt"] = input_receipt
+        complete = complete and input_receipt.get("status") == "complete"
     return {
-        "schema_version": 1,
+        "schema_version": INPUT_ATTESTATION_SCHEMA_VERSION if input_receipt is not None else 1,
         "runtime": runtime_identity,
         "score": score,
         "attestation": {
-            "kind": "deqio-local-shared-response",
+            "kind": (
+                "deqio-local-shared-response-v2"
+                if input_receipt is not None
+                else "deqio-local-shared-response"
+            ),
             "signed": False,
             "complete": complete,
             "sha256": _attestation_sha(binding),
@@ -316,7 +519,10 @@ def _shared_provenance(
 
 
 def format_result(
-    result: dict, *, runtime_identity: dict[str, Any] | None = None
+    result: dict,
+    *,
+    runtime_identity: dict[str, Any] | None = None,
+    input_receipt: dict[str, Any] | None = None,
 ) -> dict:
     probabilities = {
         option_id: float(probability)
@@ -366,8 +572,16 @@ def format_result(
         "prompt_sha256": result["prompt_sha256"],
         "probability_status": result["probability_status"],
     }
+    if input_receipt is not None:
+        response["input_receipt"] = input_receipt
+        response["usage"] = {
+            "input_tokens": result.get("input_tokens"),
+            "input_tokens_source": result.get("input_tokens_source", "unknown"),
+        }
     if runtime_identity is not None:
-        return _bind_result_provenance(response, result, runtime_identity)
+        return _bind_result_provenance(
+            response, result, runtime_identity, input_receipt=input_receipt
+        )
     return response
 
 
@@ -449,7 +663,12 @@ def record_event(
     )
 
 
-def run_decision(request: DecisionRequest, *, endpoint: str = "/v1/choice") -> dict:
+def run_decision(
+    request: DecisionRequest,
+    *,
+    endpoint: str = "/v1/choice",
+    contract: InputContractContext | None = None,
+) -> dict:
     request_id = request.id or uuid4().hex
 
     row = {
@@ -467,8 +686,13 @@ def run_decision(request: DecisionRequest, *, endpoint: str = "/v1/choice") -> d
             settings_snapshot = SETTINGS
             runtime_snapshot = _runtime()
             runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            _ensure_contract_capability(
+                runtime_snapshot, contract, request_id=request_id
+            )
             raw = runtime_snapshot.score(row, request.mode)
 
+    except InputContractHTTPError:
+        raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
@@ -479,7 +703,22 @@ def run_decision(request: DecisionRequest, *, endpoint: str = "/v1/choice") -> d
             detail=str(exc),
         ) from exc
 
-    result = format_result(raw, runtime_identity=runtime_identity)
+    input_receipt = (
+        _unknown_receipt_for_result(
+            context=contract,
+            runtime_identity=runtime_identity,
+            raw_result=raw,
+            settings_snapshot=settings_snapshot,
+            decision_id=request_id,
+            option_ids=[str(option["id"]) for option in row["options"]],
+            components=["state", "question", "options"],
+        )
+        if contract is not None
+        else None
+    )
+    result = format_result(
+        raw, runtime_identity=runtime_identity, input_receipt=input_receipt
+    )
 
     record_event(
         request_id=request_id,
@@ -550,6 +789,69 @@ app = FastAPI(
 )
 
 
+_CONTRACT_ENDPOINTS = {"/v1/noul", "/v1/choice", "/v1/decision", "/v1/shared"}
+
+
+@app.middleware("http")
+async def capture_input_contract_body(request: Request, call_next):
+    """Validate and hash negotiated request bytes before FastAPI parses the body."""
+    header = request.headers.get("deqio-contract")
+    if request.method == "POST" and request.url.path in _CONTRACT_ENDPOINTS and header:
+        try:
+            version = parse_contract_header(header)
+        except UnsupportedInputContractError as error:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "unsupported_contract",
+                        "contract": str(error),
+                        "supported": [INPUT_COMPLETENESS_V1],
+                        "inference_performed": False,
+                    }
+                },
+            )
+        if version is not None:
+            raw_body = await request.body()
+            request_body_sha256 = sha256_bytes(raw_body)
+            try:
+                validate_json_without_duplicate_keys(raw_body)
+            except DuplicateJSONKeyError as error:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "error": {
+                            "code": "duplicate_json_key",
+                            "request_body_sha256": request_body_sha256,
+                            "detail": str(error),
+                            "inference_performed": False,
+                        }
+                    },
+                )
+            except ValueError as error:
+                return JSONResponse(
+                    status_code=422,
+                    content={
+                        "error": {
+                            "code": "invalid_request_body",
+                            "request_body_sha256": request_body_sha256,
+                            "detail": str(error),
+                            "inference_performed": False,
+                        }
+                    },
+                )
+            request.state.input_contract_raw_body = raw_body
+            request.state.input_contract_request_body_sha256 = request_body_sha256
+
+    return await call_next(request)
+
+
+@app.exception_handler(InputContractHTTPError)
+async def input_contract_error_handler(_request: Request, exc: InputContractHTTPError):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.payload})
+
+
+
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
@@ -584,12 +886,19 @@ def health():
 
 @app.post("/v1/choice")
 @app.post("/v1/decision")
-def decision(payload: DecisionRequest, http_request: Request):
-    return run_decision(payload, endpoint=http_request.url.path)
+async def decision(payload: DecisionRequest, http_request: Request):
+    contract = await _input_contract_context(
+        http_request,
+        policy=payload.input_policy,
+        request_id=payload.id,
+        decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
+        option_sets=[_option_ids(payload.options)],
+    )
+    return run_decision(payload, endpoint=http_request.url.path, contract=contract)
 
 
 @app.post("/v1/noul")
-def noul(payload: NoulRequest):
+async def noul(payload: NoulRequest, http_request: Request):
     request_id = payload.id or uuid4().hex
     endpoint = "/v1/noul"
     row = {
@@ -597,19 +906,46 @@ def noul(payload: NoulRequest):
         "state": payload.state,
         "question": payload.question,
     }
+    contract = await _input_contract_context(
+        http_request,
+        policy=payload.input_policy,
+        request_id=payload.id,
+        decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
+        option_sets=[["yes", "no"]],
+    )
     try:
         with inference_lock:
             settings_snapshot = SETTINGS
             runtime_snapshot = _runtime()
             runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            _ensure_contract_capability(
+                runtime_snapshot, contract, request_id=request_id
+            )
             raw = runtime_snapshot.score_noul(row, payload.mode)
+    except InputContractHTTPError:
+        raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=400)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    result = format_result(raw, runtime_identity=runtime_identity)
+    input_receipt = (
+        _unknown_receipt_for_result(
+            context=contract,
+            runtime_identity=runtime_identity,
+            raw_result=raw,
+            settings_snapshot=settings_snapshot,
+            decision_id=request_id,
+            option_ids=["yes", "no"],
+            components=["state", "question"],
+        )
+        if contract is not None
+        else None
+    )
+    result = format_result(
+        raw, runtime_identity=runtime_identity, input_receipt=input_receipt
+    )
     record_event(
         request_id=request_id,
         mode=payload.mode,
@@ -623,9 +959,24 @@ def noul(payload: NoulRequest):
 
 
 @app.post("/v1/shared")
-def shared(payload: SharedRequest):
+async def shared(payload: SharedRequest, http_request: Request):
     endpoint = "/v1/shared"
     request_id = "shared-" + uuid4().hex[:12]
+    explicit_ids = [item.id for item in payload.decisions]
+    contract = await _input_contract_context(
+        http_request,
+        policy=payload.input_policy,
+        request_id=request_id,
+        decision_ids=[str(value) for value in explicit_ids if value is not None],
+        option_sets=[_option_ids(item.options) for item in payload.decisions],
+    )
+    if contract is not None and any(value is None for value in explicit_ids):
+        raise InputContractHTTPError(
+            "decision_id_required",
+            request_id=request_id,
+            request_body_sha256=contract.request_body_sha256,
+            inference_performed=False,
+        )
     if not payload.decisions:
         error = "At least one decision is required."
         with stats_lock:
@@ -653,8 +1004,13 @@ def shared(payload: SharedRequest):
             settings_snapshot = SETTINGS
             runtime_snapshot = _runtime()
             runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            _ensure_contract_capability(
+                runtime_snapshot, contract, request_id=request_id
+            )
             raw_results, timing = runtime_snapshot.score_shared(rows)
 
+    except InputContractHTTPError:
+        raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
@@ -665,11 +1021,38 @@ def shared(payload: SharedRequest):
             detail=str(exc),
         ) from exc
 
-    results = [
-        format_result(raw, runtime_identity=runtime_identity)
-        for raw in raw_results
-    ]
-    batch_provenance = _shared_provenance(results, runtime_identity)
+    shared_receipt = (
+        _unknown_shared_receipt(
+            context=contract,
+            runtime_identity=runtime_identity,
+            raw_results=raw_results,
+            settings_snapshot=settings_snapshot,
+            rows=rows,
+        )
+        if contract is not None
+        else None
+    )
+    results = []
+    for raw, row in zip(raw_results, rows):
+        per_result_receipt = None
+        if contract is not None:
+            per_result_receipt = _unknown_receipt_for_result(
+                context=contract,
+                runtime_identity=runtime_identity,
+                raw_result=raw,
+                settings_snapshot=settings_snapshot,
+                decision_id=str(row["id"]),
+                option_ids=[str(option["id"]) for option in row["options"]],
+                components=["state", "question", "options"],
+            )
+        results.append(
+            format_result(
+                raw, runtime_identity=runtime_identity, input_receipt=per_result_receipt
+            )
+        )
+    batch_provenance = _shared_provenance(
+        results, runtime_identity, input_receipt=shared_receipt
+    )
 
     shared_timing = format_shared_timing(timing)
     batch_ms = shared_timing.get("total_ms")
@@ -698,11 +1081,14 @@ def shared(payload: SharedRequest):
         settings_snapshot=settings_snapshot,
     )
 
-    return {
+    response = {
         "results": results,
         "shared_timing": shared_timing,
         "provenance": batch_provenance,
     }
+    if shared_receipt is not None:
+        response["input_receipt"] = shared_receipt
+    return response
 
 
 @app.post("/v1/cache/clear")
@@ -818,6 +1204,8 @@ def activate_model(payload: ModelActivateRequest):
     entry = get_model(catalog, payload.model_id)
     profile = get_profile(catalog, payload.model_id, payload.backend)
     candidate_data = apply_selection(config_data, entry, profile, payload.backend)
+    if selected.get("max_input_tokens") is not None:
+        candidate_data["max_tokens"] = int(selected["max_input_tokens"])
     candidate_settings = settings_from_data(config_path, candidate_data, apply_environment=False)
 
     old_settings = SETTINGS

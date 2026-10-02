@@ -568,7 +568,7 @@ def test_models_setup_marks_installed_profiles(
     )
     monkeypatch.setattr(manager, "_install_profile", lambda **kwargs: None)
     monkeypatch.setattr(manager, "_write_config", lambda *args, **kwargs: None)
-    answers = iter(["1", "1"])
+    answers = iter(["1", "1", ""])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
 
     assert manager.cmd_setup(type("Args", (), {"config": str(config_path)})()) == 0
@@ -1765,3 +1765,144 @@ def test_shared_provenance_binds_per_result_attestations() -> None:
     }
     assert provenance["attestation"]["complete"] is True
     assert len(provenance["attestation"]["sha256"]) == 64
+
+
+
+def test_installation_registry_records_max_input_tokens(tmp_path: Path) -> None:
+    from deqio.installations import load_registry, mark_installed, profile_key
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    mark_installed(
+        config_path,
+        "example",
+        "mlx",
+        verified=True,
+        max_input_tokens=8192,
+    )
+    record = load_registry(config_path)["profiles"][profile_key("example", "mlx")]
+    assert record["max_input_tokens"] == 8192
+
+
+def test_input_contract_rejects_duplicate_json_keys() -> None:
+    from deqio.input_contract import DuplicateJSONKeyError, validate_json_without_duplicate_keys
+
+    with pytest.raises(DuplicateJSONKeyError):
+        validate_json_without_duplicate_keys(b'{"id":"a","id":"b"}')
+
+
+def test_negotiated_input_receipt_keeps_unknown_distinct_from_complete() -> None:
+    from deqio.input_contract import InputContractContext, unknown_input_receipt
+
+    receipt = unknown_input_receipt(
+        context=InputContractContext(
+            version="input-completeness-v1",
+            request_body_sha256="a" * 64,
+            require_complete=False,
+            overflow="reject",
+        ),
+        runtime_identity={"runtime_instance_id": "runtime-1"},
+        engine_payload_sha256="b" * 64,
+        input_limit_tokens=4096,
+        decision_inputs=[],
+        input_tokens=None,
+        input_tokens_source="unknown",
+    )
+    assert receipt["status"] == "unknown"
+    assert receipt["usage"] == {"input_tokens": None, "input_tokens_source": "unknown"}
+    assert receipt["input_limit_tokens"] == 4096
+
+
+def test_attestation_v2_binds_negotiated_input_receipt() -> None:
+    from deqio.server import format_result
+
+    runtime_identity = {
+        "runtime_instance_id": "runtime-1",
+        "artifact_revisions_resolved": True,
+    }
+    receipt = {"schema": "deqio.input.v1", "status": "unknown"}
+    result = format_result(
+        {
+            "id": "req-1",
+            "option_ids": ["yes", "no"],
+            "probabilities": [0.75, 0.25],
+            "input_tokens": None,
+            "input_tokens_source": "unknown",
+            "prompt_sha256": "c" * 64,
+            "probability_status": "native",
+            "score_provenance": {"kind": "engine_probability"},
+        },
+        runtime_identity=runtime_identity,
+        input_receipt=receipt,
+    )
+    assert result["input_receipt"] is receipt
+    assert result["usage"]["input_tokens"] is None
+    assert result["provenance"]["schema_version"] == 2
+    assert result["provenance"]["attestation"]["complete"] is False
+
+
+def test_strict_contract_fails_closed_for_uninstrumented_runtime() -> None:
+    from deqio.input_contract import InputContractContext
+    from deqio.server import InputContractHTTPError, _ensure_contract_capability
+
+    class Runtime:
+        def input_completeness_capability(self):
+            return {"status": "unavailable", "reason": "backend_model_input_not_instrumented"}
+
+    with pytest.raises(InputContractHTTPError) as error:
+        _ensure_contract_capability(
+            Runtime(),
+            InputContractContext(
+                version="input-completeness-v1",
+                request_body_sha256="d" * 64,
+                require_complete=True,
+                overflow="reject",
+            ),
+            request_id="req-1",
+        )
+    assert error.value.payload["code"] == "input_completeness_unavailable"
+    assert error.value.payload["inference_performed"] is False
+
+
+def test_input_contract_duplicate_keys_rejected_before_endpoint_parsing() -> None:
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/choice",
+        content=(
+            '{"id":"req-1","id":"req-2","state":"s","question":"q",'
+            '"options":[{"id":"a","description":"A"}],'
+            '"input_policy":{"require_complete":false,"overflow":"reject"}}'
+        ),
+        headers={
+            "content-type": "application/json",
+            "Deqio-Contract": "input-completeness-v1",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "duplicate_json_key"
+    assert len(body["error"]["request_body_sha256"]) == 64
+    assert body["error"]["inference_performed"] is False
+
+
+def test_unknown_input_contract_rejected_before_endpoint_parsing() -> None:
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/choice",
+        content=b"not-even-json",
+        headers={
+            "content-type": "application/json",
+            "Deqio-Contract": "input-completeness-v999",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "unsupported_contract"
+    assert body["error"]["supported"] == ["input-completeness-v1"]
+    assert body["error"]["inference_performed"] is False

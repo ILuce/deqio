@@ -15,13 +15,28 @@ from .catalog import SUPPORTED_BACKENDS, apply_selection, get_model, get_profile
 from .backends import BackendRuntime
 from .config import read_config_data, settings_from_data, write_config_data
 from .hardware import describe_host, detect_host, host_backends, profile_compatibility
-from .installations import installed_profiles, load_registry, mark_installed, profile_key, unmark_installed
+from .installations import installed_profiles, installation_record, load_registry, mark_installed, profile_key, unmark_installed
 from .workspace import ensure_workspace
 
 
 ROOT = Path.cwd()
 
 
+
+
+def _prompt_positive_int(label: str, default: int) -> int | None:
+    value = input(f"{label} [{default}, q]: ").strip().lower()
+    if value in {"q", "quit", "exit"}:
+        return None
+    if not value:
+        return int(default)
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise RuntimeError("Invalid value; enter a positive integer or q to quit") from error
+    if parsed < 1:
+        raise RuntimeError("Value must be a positive integer")
+    return parsed
 
 
 def _prompt_index(label: str, count: int) -> int | None:
@@ -86,9 +101,44 @@ def _write_config(path: Path, data: dict[str, Any]) -> None:
 
 
 def _select_data(
-    data: dict[str, Any], model_entry: dict[str, Any], profile: dict[str, Any], backend: str
+    data: dict[str, Any],
+    model_entry: dict[str, Any],
+    profile: dict[str, Any],
+    backend: str,
+    *,
+    max_input_tokens: int | None = None,
 ) -> dict[str, Any]:
-    return apply_selection(data, model_entry, profile, backend)
+    updated = apply_selection(data, model_entry, profile, backend)
+    if max_input_tokens is not None:
+        updated["max_tokens"] = int(max_input_tokens)
+    return updated
+
+
+def _default_max_input_tokens(
+    config_path: Path,
+    data: dict[str, Any],
+    model_id: str,
+    backend: str,
+    profile: dict[str, Any],
+) -> int:
+    record = installation_record(config_path, model_id, backend) or {}
+    if record.get("max_input_tokens") is not None:
+        return max(1, int(record["max_input_tokens"]))
+    if profile.get("default_max_input_tokens") is not None:
+        return max(1, int(profile["default_max_input_tokens"]))
+    return max(1, int(data.get("max_tokens", 4096)))
+
+
+def _validate_max_input_tokens(profile: dict[str, Any], value: int) -> int:
+    value = int(value)
+    if value < 1:
+        raise RuntimeError("max input tokens must be positive")
+    hard_limit = profile.get("max_input_tokens")
+    if hard_limit is not None and value > int(hard_limit):
+        raise RuntimeError(
+            f"Requested max input tokens ({value}) exceed this profile's declared limit ({int(hard_limit)})"
+        )
+    return value
 
 
 def _ensure_venv(env_dir: Path, python_version: str) -> Path:
@@ -395,8 +445,12 @@ def _verify_model_ready(
     entry: dict[str, Any],
     profile: dict[str, Any],
     backend: str,
+    *,
+    max_input_tokens: int,
 ) -> None:
-    selected = _select_data(data, entry, profile, backend)
+    selected = _select_data(
+        data, entry, profile, backend, max_input_tokens=max_input_tokens
+    )
     # Installation is the one lifecycle phase where network access is allowed.
     # The readiness probe forces the engine to resolve every transitive/base
     # model dependency now, before the profile is registered as installed.
@@ -424,10 +478,17 @@ def _install_profile(
     backend: str,
     upgrade: bool,
     force: bool,
-) -> None:
+    max_input_tokens: int | None = None,
+) -> int:
     entry = get_model(catalog, model_id)
     profile = get_profile(catalog, model_id, backend)
     _preflight_profile(model_id, backend, profile, force=force)
+    chosen_max_input_tokens = _validate_max_input_tokens(
+        profile,
+        max_input_tokens
+        if max_input_tokens is not None
+        else _default_max_input_tokens(config_path, data, model_id, backend, profile),
+    )
 
     env_dir = _install_runtime(config_path, data, profile, upgrade=upgrade)
     print(f"Runtime ready: {env_dir}")
@@ -436,7 +497,9 @@ def _install_profile(
     else:
         print(_prefetch_declared_weights(config_path, profile))
 
-    _verify_model_ready(config_path, data, entry, profile, backend)
+    _verify_model_ready(
+        config_path, data, entry, profile, backend, max_input_tokens=chosen_max_input_tokens
+    )
     artifacts = _artifact_attestation(config_path, data, profile)
     mark_installed(
         config_path,
@@ -445,8 +508,13 @@ def _install_profile(
         verified=True,
         source="update" if upgrade else "install",
         artifacts=artifacts,
+        max_input_tokens=chosen_max_input_tokens,
     )
-    print(f"Installed and verified profile: {model_id} / {backend}")
+    print(
+        f"Installed and verified profile: {model_id} / {backend} "
+        f"(max input tokens: {chosen_max_input_tokens})"
+    )
+    return chosen_max_input_tokens
 
 
 def _installation_rows(config_path: Path, data: dict[str, Any], catalog: dict[str, Any]) -> list[dict[str, Any]]:
@@ -554,8 +622,16 @@ def cmd_select(args: argparse.Namespace) -> int:
             backend=args.backend,
             upgrade=False,
             force=False,
+            max_input_tokens=getattr(args, "max_input_tokens", None),
         )
-    updated = _select_data(data, entry, profile, args.backend)
+    record = installation_record(config_path, args.model_id, args.backend) or {}
+    updated = _select_data(
+        data,
+        entry,
+        profile,
+        args.backend,
+        max_input_tokens=record.get("max_input_tokens"),
+    )
     _write_config(config_path, updated)
     print(f"Selected {args.model_id} on {args.backend} in {config_path}")
     return 0
@@ -598,7 +674,13 @@ def cmd_use(args: argparse.Namespace) -> int:
 
     entry = get_model(catalog, str(selected["model_id"]))
     profile = get_profile(catalog, str(selected["model_id"]), str(selected["backend"]))
-    updated = _select_data(data, entry, profile, str(selected["backend"]))
+    updated = _select_data(
+        data,
+        entry,
+        profile,
+        str(selected["backend"]),
+        max_input_tokens=selected.get("max_input_tokens"),
+    )
     _write_config(config_path, updated)
     print(f"Selected installed profile {selected['model_id']} / {selected['backend']}")
     print("Start/restart deqio serve to load it, or use POST /v1/models/activate while the server is running.")
@@ -620,6 +702,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         backend=backend,
         upgrade=bool(args.upgrade),
         force=bool(getattr(args, "force", False)),
+        max_input_tokens=getattr(args, "max_input_tokens", None),
     )
     return 0
 
@@ -940,8 +1023,16 @@ def cmd_setup(args: argparse.Namespace) -> int:
     entry = compatible[model_index][0]
     profile = get_profile(catalog, str(entry["id"]), backend)
 
+    default_max_input_tokens = _default_max_input_tokens(
+        config_path, data, str(entry["id"]), backend, profile
+    )
+    max_input_tokens = _prompt_positive_int("Maximum input tokens", default_max_input_tokens)
+    if max_input_tokens is None:
+        return _cancelled()
+    max_input_tokens = _validate_max_input_tokens(profile, max_input_tokens)
+
     print(f"\nInstalling {entry['id']} / {backend}")
-    _install_profile(
+    chosen_max_input_tokens = _install_profile(
         config_path=config_path,
         data=data,
         catalog=catalog,
@@ -949,8 +1040,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
         backend=backend,
         upgrade=False,
         force=False,
+        max_input_tokens=max_input_tokens,
     )
-    updated = _select_data(data, entry, profile, backend)
+    updated = _select_data(
+        data, entry, profile, backend, max_input_tokens=chosen_max_input_tokens
+    )
     _write_config(config_path, updated)
     print(f"Setup complete. Active profile: {entry['id']} / {backend}")
     print("The runtime and model weights are ready; normal serve/benchmark starts run with Hugging Face offline mode enabled.")
@@ -996,12 +1090,14 @@ def build_parser() -> argparse.ArgumentParser:
     install_cmd.add_argument("--backend", choices=SUPPORTED_BACKENDS)
     install_cmd.add_argument("--upgrade", action="store_true")
     install_cmd.add_argument("--force", action="store_true", help="Bypass host memory/backend compatibility checks")
+    install_cmd.add_argument("--max-input-tokens", type=int, help="Maximum input-token budget stored for this profile")
     install_cmd.set_defaults(func=cmd_install)
 
     update_cmd = sub.add_parser("update", help="Upgrade an isolated engine runtime")
     update_cmd.add_argument("model_id", nargs="?")
     update_cmd.add_argument("--backend", choices=SUPPORTED_BACKENDS)
     update_cmd.add_argument("--force", action="store_true", help="Bypass host memory/backend compatibility checks")
+    update_cmd.add_argument("--max-input-tokens", type=int, help="Maximum input-token budget stored for this profile")
     update_cmd.set_defaults(func=lambda a: cmd_install(argparse.Namespace(**vars(a), upgrade=True)))
 
     delete_cmd = sub.add_parser("delete", help="Delete an installed model profile from this workspace")

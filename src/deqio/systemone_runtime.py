@@ -58,8 +58,20 @@ def _wait_for_port(port: int, process: subprocess.Popen[Any], timeout: float = 1
     raise RuntimeError(f"Timed out waiting {timeout:.1f}s for engine sidecar process on port {port}")
 
 
-def _post_json(url: str, payload: dict[str, Any], *, timeout: float = 180.0) -> dict[str, Any]:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+def _json_body(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+
+
+def _post_json(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    timeout: float = 180.0,
+    body: bytes | None = None,
+) -> dict[str, Any]:
+    body = body if body is not None else _json_body(payload)
     request = Request(url, data=body, headers={"content-type": "application/json"}, method="POST")
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -121,12 +133,25 @@ def _normalise_probabilities(
     raise RuntimeError("External engine did not return choice probabilities")
 
 
+def _input_token_usage(response: dict[str, Any]) -> tuple[int | None, str]:
+    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    value = usage.get("input_tokens")
+    if value is None:
+        return None, "unknown"
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None, "unknown"
+    if parsed < 0:
+        return None, "unknown"
+    return parsed, "engine_reported"
+
 def _choice_raw(
     *, row: dict[str, Any], answer: dict[str, Any], response: dict[str, Any], payload: dict[str, Any], latency_ms: float
 ) -> dict[str, Any]:
     option_ids = [str(option["id"]) for option in row["options"]]
     probabilities, score_provenance = _normalise_probabilities(answer, option_ids)
-    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    input_tokens, input_tokens_source = _input_token_usage(response)
     probability_status = (
         "synthetic one-hot probabilities derived from the engine choice; not a model confidence score"
         if score_provenance["synthetic"]
@@ -140,7 +165,9 @@ def _choice_raw(
         "id": row["id"],
         "option_ids": option_ids,
         "probabilities": probabilities,
-        "input_tokens": int(usage.get("input_tokens", 0) or 0),
+        "input_tokens": input_tokens,
+        "input_tokens_source": input_tokens_source,
+        "engine_payload_sha256": hashlib.sha256(_json_body(payload)).hexdigest(),
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
         "probability_status": probability_status,
@@ -154,12 +181,14 @@ def _noul_raw(
     raw_p_yes = float(answer.get("noul"))
     p_yes = max(0.0, min(1.0, raw_p_yes))
     clamped = p_yes != raw_p_yes
-    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    input_tokens, input_tokens_source = _input_token_usage(response)
     return {
         "id": row["id"],
         "option_ids": ["yes", "no"],
         "probabilities": [p_yes, 1.0 - p_yes],
-        "input_tokens": int(usage.get("input_tokens", 0) or 0),
+        "input_tokens": input_tokens,
+        "input_tokens_source": input_tokens_source,
+        "engine_payload_sha256": hashlib.sha256(_json_body(payload)).hexdigest(),
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
         "probability_status": (
@@ -202,6 +231,7 @@ def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: 
         "artifacts": deepcopy(artifacts),
         "artifact_revisions_resolved": bool(resolved),
         "installation_verified_at": record.get("verified_at"),
+        "max_input_tokens": int(record.get("max_input_tokens", settings.max_tokens)),
     }
 
 
@@ -364,7 +394,7 @@ class SystemOneRuntime:
                 str(python), "-m", "jev.server",
                 "--checkpoint", settings.model,
                 "--device", "cuda:0",
-                "--max-length", str(profile.get("open_jev_max_length", 4096)),
+                "--max-length", str(getattr(settings, "max_tokens", profile.get("open_jev_max_length", 4096))),
                 "--batch-size", "1",
                 "--no-prefix-cache",
                 "--host", "127.0.0.1",
@@ -388,7 +418,7 @@ class SystemOneRuntime:
                 "--encoder-model", model,
                 "--embedding-model", str(profile.get("clm_embedding_model", "qwen3-8b")),
                 "--checkpoint", str(checkpoint),
-                "--max-tokens", str(profile.get("clm_max_tokens", 2048)),
+                "--max-tokens", str(getattr(settings, "max_tokens", profile.get("clm_max_tokens", 2048))),
                 "--gpu-memory-utilization", str(profile.get("clm_gpu_memory_utilization", 0.35)),
                 "--port", str(port),
             ]
@@ -471,8 +501,11 @@ class SystemOneRuntime:
         }
         if execution_mode:
             payload["execution_mode"] = execution_mode
+        body = _json_body(payload)
         started = time.perf_counter()
-        response = _post_json(f"{self.base_url}/v1/systemone", payload, timeout=180.0)
+        response = _post_json(
+            f"{self.base_url}/v1/systemone", payload, timeout=180.0, body=body
+        )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         latency_ms = float(response.get("latency_ms", elapsed_ms) or elapsed_ms)
         return payload, response, latency_ms
@@ -560,6 +593,19 @@ class SystemOneRuntime:
         return raw_results, {
             "total_seconds": latency_ms / 1000.0,
             "batch_size": len(rows),
+            "engine": self.engine,
+        }
+
+    def input_completeness_capability(self) -> dict[str, Any]:
+        """Describe whether this engine can prove the exact model input it consumed.
+
+        System-One-compatible HTTP servers expose decisions and often token counts,
+        but the current wire does not expose the exact rendered/tokenized sequence,
+        attention masking, or cache consumption needed for a complete receipt.
+        """
+        return {
+            "status": "unavailable",
+            "reason": "backend_model_input_not_instrumented",
             "engine": self.engine,
         }
 

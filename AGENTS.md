@@ -174,6 +174,10 @@ Score provenance must distinguish engine-reported probabilities from Deqio trans
 
 Attestation v1 is a local unsigned response binding. Its digest binds the decision result, prompt hash, runtime identity, and score provenance, but it is not a cryptographic signature or remote trust proof. `complete` may only be true when runtime identity, resolved model artifact revisions, and score provenance are all available. `/v1/shared` must preserve per-result provenance and expose a batch-level binding to the same runtime instance.
 
+An optional versioned input-completeness contract is negotiated with `Deqio-Contract: input-completeness-v1`. Clients without the header retain the existing schema. Unknown versions must fail before inference; never silently downgrade. For negotiated requests, hash the exact HTTP body bytes before FastAPI parsing, reject duplicate JSON keys, and require explicit stable decision/option IDs. `input_policy.require_complete=true` is fail-closed: if the active runtime cannot prove exact model-boundary completeness, reject before inference with `input_completeness_unavailable`. Never infer completeness from `truncation=false`, configured `max_tokens`, token counts alone, or absence of an error. Missing usage is `null`/`unknown`, never a fabricated zero.
+
+A negotiated response may use attestation schema v2 to bind its `input_receipt` to the same request/result/runtime/score identity while preserving attestation v1 semantics for non-negotiated clients. `status=unknown` must remain distinct from `complete`. Shared receipts require unique decision IDs and must describe each decision rather than copying one aggregate token count as if it were per-decision measurement. Do not claim model-boundary completeness until the engine adapter actually instruments rendered input, logical token IDs, masks/cache behavior, and the effective scoring limit.
+
 ## Model catalog rules
 
 `models.json` is the source of truth for selectable models.
@@ -193,6 +197,8 @@ Do not silently fall back from an unsupported backend to CPU or another backend.
 Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
 
 Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata.
+
+Each installed profile may also record `max_input_tokens`. `models setup` must ask for this value (with a sensible profile/config default), direct install/update may accept `--max-input-tokens`, and selecting/activating an installed profile must restore its recorded token budget. Treat this as configuration, not proof of a backend's effective context capacity.
 
 `models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete.
 

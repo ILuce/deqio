@@ -52,6 +52,7 @@ def mark_installed(
     verified: bool = False,
     source: str = "install",
     artifacts: list[dict[str, Any]] | None = None,
+    max_input_tokens: int | None = None,
 ) -> None:
     data = load_registry(config_path)
     profiles = data.setdefault("profiles", {})
@@ -71,6 +72,10 @@ def mark_installed(
         record["verified_at"] = now
     if artifacts is not None:
         record["artifacts"] = artifacts
+    if max_input_tokens is not None:
+        if int(max_input_tokens) < 1:
+            raise ValueError("max_input_tokens must be positive")
+        record["max_input_tokens"] = int(max_input_tokens)
     profiles[key] = record
     _write_registry(config_path, data)
 
@@ -306,6 +311,11 @@ def installed_profiles(
                     "host_compatible": bool(compatibility["compatible"]),
                     "compatibility": compatibility,
                     "status": status,
+                    "max_input_tokens": (
+                        int(record["max_input_tokens"])
+                        if explicit and record.get("max_input_tokens") is not None
+                        else None
+                    ),
                 }
             )
 
