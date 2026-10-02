@@ -54,7 +54,7 @@ from .input_contract import (
     unknown_input_receipt,
     validate_json_without_duplicate_keys,
 )
-from .ui import DASHBOARD
+from .ui import DASHBOARD, WATCH_DASHBOARD
 
 
 # ---------------------------------------------------------------------------
@@ -75,11 +75,16 @@ switching_runtime = False
 inference_lock = threading.Lock()
 stats_lock = threading.Lock()
 log_lock = threading.Lock()
+watch_lock = threading.Lock()
 
 started_at = time.time()
 
 latencies = deque(maxlen=2000)
 recent_requests = deque(maxlen=50)
+watch_session_id = uuid4().hex
+watch_started_at = time.time()
+watch_session_model: dict[str, Any] = {}
+watch_events: list[dict[str, Any]] = []
 
 stats = {
     "requests": 0,
@@ -341,6 +346,130 @@ def _installation_rows() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return catalog, rows
 
 
+def _reset_watch_session() -> None:
+    global watch_session_id
+    global watch_started_at
+    global watch_session_model
+    identity = (
+        _runtime_identity_snapshot(runtime, SETTINGS)
+        if runtime is not None
+        else {}
+    )
+    with watch_lock:
+        watch_events.clear()
+        watch_session_id = uuid4().hex
+        watch_started_at = time.time()
+        watch_session_model = {
+            "engine": identity.get("engine", SETTINGS.engine),
+            "model_id": identity.get("model_id", SETTINGS.model_id),
+            "backend": identity.get("backend", SETTINGS.backend),
+            "runtime_instance_id": identity.get("runtime_instance_id"),
+        }
+
+
+def _watch_session_token() -> str:
+    with watch_lock:
+        return watch_session_id
+
+
+def _watch_json_snapshot(value: Any) -> Any:
+    return json.loads(
+        json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+    )
+
+
+def _record_watch_event(
+    *,
+    expected_session_id: str,
+    endpoint: str,
+    request_payload: dict[str, Any],
+    response_payload: dict[str, Any],
+    status_code: int,
+    request_id: str | None,
+    mode: str,
+    decisions: int,
+    settings_snapshot: Settings,
+) -> None:
+    provenance = response_payload.get("provenance") if isinstance(response_payload, dict) else None
+    runtime_identity = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
+    timing = (
+        response_payload.get("shared_timing", {})
+        if endpoint == "/v1/shared"
+        else response_payload.get("timing", {})
+    ) if isinstance(response_payload, dict) else {}
+    latency_ms = timing.get("total_ms") if isinstance(timing, dict) else None
+    decision = response_payload.get("decision") if isinstance(response_payload, dict) else None
+    top_probability = response_payload.get("top_probability") if isinstance(response_payload, dict) else None
+    input_tokens = response_payload.get("input_tokens") if isinstance(response_payload, dict) else None
+    if endpoint == "/v1/shared" and isinstance(response_payload, dict):
+        results = response_payload.get("results")
+        if isinstance(results, list):
+            decision = f"{len(results)} decisions"
+            token_values = [
+                int(item["input_tokens"])
+                for item in results
+                if isinstance(item, dict) and isinstance(item.get("input_tokens"), int)
+            ]
+            input_tokens = sum(token_values) if token_values else None
+
+    event = {
+        "event_id": uuid4().hex,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "endpoint": endpoint,
+        "method": "POST",
+        "status_code": int(status_code),
+        "request_id": request_id,
+        "engine": runtime_identity.get("engine", settings_snapshot.engine),
+        "model_id": runtime_identity.get("model_id", settings_snapshot.model_id),
+        "backend": runtime_identity.get("backend", settings_snapshot.backend),
+        "runtime_instance_id": runtime_identity.get("runtime_instance_id"),
+        "mode": mode,
+        "decisions": int(decisions),
+        "decision": decision,
+        "top_probability": top_probability,
+        "latency_ms": latency_ms,
+        "input_tokens": input_tokens,
+        "request": _watch_json_snapshot(request_payload),
+        "response": _watch_json_snapshot(response_payload),
+    }
+    with watch_lock:
+        # A model switch resets the session. A request finishing after that reset
+        # must never leak its old-model payload into the new model session.
+        if expected_session_id != watch_session_id:
+            return
+        watch_events.append(event)
+
+
+def _watch_rows_snapshot() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    with watch_lock:
+        events = list(watch_events)
+        session = {
+            "id": watch_session_id,
+            "started_at": datetime.fromtimestamp(watch_started_at, timezone.utc).isoformat(),
+            **watch_session_model,
+        }
+    latencies_ms = [
+        float(event["latency_ms"])
+        for event in events
+        if isinstance(event.get("latency_ms"), (int, float))
+    ]
+    session["requests"] = len(events)
+    session["decisions"] = sum(int(event.get("decisions", 0)) for event in events)
+    session["errors"] = sum(1 for event in events if int(event.get("status_code", 500)) >= 400)
+    session["latency_ms"] = {
+        "p50": percentile(latencies_ms, 0.50),
+        "p95": percentile(latencies_ms, 0.95),
+        "samples": len(latencies_ms),
+    }
+    row_keys = (
+        "event_id", "timestamp", "endpoint", "method", "status_code",
+        "request_id", "engine", "model_id", "backend", "runtime_instance_id",
+        "mode", "decisions", "decision", "top_probability", "latency_ms", "input_tokens",
+    )
+    rows = [{key: event.get(key) for key in row_keys} for event in reversed(events)]
+    return session, rows
+
+
 def _reset_session_metrics() -> None:
     global started_at
     with stats_lock:
@@ -349,7 +478,7 @@ def _reset_session_metrics() -> None:
         latencies.clear()
         recent_requests.clear()
         started_at = time.time()
-
+    _reset_watch_session()
 
 def _warmup_runtime(target: BackendRuntime, *, announce: bool) -> None:
     warmup_row = {
@@ -758,6 +887,7 @@ async def lifespan(app: FastAPI):
 
     with inference_lock:
         _warmup_runtime(runtime, announce=True)
+    _reset_watch_session()
 
     mark_installed(
         SETTINGS.config_path,
@@ -887,33 +1017,79 @@ def health():
 @app.post("/v1/choice")
 @app.post("/v1/decision")
 async def decision(payload: DecisionRequest, http_request: Request):
-    contract = await _input_contract_context(
-        http_request,
-        policy=payload.input_policy,
-        request_id=payload.id,
-        decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
-        option_sets=[_option_ids(payload.options)],
+    endpoint = http_request.url.path
+    session_id = _watch_session_token()
+    request_payload = payload.model_dump(mode="json")
+    try:
+        contract = await _input_contract_context(
+            http_request,
+            policy=payload.input_policy,
+            request_id=payload.id,
+            decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
+            option_sets=[_option_ids(payload.options)],
+        )
+        result = run_decision(payload, endpoint=endpoint, contract=contract)
+    except InputContractHTTPError as exc:
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"error": exc.payload},
+            status_code=exc.status_code,
+            request_id=payload.id,
+            mode=payload.mode,
+            decisions=1,
+            settings_snapshot=SETTINGS,
+        )
+        raise
+    except HTTPException as exc:
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": exc.detail},
+            status_code=exc.status_code,
+            request_id=payload.id,
+            mode=payload.mode,
+            decisions=1,
+            settings_snapshot=SETTINGS,
+        )
+        raise
+
+    _record_watch_event(
+        expected_session_id=session_id,
+        endpoint=endpoint,
+        request_payload=request_payload,
+        response_payload=result,
+        status_code=200,
+        request_id=str(result.get("id") or payload.id or ""),
+        mode=payload.mode,
+        decisions=1,
+        settings_snapshot=SETTINGS,
     )
-    return run_decision(payload, endpoint=http_request.url.path, contract=contract)
+    return result
 
 
 @app.post("/v1/noul")
 async def noul(payload: NoulRequest, http_request: Request):
     request_id = payload.id or uuid4().hex
     endpoint = "/v1/noul"
+    session_id = _watch_session_token()
+    request_payload = payload.model_dump(mode="json")
+    settings_snapshot = SETTINGS
     row = {
         "id": request_id,
         "state": payload.state,
         "question": payload.question,
     }
-    contract = await _input_contract_context(
-        http_request,
-        policy=payload.input_policy,
-        request_id=payload.id,
-        decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
-        option_sets=[["yes", "no"]],
-    )
     try:
+        contract = await _input_contract_context(
+            http_request,
+            policy=payload.input_policy,
+            request_id=payload.id,
+            decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
+            option_sets=[["yes", "no"]],
+        )
         with inference_lock:
             settings_snapshot = SETTINGS
             runtime_snapshot = _runtime()
@@ -922,12 +1098,34 @@ async def noul(payload: NoulRequest, http_request: Request):
                 runtime_snapshot, contract, request_id=request_id
             )
             raw = runtime_snapshot.score_noul(row, payload.mode)
-    except InputContractHTTPError:
+    except InputContractHTTPError as exc:
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"error": exc.payload},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode=payload.mode,
+            decisions=1,
+            settings_snapshot=settings_snapshot,
+        )
         raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=400)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": str(exc)},
+            status_code=400,
+            request_id=request_id,
+            mode=payload.mode,
+            decisions=1,
+            settings_snapshot=settings_snapshot,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     input_receipt = (
@@ -955,6 +1153,17 @@ async def noul(payload: NoulRequest, http_request: Request):
         endpoint=endpoint,
         settings_snapshot=settings_snapshot,
     )
+    _record_watch_event(
+        expected_session_id=session_id,
+        endpoint=endpoint,
+        request_payload=request_payload,
+        response_payload=result,
+        status_code=200,
+        request_id=request_id,
+        mode=payload.mode,
+        decisions=1,
+        settings_snapshot=settings_snapshot,
+    )
     return result
 
 
@@ -962,43 +1171,79 @@ async def noul(payload: NoulRequest, http_request: Request):
 async def shared(payload: SharedRequest, http_request: Request):
     endpoint = "/v1/shared"
     request_id = "shared-" + uuid4().hex[:12]
+    session_id = _watch_session_token()
+    request_payload = payload.model_dump(mode="json")
     explicit_ids = [item.id for item in payload.decisions]
-    contract = await _input_contract_context(
-        http_request,
-        policy=payload.input_policy,
-        request_id=request_id,
-        decision_ids=[str(value) for value in explicit_ids if value is not None],
-        option_sets=[_option_ids(item.options) for item in payload.decisions],
-    )
+    try:
+        contract = await _input_contract_context(
+            http_request,
+            policy=payload.input_policy,
+            request_id=request_id,
+            decision_ids=[str(value) for value in explicit_ids if value is not None],
+            option_sets=[_option_ids(item.options) for item in payload.decisions],
+        )
+    except InputContractHTTPError as exc:
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"error": exc.payload},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode="shared",
+            decisions=len(payload.decisions),
+            settings_snapshot=SETTINGS,
+        )
+        raise
+
     if contract is not None and any(value is None for value in explicit_ids):
-        raise InputContractHTTPError(
+        exc = InputContractHTTPError(
             "decision_id_required",
             request_id=request_id,
             request_body_sha256=contract.request_body_sha256,
             inference_performed=False,
         )
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"error": exc.payload},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode="shared",
+            decisions=len(payload.decisions),
+            settings_snapshot=SETTINGS,
+        )
+        raise exc
     if not payload.decisions:
         error = "At least one decision is required."
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=error, status=400)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": error},
+            status_code=400,
+            request_id=request_id,
+            mode="shared",
+            decisions=0,
+            settings_snapshot=SETTINGS,
+        )
         raise HTTPException(status_code=400, detail=error)
 
-    rows = []
+    rows = [
+        {
+            "id": item.id or uuid4().hex,
+            "state": payload.state,
+            "question": item.question,
+            "options": [option.model_dump() for option in item.options],
+        }
+        for item in payload.decisions
+    ]
 
-    for item in payload.decisions:
-        rows.append(
-            {
-                "id": item.id or uuid4().hex,
-                "state": payload.state,
-                "question": item.question,
-                "options": [
-                    option.model_dump()
-                    for option in item.options
-                ],
-            }
-        )
-
+    settings_snapshot = SETTINGS
     try:
         with inference_lock:
             settings_snapshot = SETTINGS
@@ -1008,14 +1253,34 @@ async def shared(payload: SharedRequest, http_request: Request):
                 runtime_snapshot, contract, request_id=request_id
             )
             raw_results, timing = runtime_snapshot.score_shared(rows)
-
-    except InputContractHTTPError:
+    except InputContractHTTPError as exc:
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"error": exc.payload},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode="shared",
+            decisions=len(rows),
+            settings_snapshot=settings_snapshot,
+        )
         raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=400)
-
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": str(exc)},
+            status_code=400,
+            request_id=request_id,
+            mode="shared",
+            decisions=len(rows),
+            settings_snapshot=settings_snapshot,
+        )
         raise HTTPException(
             status_code=400,
             detail=str(exc),
@@ -1088,6 +1353,17 @@ async def shared(payload: SharedRequest, http_request: Request):
     }
     if shared_receipt is not None:
         response["input_receipt"] = shared_receipt
+    _record_watch_event(
+        expected_session_id=session_id,
+        endpoint=endpoint,
+        request_payload=request_payload,
+        response_payload=response,
+        status_code=200,
+        request_id=request_id,
+        mode="shared",
+        decisions=len(results),
+        settings_snapshot=settings_snapshot,
+    )
     return response
 
 
@@ -1296,6 +1572,31 @@ def get_recent():
         return list(recent_requests)
 
 
+@app.get("/v1/watch")
+def get_watch():
+    session, rows = _watch_rows_snapshot()
+    return {
+        "session": {**session, "switching": switching_runtime},
+        "events": rows,
+    }
+
+
+@app.get("/v1/watch/{event_id}")
+def get_watch_event(event_id: str):
+    with watch_lock:
+        event = next((item for item in watch_events if item.get("event_id") == event_id), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Watch event not found in the current model session")
+        return _watch_json_snapshot(event)
+
+
+@app.post("/v1/watch/clear")
+def clear_watch():
+    _reset_watch_session()
+    session, _rows = _watch_rows_snapshot()
+    return {"status": "ok", "session": session}
+
+
 @app.get("/v1/benchmarks")
 def get_benchmarks():
     runs = list_benchmark_runs(SETTINGS.config_path)
@@ -1330,3 +1631,8 @@ def get_benchmark_results(run_id: str):
 @app.get("/ui", response_class=HTMLResponse)
 def dashboard():
     return DASHBOARD
+
+
+@app.get("/ui/watch", response_class=HTMLResponse)
+def watch_dashboard():
+    return WATCH_DASHBOARD

@@ -22,21 +22,7 @@ from .workspace import ensure_workspace
 ROOT = Path.cwd()
 
 
-
-
-def _prompt_positive_int(label: str, default: int) -> int | None:
-    value = input(f"{label} [{default}, q]: ").strip().lower()
-    if value in {"q", "quit", "exit"}:
-        return None
-    if not value:
-        return int(default)
-    try:
-        parsed = int(value)
-    except ValueError as error:
-        raise RuntimeError("Invalid value; enter a positive integer or q to quit") from error
-    if parsed < 1:
-        raise RuntimeError("Value must be a positive integer")
-    return parsed
+TOKEN_BUDGET_PRESETS = (4096, 8192, 12288, 16384, 32768)
 
 
 def _prompt_index(label: str, count: int) -> int | None:
@@ -114,6 +100,23 @@ def _select_data(
     return updated
 
 
+def _profile_input_token_limit(profile: dict[str, Any]) -> int | None:
+    """Return a catalogued hard token limit when this runtime exposes one.
+
+    The generic ``max_input_tokens`` field is preferred. Legacy engine-specific
+    limits remain honored so interactive setup cannot select a value that the
+    sidecar command would immediately reject or silently reinterpret.
+    """
+
+    for key in ("max_input_tokens", "open_jev_max_length", "clm_max_tokens"):
+        raw = profile.get(key)
+        if raw is not None:
+            value = int(raw)
+            if value > 0:
+                return value
+    return None
+
+
 def _default_max_input_tokens(
     config_path: Path,
     data: dict[str, Any],
@@ -123,21 +126,136 @@ def _default_max_input_tokens(
 ) -> int:
     record = installation_record(config_path, model_id, backend) or {}
     if record.get("max_input_tokens") is not None:
-        return max(1, int(record["max_input_tokens"]))
-    if profile.get("default_max_input_tokens") is not None:
-        return max(1, int(profile["default_max_input_tokens"]))
-    return max(1, int(data.get("max_tokens", 4096)))
+        value = max(1, int(record["max_input_tokens"]))
+    elif profile.get("default_max_input_tokens") is not None:
+        value = max(1, int(profile["default_max_input_tokens"]))
+    else:
+        value = max(1, int(data.get("max_tokens", 4096)))
+    hard_limit = _profile_input_token_limit(profile)
+    return min(value, hard_limit) if hard_limit is not None else value
 
 
-def _validate_max_input_tokens(profile: dict[str, Any], value: int) -> int:
+def _estimated_token_budget_memory_gib(
+    profile: dict[str, Any],
+    compatibility: dict[str, Any],
+    value: int,
+) -> float | None:
+    """Conservative install-time memory guardrail for larger context budgets.
+
+    This is deliberately only a provisioning estimate, not a statement about
+    the model's effective attention/context limit. The exact completeness
+    contract remains fail-closed unless a runtime instruments the model input.
+    """
+
+    minimum_raw = compatibility.get("minimum_memory_gib", profile.get("min_memory_gib"))
+    if minimum_raw is None:
+        return None
+    minimum = float(minimum_raw)
+    if value <= 4096:
+        return minimum
+    # KV/cache implementations differ by engine. Reserve at least 0.5 GiB for
+    # every additional 4K tokens, scaling the reserve for larger models.
+    per_extra_4k = max(0.5, minimum * 0.08)
+    extra_4k = (float(value) - 4096.0) / 4096.0
+    return minimum + (extra_4k * per_extra_4k)
+
+
+def _token_budget_unavailable_reason(
+    profile: dict[str, Any],
+    compatibility: dict[str, Any],
+    value: int,
+) -> str | None:
+    hard_limit = _profile_input_token_limit(profile)
+    if hard_limit is not None and value > hard_limit:
+        return f"profile limit is {hard_limit} tokens"
+
+    available_raw = compatibility.get("available_memory_gib")
+    estimated = _estimated_token_budget_memory_gib(profile, compatibility, value)
+    if available_raw is not None and estimated is not None and estimated > float(available_raw):
+        return (
+            f"conservative memory guardrail estimates ~{estimated:.1f} GiB; "
+            f"host has ~{float(available_raw):.1f} GiB usable"
+        )
+    return None
+
+
+def _token_budget_options(
+    profile: dict[str, Any],
+    compatibility: dict[str, Any],
+    *,
+    default: int,
+) -> tuple[list[int], list[tuple[int, str]]]:
+    hard_limit = _profile_input_token_limit(profile)
+    candidates = set(TOKEN_BUDGET_PRESETS)
+    candidates.add(int(default))
+    if hard_limit is not None and hard_limit < min(TOKEN_BUDGET_PRESETS):
+        candidates.add(hard_limit)
+
+    available: list[int] = []
+    blocked: list[tuple[int, str]] = []
+    for value in sorted(item for item in candidates if item > 0):
+        reason = _token_budget_unavailable_reason(profile, compatibility, value)
+        if reason is None:
+            available.append(value)
+        else:
+            blocked.append((value, reason))
+    return available, blocked
+
+
+def _prompt_token_budget(
+    *,
+    model_id: str,
+    backend: str,
+    profile: dict[str, Any],
+    compatibility: dict[str, Any],
+    default: int,
+) -> int | None:
+    available, blocked = _token_budget_options(
+        profile, compatibility, default=default
+    )
+    if not available:
+        raise RuntimeError(
+            f"No safe input-token budget is available for {model_id}/{backend} on this host"
+        )
+
+    print(f"\nMaximum input tokens for {model_id} / {backend}:")
+    for index, value in enumerate(available, start=1):
+        suffix = " — current/default" if value == default else ""
+        estimated = _estimated_token_budget_memory_gib(profile, compatibility, value)
+        memory = f"; ~{estimated:.1f} GiB guardrail" if estimated is not None else ""
+        print(f"  {index}. {value} tokens{memory}{suffix}")
+    if blocked:
+        print("\nUnavailable token budgets for this host/profile:")
+        for value, reason in blocked:
+            print(f"  - {value} tokens: {reason}")
+    print(
+        "Token-budget memory checks are conservative installation guardrails; "
+        "they do not prove the model's effective context limit or input completeness."
+    )
+
+    index = _prompt_index("Select max input tokens", len(available))
+    return None if index is None else available[index]
+
+
+def _validate_max_input_tokens(
+    profile: dict[str, Any],
+    value: int,
+    *,
+    compatibility: dict[str, Any] | None = None,
+    force: bool = False,
+) -> int:
     value = int(value)
     if value < 1:
         raise RuntimeError("max input tokens must be positive")
-    hard_limit = profile.get("max_input_tokens")
-    if hard_limit is not None and value > int(hard_limit):
+    compatibility = compatibility or {}
+    reason = _token_budget_unavailable_reason(profile, compatibility, value)
+    if reason is not None and not force:
         raise RuntimeError(
-            f"Requested max input tokens ({value}) exceed this profile's declared limit ({int(hard_limit)})"
+            f"Requested max input tokens ({value}) are not available for this profile/host: {reason}. "
+            "Use --force only if you understand the context-memory risk."
         )
+    if reason is not None and force:
+        print(f"WARNING: forcing max input tokens {value}: {reason}")
     return value
 
 
@@ -482,12 +600,14 @@ def _install_profile(
 ) -> int:
     entry = get_model(catalog, model_id)
     profile = get_profile(catalog, model_id, backend)
-    _preflight_profile(model_id, backend, profile, force=force)
+    compatibility = _preflight_profile(model_id, backend, profile, force=force)
     chosen_max_input_tokens = _validate_max_input_tokens(
         profile,
         max_input_tokens
         if max_input_tokens is not None
         else _default_max_input_tokens(config_path, data, model_id, backend, profile),
+        compatibility=compatibility,
+        force=force,
     )
 
     env_dir = _install_runtime(config_path, data, profile, upgrade=upgrade)
@@ -1020,18 +1140,23 @@ def cmd_setup(args: argparse.Namespace) -> int:
     model_index = _prompt_index("Select model", len(compatible))
     if model_index is None:
         return _cancelled()
-    entry = compatible[model_index][0]
+    entry, selected_check = compatible[model_index]
     profile = get_profile(catalog, str(entry["id"]), backend)
 
     default_max_input_tokens = _default_max_input_tokens(
         config_path, data, str(entry["id"]), backend, profile
     )
-    max_input_tokens = _prompt_positive_int("Maximum input tokens", default_max_input_tokens)
+    max_input_tokens = _prompt_token_budget(
+        model_id=str(entry["id"]),
+        backend=backend,
+        profile=profile,
+        compatibility=selected_check,
+        default=default_max_input_tokens,
+    )
     if max_input_tokens is None:
         return _cancelled()
-    max_input_tokens = _validate_max_input_tokens(profile, max_input_tokens)
 
-    print(f"\nInstalling {entry['id']} / {backend}")
+    print(f"\nInstalling {entry['id']} / {backend} with max input tokens {max_input_tokens}")
     chosen_max_input_tokens = _install_profile(
         config_path=config_path,
         data=data,

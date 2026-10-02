@@ -155,7 +155,10 @@ GET  /v1/models
 GET  /v1/models/installed
 GET  /v1/stats
 GET  /v1/recent
+GET  /v1/watch
+GET  /v1/watch/{event_id}
 
+POST /v1/watch/clear
 POST /v1/noul
 POST /v1/choice
 POST /v1/decision
@@ -198,7 +201,7 @@ Installed-profile state is local machine state under `.deqio/` and must not be c
 
 Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata.
 
-Each installed profile may also record `max_input_tokens`. `models setup` must ask for this value (with a sensible profile/config default), direct install/update may accept `--max-input-tokens`, and selecting/activating an installed profile must restore its recorded token budget. Treat this as configuration, not proof of a backend's effective context capacity.
+Each installed profile may also record `max_input_tokens`. `models setup` must present a bounded interactive token-budget list after model selection. Prefer the standard presets `4096`, `8192`, `12288`, `16384`, and `32768`, while honoring runtime-specific hard limits and conservative host-memory guardrails; values that fail those guards should be shown as unavailable rather than selectable. Direct install/update may accept `--max-input-tokens`, and selecting/activating an installed profile must restore its recorded token budget. The memory calculation is only a provisioning guardrail and may not be presented as proof of a backend's effective context capacity or completeness.
 
 `models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete.
 
@@ -284,6 +287,17 @@ Changes to UI must verify:
 7. active engine/model/backend are visible.
 8. installed model profiles are listed.
 9. switching an installed profile keeps the same public API URL.
+10. `/ui/watch` loads and links back to `/ui`.
+11. watch rows refresh for model-serving requests and row details expose the full in-memory request/response.
+12. switching the active model resets the watch session instead of mixing model identities.
+
+## Watch UI and session inspection
+
+`/ui/watch` is a separate operational view for live model-serving traffic. It should stay focused on the active server/runtime rather than duplicate the playground or benchmark UI. Track parsed request/response pairs for `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, including failed calls that reach those endpoint handlers. Do not record the watch/stats/health polling endpoints themselves.
+
+Full watch payloads are memory-only and must not be appended to the normal JSONL request log. A watch session is scoped to one active model/runtime session and must reset on process restart, successful live model switch, or explicit watch clear. If a request finishes after its original watch session has already been replaced, drop it rather than inserting old-model data into the new session. The summary endpoint may return lightweight rows; detailed request/response bodies should be fetched by event ID.
+
+The main `/ui` must link to `/ui/watch`, and the watch page must link back to `/ui`. Keep both pages dependency-free.
 
 ## Logging
 

@@ -32,6 +32,11 @@ button, select, input, textarea {
     color: CanvasText;
 }
 button { padding: 8px 12px; cursor: pointer; }
+.nav-link {
+    display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+    color: CanvasText; text-decoration: none;
+}
 button.primary { background: CanvasText; color: Canvas; border-color: CanvasText; }
 button.tab.active { font-weight: 700; border-color: CanvasText; }
 button.danger { border-color: #a33; }
@@ -109,6 +114,7 @@ th { opacity: .7; }
   </div>
   <div class="actions">
     <span class="badge" id="healthBadge">health: ...</span>
+    <a class="nav-link" href="/ui/watch">Watch requests</a>
     <button id="clearCache" class="danger" type="button">Clear runtime cache</button>
   </div>
 </div>
@@ -928,6 +934,229 @@ refreshStats();
 refreshModels();
 refreshBenchmarks();
 setInterval(refreshStats, 2000);
+</script>
+</body>
+</html>
+"""
+
+WATCH_DASHBOARD = r"""
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deqio Watch</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  max-width: 1360px; margin: 28px auto; padding: 0 20px 48px;
+  background: Canvas; color: CanvasText;
+}
+h1 { margin: 0 0 4px; font-size: 28px; }
+.sub { opacity: .66; margin: 0; }
+.toolbar, .actions, .filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.toolbar { justify-content:space-between; margin-bottom:18px; }
+.actions { justify-content:flex-end; }
+button, select, input, a.button {
+  font: inherit; border:1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius:8px; background:Canvas; color:CanvasText; padding:8px 11px;
+}
+button { cursor:pointer; }
+a.button { text-decoration:none; display:inline-flex; align-items:center; }
+button.danger { border-color:#a33; }
+.panel { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:12px; padding:16px; margin-bottom:16px; background:color-mix(in srgb, Canvas 97%, CanvasText 3%); }
+.cards { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+.card { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:10px; padding:13px; }
+.card small { display:block; opacity:.6; margin-bottom:5px; }
+.card strong { font-size:19px; }
+.runtime { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.runtime div { min-width:0; }
+.runtime small { display:block; opacity:.6; margin-bottom:3px; }
+.runtime code { overflow-wrap:anywhere; }
+.filters { margin-bottom:12px; }
+.filters label { font-size:12px; opacity:.7; }
+.filters select { min-width:160px; }
+.table-scroll { overflow:auto; max-height:58vh; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { text-align:left; padding:9px; border-bottom:1px solid color-mix(in srgb, CanvasText 10%, transparent); white-space:nowrap; }
+th { position:sticky; top:0; background:Canvas; opacity:.8; z-index:1; }
+tbody tr { cursor:pointer; }
+tbody tr:hover { background:color-mix(in srgb, CanvasText 6%, transparent); }
+.status-ok { font-weight:700; }
+.status-error { font-weight:700; color:#b23b3b; }
+.empty { opacity:.65; padding:20px 4px; }
+dialog { width:min(1100px,94vw); max-height:90vh; border:1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius:14px; background:Canvas; color:CanvasText; padding:0; }
+dialog::backdrop { background:rgba(0,0,0,.45); }
+.dialog-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid color-mix(in srgb, CanvasText 12%, transparent); position:sticky; top:0; background:Canvas; }
+.dialog-body { padding:18px; overflow:auto; }
+.detail-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.detail-grid div { border:1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius:9px; padding:10px; }
+.detail-grid small { display:block; opacity:.6; margin-bottom:4px; }
+.json-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, Canvas 94%, CanvasText 6%); overflow:auto; max-height:52vh; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.session-note { font-size:12px; opacity:.65; margin-top:8px; }
+@media (max-width:900px) { .cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .runtime,.detail-grid,.json-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <div>
+    <h1>Deqio Watch</h1>
+    <p class="sub">Live, in-memory request/response inspection for the current model session.</p>
+  </div>
+  <div class="actions">
+    <span id="healthBadge">health: ...</span>
+    <a class="button" href="/ui">Back to UI</a>
+    <button id="clearSession" class="danger" type="button">Clear session</button>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="runtime">
+    <div><small>Model</small><code id="model">-</code></div>
+    <div><small>Backend</small><code id="backend">-</code></div>
+    <div><small>Session</small><code id="sessionId">-</code></div>
+    <div><small>Started</small><code id="sessionStarted">-</code></div>
+  </div>
+  <div class="session-note">History is kept only in server memory. Restarting the server, changing the active model, or clearing this page's session starts a new watch session.</div>
+</section>
+
+<div class="cards">
+  <div class="card"><small>Requests</small><strong id="requests">0</strong></div>
+  <div class="card"><small>Decisions</small><strong id="decisions">0</strong></div>
+  <div class="card"><small>Errors</small><strong id="errors">0</strong></div>
+  <div class="card"><small>P50 latency</small><strong id="p50">-</strong></div>
+  <div class="card"><small>P95 latency</small><strong id="p95">-</strong></div>
+</div>
+
+<section class="panel">
+  <div class="filters">
+    <label for="endpointFilter">Endpoint</label>
+    <select id="endpointFilter">
+      <option value="*">All model requests</option>
+      <option value="/v1/noul">/v1/noul</option>
+      <option value="/v1/choice">/v1/choice</option>
+      <option value="/v1/decision">/v1/decision</option>
+      <option value="/v1/shared">/v1/shared</option>
+    </select>
+    <label for="statusFilter">Status</label>
+    <select id="statusFilter">
+      <option value="*">All</option>
+      <option value="ok">Success</option>
+      <option value="error">Errors</option>
+    </select>
+    <label><input id="autoRefresh" type="checkbox" checked style="width:auto"> auto refresh</label>
+    <button id="refresh" type="button">Refresh</button>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>Request ID</th><th>Mode</th><th>Decision</th><th>Top p</th><th>Latency</th><th>Tokens</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty">No requests in this model session yet.</div>
+  </div>
+</section>
+
+<dialog id="detailDialog">
+  <div class="dialog-head">
+    <div><strong id="detailTitle">Request</strong><div class="sub" id="detailSubtitle"></div></div>
+    <button id="closeDetail" type="button">Close</button>
+  </div>
+  <div class="dialog-body">
+    <div class="detail-grid">
+      <div><small>Model</small><strong id="detailModel">-</strong></div>
+      <div><small>Runtime instance</small><strong id="detailRuntime">-</strong></div>
+      <div><small>Latency</small><strong id="detailLatency">-</strong></div>
+      <div><small>Input tokens</small><strong id="detailTokens">-</strong></div>
+    </div>
+    <div class="json-grid">
+      <div><h3>Request</h3><pre id="detailRequest"></pre></div>
+      <div><h3>Response</h3><pre id="detailResponse"></pre></div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const byId = id => document.getElementById(id);
+let events = [];
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const fmtMs = value => value == null ? '-' : `${Number(value).toFixed(1)} ms`;
+const fmtP = value => value == null ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
+
+function renderRows() {
+  const endpoint = byId('endpointFilter').value;
+  const status = byId('statusFilter').value;
+  const filtered = events.filter(row =>
+    (endpoint === '*' || row.endpoint === endpoint) &&
+    (status === '*' || (status === 'ok' ? row.status_code < 400 : row.status_code >= 400))
+  );
+  byId('empty').style.display = filtered.length ? 'none' : 'block';
+  byId('rows').innerHTML = filtered.map(row => `
+    <tr data-id="${escapeHtml(row.event_id)}">
+      <td>${escapeHtml(new Date(row.timestamp).toLocaleTimeString())}</td>
+      <td><code>${escapeHtml(row.endpoint)}</code></td>
+      <td class="${row.status_code < 400 ? 'status-ok' : 'status-error'}">${escapeHtml(row.status_code)}</td>
+      <td>${escapeHtml(row.request_id || '-')}</td>
+      <td>${escapeHtml(row.mode || '-')}</td>
+      <td>${escapeHtml(row.decision || '-')}</td>
+      <td>${escapeHtml(fmtP(row.top_probability))}</td>
+      <td>${escapeHtml(fmtMs(row.latency_ms))}</td>
+      <td>${escapeHtml(row.input_tokens ?? '-')}</td>
+    </tr>`).join('');
+  byId('rows').querySelectorAll('tr').forEach(row => row.addEventListener('click', () => openDetail(row.dataset.id)));
+}
+
+async function refresh() {
+  try {
+    const [watch, health] = await Promise.all([fetch('/v1/watch').then(r => r.json()), fetch('/health').then(r => r.json())]);
+    events = watch.events || [];
+    const session = watch.session || {};
+    byId('model').textContent = `${session.engine || '-'} · ${session.model_id || '-'}`;
+    byId('backend').textContent = session.backend || '-';
+    byId('sessionId').textContent = session.id || '-';
+    byId('sessionStarted').textContent = session.started_at ? new Date(session.started_at).toLocaleString() : '-';
+    byId('requests').textContent = session.requests ?? 0;
+    byId('decisions').textContent = session.decisions ?? 0;
+    byId('errors').textContent = session.errors ?? 0;
+    byId('p50').textContent = fmtMs(session.latency_ms?.p50);
+    byId('p95').textContent = fmtMs(session.latency_ms?.p95);
+    byId('healthBadge').textContent = `health: ${health.status}`;
+    renderRows();
+  } catch (error) {
+    byId('healthBadge').textContent = `watch unavailable: ${error.message}`;
+  }
+}
+
+async function openDetail(eventId) {
+  const response = await fetch(`/v1/watch/${encodeURIComponent(eventId)}`);
+  const item = await response.json();
+  if (!response.ok) { alert(item.detail || JSON.stringify(item)); return; }
+  byId('detailTitle').textContent = `${item.endpoint} · ${item.status_code}`;
+  byId('detailSubtitle').textContent = `${new Date(item.timestamp).toLocaleString()} · ${item.request_id || '-'}`;
+  byId('detailModel').textContent = `${item.engine} · ${item.model_id} · ${item.backend}`;
+  byId('detailRuntime').textContent = item.runtime_instance_id || '-';
+  byId('detailLatency').textContent = fmtMs(item.latency_ms);
+  byId('detailTokens').textContent = item.input_tokens ?? '-';
+  byId('detailRequest').textContent = JSON.stringify(item.request, null, 2);
+  byId('detailResponse').textContent = JSON.stringify(item.response, null, 2);
+  byId('detailDialog').showModal();
+}
+
+async function clearSession() {
+  if (!confirm('Clear the in-memory watch session for the active model?')) return;
+  await fetch('/v1/watch/clear', {method:'POST'});
+  await refresh();
+}
+
+byId('endpointFilter').addEventListener('change', renderRows);
+byId('statusFilter').addEventListener('change', renderRows);
+byId('refresh').addEventListener('click', refresh);
+byId('clearSession').addEventListener('click', clearSession);
+byId('closeDetail').addEventListener('click', () => byId('detailDialog').close());
+setInterval(() => { if (byId('autoRefresh').checked) refresh(); }, 2000);
+refresh();
 </script>
 </body>
 </html>

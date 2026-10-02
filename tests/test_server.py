@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 
@@ -5,7 +6,48 @@ import pytest
 
 from deqio.config import load_settings
 from deqio.server import app, format_result, format_shared_timing, percentile, state_hash
-from deqio.ui import DASHBOARD
+from deqio.ui import DASHBOARD, WATCH_DASHBOARD
+
+
+def _asgi_post_json(path: str, body: bytes | str, headers: dict[str, str]) -> tuple[int, dict]:
+    raw = body.encode("utf-8") if isinstance(body, str) else body
+
+    async def invoke() -> tuple[int, dict]:
+        sent: list[dict] = []
+        delivered = False
+
+        async def receive() -> dict:
+            nonlocal delivered
+            if delivered:
+                return {"type": "http.disconnect"}
+            delivered = True
+            return {"type": "http.request", "body": raw, "more_body": False}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [(key.lower().encode("latin-1"), value.encode("latin-1")) for key, value in headers.items()],
+            "client": ("testclient", 123),
+            "server": ("testserver", 80),
+            "root_path": "",
+        }
+        await app(scope, receive, send)
+        status = next(message["status"] for message in sent if message["type"] == "http.response.start")
+        response_body = b"".join(
+            message.get("body", b"") for message in sent if message["type"] == "http.response.body"
+        )
+        return int(status), json.loads(response_body.decode("utf-8"))
+
+    return asyncio.run(invoke())
 
 
 def test_public_routes_are_registered() -> None:
@@ -14,8 +56,12 @@ def test_public_routes_are_registered() -> None:
     assert "/" in routes
     assert "/health" in routes
     assert "/ui" in routes
+    assert "/ui/watch" in routes
     assert "/v1/stats" in routes
     assert "/v1/recent" in routes
+    assert "/v1/watch" in routes
+    assert "/v1/watch/{event_id}" in routes
+    assert "/v1/watch/clear" in routes
     assert "/v1/noul" in routes
     assert "/v1/choice" in routes
     assert "/v1/decision" in routes
@@ -555,7 +601,8 @@ def test_models_setup_marks_installed_profiles(
         lambda backend, profile, host=None: {
             "compatible": True,
             "warning": None,
-            "minimum_memory_gib": None,
+            "minimum_memory_gib": 6.0,
+            "available_memory_gib": 12.0,
             "reason": "compatible",
         },
     )
@@ -568,7 +615,7 @@ def test_models_setup_marks_installed_profiles(
     )
     monkeypatch.setattr(manager, "_install_profile", lambda **kwargs: None)
     monkeypatch.setattr(manager, "_write_config", lambda *args, **kwargs: None)
-    answers = iter(["1", "1", ""])
+    answers = iter(["1", "1", "1"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
 
     assert manager.cmd_setup(type("Args", (), {"config": str(config_path)})()) == 0
@@ -576,6 +623,9 @@ def test_models_setup_marks_installed_profiles(
 
     assert "1. [x] semif-qwen3.5-4b" in output
     assert "2. [ ] kev-0.8b" in output
+    assert "Maximum input tokens for semif-qwen3.5-4b / mlx:" in output
+    assert "4096 tokens" in output
+    assert "Select max input tokens" not in output  # prompt text is supplied to input(), not printed by the test stub
 
 
 def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> None:
@@ -583,6 +633,70 @@ def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> No
     assert 'id="activateModel"' in DASHBOARD
     assert "/v1/models/installed" in DASHBOARD
     assert "/v1/models/activate" in DASHBOARD
+    assert 'href="/ui/watch"' in DASHBOARD
+
+
+def test_watch_ui_uses_session_watch_endpoints() -> None:
+    assert "Deqio Watch" in WATCH_DASHBOARD
+    assert "fetch('/v1/watch')" in WATCH_DASHBOARD
+    assert "/v1/watch/${encodeURIComponent(eventId)}" in WATCH_DASHBOARD
+    assert "/v1/watch/clear" in WATCH_DASHBOARD
+    assert 'href="/ui"' in WATCH_DASHBOARD
+
+
+def test_watch_session_records_full_request_response_and_rejects_stale_session() -> None:
+    import deqio.server as server
+
+    server._reset_watch_session()
+    session_id = server._watch_session_token()
+    request_payload = {"id": "req-1", "state": "s", "question": "q"}
+    response_payload = {
+        "id": "req-1",
+        "decision": "yes",
+        "top_probability": 0.8,
+        "input_tokens": 12,
+        "timing": {"total_ms": 5.0},
+        "provenance": {"runtime": {"runtime_instance_id": "runtime-1"}},
+    }
+    server._record_watch_event(
+        expected_session_id=session_id,
+        endpoint="/v1/noul",
+        request_payload=request_payload,
+        response_payload=response_payload,
+        status_code=200,
+        request_id="req-1",
+        mode="serial",
+        decisions=1,
+        settings_snapshot=server.SETTINGS,
+    )
+
+    session, rows = server._watch_rows_snapshot()
+    assert session["requests"] == 1
+    assert session["decisions"] == 1
+    assert session["errors"] == 0
+    assert rows[0]["request_id"] == "req-1"
+    event_id = rows[0]["event_id"]
+    with server.watch_lock:
+        stored = next(item for item in server.watch_events if item["event_id"] == event_id)
+    assert stored["request"] == request_payload
+    assert stored["response"]["decision"] == "yes"
+
+    server._reset_watch_session()
+    server._record_watch_event(
+        expected_session_id=session_id,
+        endpoint="/v1/noul",
+        request_payload=request_payload,
+        response_payload=response_payload,
+        status_code=200,
+        request_id="req-old",
+        mode="serial",
+        decisions=1,
+        settings_snapshot=server.SETTINGS,
+    )
+    reset_session, reset_rows = server._watch_rows_snapshot()
+    assert reset_session["id"] != session_id
+    assert reset_session["requests"] == 0
+    assert reset_rows == []
 
 
 def test_live_model_activation_persists_selection_and_swaps_runtime(
@@ -668,6 +782,8 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     old_runtime = FakeRuntime(old_settings)
     monkeypatch.setattr(server, "SETTINGS", old_settings)
     monkeypatch.setattr(server, "runtime", old_runtime)
+    server._reset_watch_session()
+    previous_watch_session = server._watch_session_token()
     monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
     monkeypatch.setattr(server, "_installation_rows", lambda: (catalog, rows))
     monkeypatch.setattr(server, "mark_installed", lambda *args, **kwargs: None)
@@ -683,6 +799,10 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     persisted = json.loads(config_path.read_text())
     assert persisted["model_id"] == "decider-2b"
     assert persisted["backend"] == "mps"
+    watch_session, watch_rows = server._watch_rows_snapshot()
+    assert watch_session["id"] != previous_watch_session
+    assert watch_session["model_id"] == "decider-2b"
+    assert watch_rows == []
 
 def test_release_version_is_consistent() -> None:
     import tomllib
@@ -841,7 +961,48 @@ def test_benchmark_store_rejects_path_traversal(tmp_path: Path) -> None:
 
 def test_benchmark_routes_and_ui_are_exposed() -> None:
     from deqio.server import app
-    from deqio.ui import DASHBOARD
+    from deqio.ui import DASHBOARD, WATCH_DASHBOARD
+
+
+def _asgi_post_json(path: str, body: bytes | str, headers: dict[str, str]) -> tuple[int, dict]:
+    raw = body.encode("utf-8") if isinstance(body, str) else body
+
+    async def invoke() -> tuple[int, dict]:
+        sent: list[dict] = []
+        delivered = False
+
+        async def receive() -> dict:
+            nonlocal delivered
+            if delivered:
+                return {"type": "http.disconnect"}
+            delivered = True
+            return {"type": "http.request", "body": raw, "more_body": False}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [(key.lower().encode("latin-1"), value.encode("latin-1")) for key, value in headers.items()],
+            "client": ("testclient", 123),
+            "server": ("testserver", 80),
+            "root_path": "",
+        }
+        await app(scope, receive, send)
+        status = next(message["status"] for message in sent if message["type"] == "http.response.start")
+        response_body = b"".join(
+            message.get("body", b"") for message in sent if message["type"] == "http.response.body"
+        )
+        return int(status), json.loads(response_body.decode("utf-8"))
+
+    return asyncio.run(invoke())
 
     routes = {route.path for route in app.routes}
     assert "/v1/benchmarks" in routes
@@ -1768,6 +1929,33 @@ def test_shared_provenance_binds_per_result_attestations() -> None:
 
 
 
+def test_token_budget_options_apply_profile_and_host_guardrails() -> None:
+    import deqio.model_manager as manager
+
+    profile = {"min_memory_gib": 12}
+    compatibility = {"minimum_memory_gib": 12.0, "available_memory_gib": 12.0}
+    available, blocked = manager._token_budget_options(
+        profile, compatibility, default=4096
+    )
+
+    assert available == [4096]
+    blocked_values = {value for value, _reason in blocked}
+    assert {8192, 12288, 16384, 32768}.issubset(blocked_values)
+
+
+def test_token_budget_options_honor_engine_specific_hard_limit() -> None:
+    import deqio.model_manager as manager
+
+    profile = {"min_memory_gib": 8, "open_jev_max_length": 4096}
+    compatibility = {"minimum_memory_gib": 8.0, "available_memory_gib": 24.0}
+    available, blocked = manager._token_budget_options(
+        profile, compatibility, default=4096
+    )
+
+    assert available == [4096]
+    assert any(value == 8192 and "profile limit" in reason for value, reason in blocked)
+
+
 def test_installation_registry_records_max_input_tokens(tmp_path: Path) -> None:
     from deqio.installations import load_registry, mark_installed, profile_key
 
@@ -1865,44 +2053,36 @@ def test_strict_contract_fails_closed_for_uninstrumented_runtime() -> None:
 
 
 def test_input_contract_duplicate_keys_rejected_before_endpoint_parsing() -> None:
-    from fastapi.testclient import TestClient
-
-    client = TestClient(app)
-    response = client.post(
+    status, body = _asgi_post_json(
         "/v1/choice",
-        content=(
+        (
             '{"id":"req-1","id":"req-2","state":"s","question":"q",'
             '"options":[{"id":"a","description":"A"}],'
             '"input_policy":{"require_complete":false,"overflow":"reject"}}'
         ),
-        headers={
+        {
             "content-type": "application/json",
             "Deqio-Contract": "input-completeness-v1",
         },
     )
 
-    assert response.status_code == 422
-    body = response.json()
+    assert status == 422
     assert body["error"]["code"] == "duplicate_json_key"
     assert len(body["error"]["request_body_sha256"]) == 64
     assert body["error"]["inference_performed"] is False
 
 
 def test_unknown_input_contract_rejected_before_endpoint_parsing() -> None:
-    from fastapi.testclient import TestClient
-
-    client = TestClient(app)
-    response = client.post(
+    status, body = _asgi_post_json(
         "/v1/choice",
-        content=b"not-even-json",
-        headers={
+        b"not-even-json",
+        {
             "content-type": "application/json",
             "Deqio-Contract": "input-completeness-v999",
         },
     )
 
-    assert response.status_code == 422
-    body = response.json()
+    assert status == 422
     assert body["error"]["code"] == "unsupported_contract"
     assert body["error"]["supported"] == ["input-completeness-v1"]
     assert body["error"]["inference_performed"] is False

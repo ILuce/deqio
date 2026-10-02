@@ -77,6 +77,7 @@ def server_ready(*, host: str = "127.0.0.1", port: int = 8787) -> None:
     base = f"http://{host}:{port}"
     info("Ready")
     info(f"  UI       {base}/ui")
+    info(f"  Watch    {base}/ui/watch")
     info(f"  API      {base}/docs")
     info(f"  health   {base}/health")
     info("  endpoints POST /v1/noul  /v1/choice  /v1/shared")

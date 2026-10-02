@@ -129,7 +129,11 @@ On a Mac, the installer offers:
 - `mlx` — recommended for models with native MLX support
 - `mps` — PyTorch on Apple Silicon, required by models such as Decider
 
-`models setup` detects host memory and hides profiles that do not meet the catalogued minimum for the selected backend. After selecting a model it also asks for the **maximum input token budget** for that profile. The chosen value is stored with the installed profile and restored when that model/backend is selected again. The installer then installs the isolated runtime, downloads/prepares the model weights, starts the model once, and requires a real typed-decision readiness probe to pass before the profile is registered as installed.
+`models setup` detects host memory and hides profiles that do not meet the catalogued minimum for the selected backend. After selecting a model it shows a second interactive list of **maximum input-token budgets** (normally `4096`, `8192`, `12288`, `16384`, and `32768`). Values above a catalogued runtime limit or the conservative host-memory guardrail are listed as unavailable instead of being selectable. For example, a profile that already consumes almost all usable unified/GPU memory may only offer `4096`, while a smaller model can offer larger budgets.
+
+The token-memory check is an installation guardrail, not a claim about the model's true attention/context capacity. Runtime-specific hard limits still win, and the input-completeness contract described below remains the only strict mechanism for refusing a request when complete model-boundary input cannot be proven. The chosen budget is stored with the installed profile and restored when that model/backend is selected again.
+
+After the budget is selected, the installer installs the isolated runtime, downloads/prepares the model weights, starts the model once, and requires a real typed-decision readiness probe to pass before the profile is registered as installed.
 
 For non-interactive provisioning, pass the same value explicitly:
 
@@ -350,10 +354,31 @@ Use **Shared** when several decisions should be evaluated against the same conte
 
 Enter the shared `State`, add the decisions and their options, then send them together. This is preferable to several separate requests when an engine can reuse the common state efficiently.
 
+### Watch — current model session
+
+Click **Watch requests** in the main UI or open:
+
+```text
+http://127.0.0.1:8787/ui/watch
+```
+
+Watch is a server-focused view for the currently loaded model. It keeps an **in-memory session history** of model-serving calls to `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`. The table shows endpoint, status, decision, probability, latency, and input-token information. Click any row to inspect the complete parsed request and Deqio response, including provenance/attestation fields when present.
+
+The watch session is intentionally ephemeral: it resets when the server restarts, when the active model is switched, or when **Clear session** is used. Full request/response bodies are not added to the normal JSONL request log. This keeps the existing persistent logging behavior unchanged while still making live debugging possible.
+
+Watch API endpoints are:
+
+```text
+GET  /v1/watch
+GET  /v1/watch/{event_id}
+POST /v1/watch/clear
+```
+
 ### Useful links
 
 ```text
 UI:        http://127.0.0.1:8787/ui
+Watch:     http://127.0.0.1:8787/ui/watch
 API docs:  http://127.0.0.1:8787/docs
 Health:    http://127.0.0.1:8787/health
 ```

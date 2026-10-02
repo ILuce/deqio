@@ -107,7 +107,7 @@ def main() -> int:
                 "-c",
                 "from deqio.server import app; "
                 "paths={r.path for r in app.routes}; "
-                "assert '/ui' in paths and '/v1/noul' in paths and '/v1/benchmarks' in paths",
+                "assert '/ui' in paths and '/ui/watch' in paths and '/v1/noul' in paths and '/v1/watch' in paths and '/v1/benchmarks' in paths",
             ],
             cwd=work,
             env=env,
