@@ -114,6 +114,12 @@ th { opacity: .7; }
   </div>
   <div class="actions">
     <span class="badge" id="healthBadge">health: ...</span>
+    <label for="watchAutoClear" style="margin:0;display:flex;align-items:center;gap:6px;font-weight:500">Watch clear
+      <select id="watchAutoClear" style="width:auto;padding:7px 9px">
+        <option value="0">off</option><option value="15">15 min</option><option value="30">30 min</option>
+        <option value="60">1 h</option><option value="120">2 h</option><option value="240">4 h</option>
+      </select>
+    </label>
     <a class="nav-link" href="/ui/watch">Watch requests</a>
     <button id="clearCache" class="danger" type="button">Clear runtime cache</button>
   </div>
@@ -877,6 +883,25 @@ function setBenchmarkView(view) {
   byId('benchmarkResultsView').classList.toggle('hidden', view !== 'results');
 }
 
+async function loadWatchSettings() {
+  try {
+    const data = await fetch('/v1/watch/settings').then(r => r.json());
+    byId('watchAutoClear').value = String(data.auto_clear_minutes ?? 0);
+  } catch (_) {}
+}
+
+async function setWatchAutoClear() {
+  const minutes = Number(byId('watchAutoClear').value);
+  const response = await fetch('/v1/watch/settings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({auto_clear_minutes:minutes}),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    alert(data.detail || JSON.stringify(data));
+  }
+}
+
 async function refreshHealth() {
   try {
     const health = await fetch('/health').then(r => r.json());
@@ -917,6 +942,7 @@ byId('addChoiceOption').addEventListener('click', () => addOption(byId('choiceOp
 byId('addSharedDecision').addEventListener('click', () => addSharedDecision());
 byId('sendRequest').addEventListener('click', sendRequest);
 byId('clearCache').addEventListener('click', clearRuntimeCache);
+byId('watchAutoClear').addEventListener('change', setWatchAutoClear);
 byId('activateModel').addEventListener('click', activateSelectedModel);
 byId('modelSelect').addEventListener('change', () => { byId('activateModel').disabled = byId('modelSelect').value === activeModelKey; });
 byId('refreshBenchmarks').addEventListener('click', refreshBenchmarks);
@@ -931,6 +957,7 @@ setEndpoint('noul');
 setBenchmarkView('summary');
 refreshHealth();
 refreshStats();
+loadWatchSettings();
 refreshModels();
 refreshBenchmarks();
 setInterval(refreshStats, 2000);
@@ -971,7 +998,7 @@ button.danger { border-color:#a33; }
 .card { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:10px; padding:13px; }
 .card small { display:block; opacity:.6; margin-bottom:5px; }
 .card strong { font-size:19px; }
-.runtime { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.runtime { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
 .runtime div { min-width:0; }
 .runtime small { display:block; opacity:.6; margin-bottom:3px; }
 .runtime code { overflow-wrap:anywhere; }
@@ -991,7 +1018,7 @@ dialog { width:min(1100px,94vw); max-height:90vh; border:1px solid color-mix(in 
 dialog::backdrop { background:rgba(0,0,0,.45); }
 .dialog-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid color-mix(in srgb, CanvasText 12%, transparent); position:sticky; top:0; background:Canvas; }
 .dialog-body { padding:18px; overflow:auto; }
-.detail-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.detail-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
 .detail-grid div { border:1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius:9px; padding:10px; }
 .detail-grid small { display:block; opacity:.6; margin-bottom:4px; }
 .json-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
@@ -1004,7 +1031,7 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
 <div class="toolbar">
   <div>
     <h1>Deqio Watch</h1>
-    <p class="sub">Live, in-memory request/response inspection for the current model session.</p>
+    <p class="sub">Disk-backed request/response inspection for every decision executed in this server session.</p>
   </div>
   <div class="actions">
     <span id="healthBadge">health: ...</span>
@@ -1015,12 +1042,13 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
 
 <section class="panel">
   <div class="runtime">
-    <div><small>Model</small><code id="model">-</code></div>
+    <div><small>Active model</small><code id="model">-</code></div>
     <div><small>Backend</small><code id="backend">-</code></div>
     <div><small>Session</small><code id="sessionId">-</code></div>
     <div><small>Started</small><code id="sessionStarted">-</code></div>
+    <div><small>History files</small><code id="historyFiles">0</code></div>
   </div>
-  <div class="session-note">History is kept only in server memory. Restarting the server, changing the active model, or clearing this page's session starts a new watch session.</div>
+  <div class="session-note">Full Watch payloads are stored in temporary <code>.deqio/watch/</code> JSONL files, rotating at 10,000 records per file. They are deleted on server restart, manual Clear, or the configured automatic cleanup interval. Model switches stay in the same server session and each row keeps its own model identity.</div>
 </section>
 
 <div class="cards">
@@ -1047,16 +1075,23 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
       <option value="ok">Success</option>
       <option value="error">Errors</option>
     </select>
+    <label for="sourceFilter">Source</label>
+    <select id="sourceFilter"><option value="*">API + benchmark</option><option value="api">API</option><option value="benchmark">Benchmark</option></select>
+    <label for="modelFilter">Model</label>
+    <select id="modelFilter"><option value="*">All models</option></select>
+    <label for="watchAutoClear">Auto clear</label>
+    <select id="watchAutoClear"><option value="0">off</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 h</option><option value="120">2 h</option><option value="240">4 h</option></select>
     <label><input id="autoRefresh" type="checkbox" checked style="width:auto"> auto refresh</label>
     <button id="refresh" type="button">Refresh</button>
   </div>
   <div class="table-scroll">
     <table>
-      <thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>Request ID</th><th>Mode</th><th>Decision</th><th>Top p</th><th>Latency</th><th>Tokens</th></tr></thead>
+      <thead><tr><th>Time</th><th>Source</th><th>Model</th><th>Endpoint</th><th>Status</th><th>Request ID</th><th>Mode</th><th>Decision</th><th>Top p</th><th>Latency</th><th>Tokens</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
-    <div id="empty" class="empty">No requests in this model session yet.</div>
+    <div id="empty" class="empty">No requests in this server session yet.</div>
   </div>
+  <div class="actions" style="margin-top:12px"><span id="paginationNote" class="sub"></span><button id="loadOlder" type="button">Load older</button></div>
 </section>
 
 <dialog id="detailDialog">
@@ -1066,6 +1101,7 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
   </div>
   <div class="dialog-body">
     <div class="detail-grid">
+      <div><small>Source</small><strong id="detailSource">-</strong></div>
       <div><small>Model</small><strong id="detailModel">-</strong></div>
       <div><small>Runtime instance</small><strong id="detailRuntime">-</strong></div>
       <div><small>Latency</small><strong id="detailLatency">-</strong></div>
@@ -1081,21 +1117,39 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
 <script>
 const byId = id => document.getElementById(id);
 let events = [];
+let totalEvents = 0;
+const pageSize = 500;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const fmtMs = value => value == null ? '-' : `${Number(value).toFixed(1)} ms`;
 const fmtP = value => value == null ? '-' : `${(Number(value) * 100).toFixed(1)}%`;
 
+function refreshModelFilter() {
+  const select = byId('modelFilter');
+  const previous = select.value || '*';
+  const values = [...new Set(events.map(row => `${row.model_id || '-'}:${row.backend || '-'}`))].sort();
+  select.replaceChildren();
+  const all = document.createElement('option'); all.value='*'; all.textContent='All models'; select.appendChild(all);
+  values.forEach(value => { const option=document.createElement('option'); option.value=value; option.textContent=value; select.appendChild(option); });
+  select.value = values.includes(previous) ? previous : '*';
+}
+
 function renderRows() {
   const endpoint = byId('endpointFilter').value;
   const status = byId('statusFilter').value;
+  const source = byId('sourceFilter').value;
+  const model = byId('modelFilter').value;
   const filtered = events.filter(row =>
     (endpoint === '*' || row.endpoint === endpoint) &&
+    (source === '*' || row.source === source) &&
+    (model === '*' || `${row.model_id || '-'}:${row.backend || '-'}` === model) &&
     (status === '*' || (status === 'ok' ? row.status_code < 400 : row.status_code >= 400))
   );
   byId('empty').style.display = filtered.length ? 'none' : 'block';
   byId('rows').innerHTML = filtered.map(row => `
     <tr data-id="${escapeHtml(row.event_id)}">
       <td>${escapeHtml(new Date(row.timestamp).toLocaleTimeString())}</td>
+      <td>${escapeHtml(row.source || 'api')}</td>
+      <td>${escapeHtml(`${row.model_id || '-'}:${row.backend || '-'}`)}</td>
       <td><code>${escapeHtml(row.endpoint)}</code></td>
       <td class="${row.status_code < 400 ? 'status-ok' : 'status-error'}">${escapeHtml(row.status_code)}</td>
       <td>${escapeHtml(row.request_id || '-')}</td>
@@ -1106,27 +1160,47 @@ function renderRows() {
       <td>${escapeHtml(row.input_tokens ?? '-')}</td>
     </tr>`).join('');
   byId('rows').querySelectorAll('tr').forEach(row => row.addEventListener('click', () => openDetail(row.dataset.id)));
+  byId('paginationNote').textContent = `Loaded ${events.length} of ${totalEvents} request(s)`;
+  byId('loadOlder').disabled = events.length >= totalEvents;
+}
+
+async function fetchWatch(offset=0) {
+  const response = await fetch(`/v1/watch?limit=${pageSize}&offset=${offset}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
 async function refresh() {
   try {
-    const [watch, health] = await Promise.all([fetch('/v1/watch').then(r => r.json()), fetch('/health').then(r => r.json())]);
+    const [watch, health] = await Promise.all([fetchWatch(0), fetch('/health').then(r => r.json())]);
     events = watch.events || [];
+    totalEvents = watch.pagination?.total ?? events.length;
     const session = watch.session || {};
-    byId('model').textContent = `${session.engine || '-'} · ${session.model_id || '-'}`;
-    byId('backend').textContent = session.backend || '-';
+    byId('model').textContent = `${health.engine || '-'} · ${health.model_id || '-'}`;
+    byId('backend').textContent = health.backend || '-';
     byId('sessionId').textContent = session.id || '-';
     byId('sessionStarted').textContent = session.started_at ? new Date(session.started_at).toLocaleString() : '-';
+    byId('historyFiles').textContent = `${session.storage?.files ?? 0} × ≤${session.storage?.max_lines_per_file ?? 10000}`;
     byId('requests').textContent = session.requests ?? 0;
     byId('decisions').textContent = session.decisions ?? 0;
     byId('errors').textContent = session.errors ?? 0;
     byId('p50').textContent = fmtMs(session.latency_ms?.p50);
     byId('p95').textContent = fmtMs(session.latency_ms?.p95);
+    byId('watchAutoClear').value = String(session.auto_clear_minutes ?? 0);
     byId('healthBadge').textContent = `health: ${health.status}`;
+    refreshModelFilter();
     renderRows();
   } catch (error) {
     byId('healthBadge').textContent = `watch unavailable: ${error.message}`;
   }
+}
+
+async function loadOlder() {
+  const watch = await fetchWatch(events.length);
+  events = events.concat(watch.events || []);
+  totalEvents = watch.pagination?.total ?? totalEvents;
+  refreshModelFilter();
+  renderRows();
 }
 
 async function openDetail(eventId) {
@@ -1135,6 +1209,7 @@ async function openDetail(eventId) {
   if (!response.ok) { alert(item.detail || JSON.stringify(item)); return; }
   byId('detailTitle').textContent = `${item.endpoint} · ${item.status_code}`;
   byId('detailSubtitle').textContent = `${new Date(item.timestamp).toLocaleString()} · ${item.request_id || '-'}`;
+  byId('detailSource').textContent = item.source || 'api';
   byId('detailModel').textContent = `${item.engine} · ${item.model_id} · ${item.backend}`;
   byId('detailRuntime').textContent = item.runtime_instance_id || '-';
   byId('detailLatency').textContent = fmtMs(item.latency_ms);
@@ -1145,14 +1220,22 @@ async function openDetail(eventId) {
 }
 
 async function clearSession() {
-  if (!confirm('Clear the in-memory watch session for the active model?')) return;
+  if (!confirm('Delete all temporary Watch history files for this server session?')) return;
   await fetch('/v1/watch/clear', {method:'POST'});
   await refresh();
 }
 
 byId('endpointFilter').addEventListener('change', renderRows);
 byId('statusFilter').addEventListener('change', renderRows);
+byId('sourceFilter').addEventListener('change', renderRows);
+byId('modelFilter').addEventListener('change', renderRows);
 byId('refresh').addEventListener('click', refresh);
+byId('loadOlder').addEventListener('click', loadOlder);
+byId('watchAutoClear').addEventListener('change', async () => {
+  const response = await fetch('/v1/watch/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({auto_clear_minutes:Number(byId('watchAutoClear').value)})});
+  if (!response.ok) { const data=await response.json(); alert(data.detail || JSON.stringify(data)); }
+  await refresh();
+});
 byId('clearSession').addEventListener('click', clearSession);
 byId('closeDetail').addEventListener('click', () => byId('detailDialog').close());
 setInterval(() => { if (byId('autoRefresh').checked) refresh(); }, 2000);

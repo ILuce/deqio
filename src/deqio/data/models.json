@@ -405,6 +405,46 @@
       }
     },
     {
+      "id": "basal-1.5b",
+      "engine": "basal",
+      "label": "Basal 1.5B",
+      "description": "Basal 1.0 1.5B calibrated typed-decision model for Polish and English with a System One API.",
+      "source": "https://github.com/rkinas/basal",
+      "backends": {
+        "mlx": {
+          "model": "Remek/basal-1.0-1.5B",
+          "wire_model": "Remek/basal-1.0-1.5B",
+          "model_revision": "upstream-latest",
+          "runtime_key": "basal-mlx",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mlx",
+          "basal_package": "basal @ git+https://github.com/rkinas/basal.git",
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 8
+        },
+        "cuda": {
+          "model": "Remek/basal-1.0-1.5B",
+          "wire_model": "Remek/basal-1.0-1.5B",
+          "model_revision": "upstream-latest",
+          "runtime_key": "basal-cuda",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "cuda",
+          "basal_package": "basal[fp8] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+          "basal_mode": "fast-nocompile",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 5,
+          "recommended_memory_gib": 8
+        }
+      }
+    },
+    {
       "id": "decider-0.8b",
       "engine": "decider",
       "label": "Decider 0.8B",

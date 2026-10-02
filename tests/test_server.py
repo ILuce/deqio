@@ -60,6 +60,7 @@ def test_public_routes_are_registered() -> None:
     assert "/v1/stats" in routes
     assert "/v1/recent" in routes
     assert "/v1/watch" in routes
+    assert "/v1/watch/settings" in routes
     assert "/v1/watch/{event_id}" in routes
     assert "/v1/watch/clear" in routes
     assert "/v1/noul" in routes
@@ -636,18 +637,51 @@ def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> No
     assert 'href="/ui/watch"' in DASHBOARD
 
 
-def test_watch_ui_uses_session_watch_endpoints() -> None:
+def test_watch_ui_uses_disk_backed_session_endpoints() -> None:
     assert "Deqio Watch" in WATCH_DASHBOARD
-    assert "fetch('/v1/watch')" in WATCH_DASHBOARD
+    assert "fetch(`/v1/watch?limit=${pageSize}&offset=${offset}`)" in WATCH_DASHBOARD
     assert "/v1/watch/${encodeURIComponent(eventId)}" in WATCH_DASHBOARD
+    assert "/v1/watch/settings" in WATCH_DASHBOARD
     assert "/v1/watch/clear" in WATCH_DASHBOARD
+    assert 'id="sourceFilter"' in WATCH_DASHBOARD
+    assert 'id="modelFilter"' in WATCH_DASHBOARD
+    assert 'id="watchAutoClear"' in WATCH_DASHBOARD
     assert 'href="/ui"' in WATCH_DASHBOARD
+    assert 'id="watchAutoClear"' in DASHBOARD
 
 
-def test_watch_session_records_full_request_response_and_rejects_stale_session() -> None:
+def test_watch_session_records_full_request_response_on_disk_and_rejects_stale_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import deqio.server as server
+    from deqio.config import settings_from_data
 
-    server._reset_watch_session()
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    catalog_path = tmp_path / "models.json"
+    catalog_path.write_text('{"models": []}')
+    settings = settings_from_data(
+        config_path,
+        {
+            "engine": "kev",
+            "model_id": "kev-0.8b",
+            "backend": "mlx",
+            "model": "jaredpalmer/kev-0.8b",
+            "model_revision": "upstream-latest",
+            "model_catalog": str(catalog_path),
+            "runtime_dir": str(tmp_path / ".model-runtimes"),
+            "max_tokens": 4096,
+            "mlx_cache_mib": 256,
+            "log": str(tmp_path / "logs" / "requests.jsonl"),
+            "torch_dtype": "bfloat16",
+            "sidecar_startup_seconds": 900,
+            "hf_offline_runtime": True,
+        },
+        apply_environment=False,
+    )
+    monkeypatch.setattr(server, "SETTINGS", settings)
+
+    server._reset_watch_session(reason="test-start")
     session_id = server._watch_session_token()
     request_payload = {"id": "req-1", "state": "s", "question": "q"}
     response_payload = {
@@ -658,7 +692,7 @@ def test_watch_session_records_full_request_response_and_rejects_stale_session()
         "timing": {"total_ms": 5.0},
         "provenance": {"runtime": {"runtime_instance_id": "runtime-1"}},
     }
-    server._record_watch_event(
+    event_id = server._record_watch_event(
         expected_session_id=session_id,
         endpoint="/v1/noul",
         request_payload=request_payload,
@@ -667,21 +701,27 @@ def test_watch_session_records_full_request_response_and_rejects_stale_session()
         request_id="req-1",
         mode="serial",
         decisions=1,
-        settings_snapshot=server.SETTINGS,
+        settings_snapshot=settings,
     )
 
     session, rows = server._watch_rows_snapshot()
     assert session["requests"] == 1
     assert session["decisions"] == 1
     assert session["errors"] == 0
+    assert session["storage"]["kind"] == "temporary-jsonl"
+    assert session["storage"]["max_lines_per_file"] == 10_000
     assert rows[0]["request_id"] == "req-1"
-    event_id = rows[0]["event_id"]
-    with server.watch_lock:
-        stored = next(item for item in server.watch_events if item["event_id"] == event_id)
+    assert rows[0]["source"] == "api"
+    stored = server._watch_store().get_event(str(event_id))
+    assert stored is not None
     assert stored["request"] == request_payload
     assert stored["response"]["decision"] == "yes"
+    event_files = list((tmp_path / ".deqio" / "watch").glob("events-*.jsonl"))
+    assert len(event_files) == 1
+    assert len(event_files[0].read_text(encoding="utf-8").splitlines()) == 1
 
-    server._reset_watch_session()
+    server._reset_watch_session(reason="manual-clear")
+    assert list((tmp_path / ".deqio" / "watch").glob("events-*.jsonl")) == []
     server._record_watch_event(
         expected_session_id=session_id,
         endpoint="/v1/noul",
@@ -691,7 +731,7 @@ def test_watch_session_records_full_request_response_and_rejects_stale_session()
         request_id="req-old",
         mode="serial",
         decisions=1,
-        settings_snapshot=server.SETTINGS,
+        settings_snapshot=settings,
     )
     reset_session, reset_rows = server._watch_rows_snapshot()
     assert reset_session["id"] != session_id
@@ -800,8 +840,7 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     assert persisted["model_id"] == "decider-2b"
     assert persisted["backend"] == "mps"
     watch_session, watch_rows = server._watch_rows_snapshot()
-    assert watch_session["id"] != previous_watch_session
-    assert watch_session["model_id"] == "decider-2b"
+    assert watch_session["id"] == previous_watch_session
     assert watch_rows == []
 
 def test_release_version_is_consistent() -> None:
@@ -812,7 +851,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.2.1"
+    assert __version__ == "0.3.0"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -2086,3 +2125,117 @@ def test_unknown_input_contract_rejected_before_endpoint_parsing() -> None:
     assert body["error"]["code"] == "unsupported_contract"
     assert body["error"]["supported"] == ["input-completeness-v1"]
     assert body["error"]["inference_performed"] is False
+
+
+def test_basal_15b_catalog_profiles_are_mlx_and_cuda_only() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    basal = next(entry for entry in catalog["models"] if entry["id"] == "basal-1.5b")
+
+    assert basal["engine"] == "basal"
+    assert set(basal["backends"]) == {"mlx", "cuda"}
+    mlx = get_profile(catalog, "basal-1.5b", "mlx")
+    cuda = get_profile(catalog, "basal-1.5b", "cuda")
+    assert mlx["model"] == "Remek/basal-1.0-1.5B"
+    assert mlx["installer"] == "basal"
+    assert mlx["systems"] == ["Darwin"]
+    assert cuda["model"] == "Remek/basal-1.0-1.5B"
+    assert cuda["installer"] == "basal"
+    assert cuda["systems"] == ["Linux"]
+    assert cuda["basal_mode"] == "fast-nocompile"
+    with pytest.raises(RuntimeError, match="does not support backend"):
+        get_profile(catalog, "basal-1.5b", "mps")
+
+
+def test_basal_installer_uses_backend_specific_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+
+    mlx_env = tmp_path / ".model-runtimes" / "basal-mlx"
+    mlx_python = mlx_env / "bin" / "python"
+    mlx_python.parent.mkdir(parents=True)
+    mlx_python.write_text("", encoding="utf-8")
+    manager._install_basal(
+        tmp_path / "config.json",
+        {"backend": "mlx", "runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "basal-mlx",
+            "python": "3.12",
+            "basal_backend": "mlx",
+            "basal_package": "basal @ git+https://github.com/rkinas/basal.git",
+        },
+        upgrade=False,
+    )
+    assert commands[0][-1] == "mlx>=0.32,<0.33"
+    assert commands[1][-1] == "basal @ git+https://github.com/rkinas/basal.git"
+
+    commands.clear()
+    cuda_env = tmp_path / ".model-runtimes" / "basal-cuda"
+    cuda_python = cuda_env / "bin" / "python"
+    cuda_python.parent.mkdir(parents=True)
+    cuda_python.write_text("", encoding="utf-8")
+    manager._install_basal(
+        tmp_path / "config.json",
+        {"backend": "cuda", "runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "basal-cuda",
+            "python": "3.12",
+            "basal_backend": "cuda",
+            "basal_package": "basal[fp8] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+        },
+        upgrade=False,
+    )
+    assert "torch==2.11.0" in commands[0]
+    assert "https://download.pytorch.org/whl/cu128" in commands[0]
+    assert commands[1][-1].endswith("basal/archive/refs/tags/v1.0.1.tar.gz")
+
+
+def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+
+    mlx = SimpleNamespace(engine="basal", backend="mlx")
+    command = SystemOneRuntime._command(
+        mlx,
+        {"model": "Remek/basal-1.0-1.5B"},
+        env_dir,
+        python,
+        9020,
+        {},
+    )
+    assert command == [
+        str(executable),
+        "--model", "Remek/basal-1.0-1.5B",
+        "--port", "9020",
+    ]
+
+    cuda = SimpleNamespace(engine="basal", backend="cuda")
+    command = SystemOneRuntime._command(
+        cuda,
+        {
+            "model": "Remek/basal-1.0-1.5B",
+            "basal_mode": "fast-nocompile",
+        },
+        env_dir,
+        python,
+        9021,
+        {},
+    )
+    assert command == [
+        str(executable),
+        "--model", "Remek/basal-1.0-1.5B",
+        "--mode", "fast-nocompile",
+        "--port", "9021",
+    ]

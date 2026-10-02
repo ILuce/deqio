@@ -156,8 +156,10 @@ GET  /v1/models/installed
 GET  /v1/stats
 GET  /v1/recent
 GET  /v1/watch
+GET  /v1/watch/settings
 GET  /v1/watch/{event_id}
 
+POST /v1/watch/settings
 POST /v1/watch/clear
 POST /v1/noul
 POST /v1/choice
@@ -214,6 +216,8 @@ Sidecar process readiness and model readiness are distinct states. Opening the l
 Live model switching must keep one resident model at a time. Unload the old runtime before loading the new one, block inference during the transition, persist `config.json` only after the new runtime passes warmup, and attempt to restore the previous runtime on failure.
 
 Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime stacks.
+
+Basal `basal-1.5b` uses the upstream System One API. Keep the MLX and CUDA runtimes isolated and backend-specific. CUDA follows the pinned upstream v1.0.1 install path; MLX currently follows the upstream multi-backend branch because Apple/MLX support was added after that release. Do not claim MPS support for Basal or silently substitute it for MLX.
 
 ## Change workflow
 
@@ -288,14 +292,20 @@ Changes to UI must verify:
 8. installed model profiles are listed.
 9. switching an installed profile keeps the same public API URL.
 10. `/ui/watch` loads and links back to `/ui`.
-11. watch rows refresh for model-serving requests and row details expose the full in-memory request/response.
-12. switching the active model resets the watch session instead of mixing model identities.
+11. watch rows refresh for API decision requests and direct benchmark cases, and row details expose the full temporary request/response payload.
+12. model switches keep history in the same server session while every row retains its own engine/model/backend/runtime identity.
+13. Watch auto-clear can be configured from both `/ui` and `/ui/watch`.
+14. rotated Watch files never exceed 10,000 JSONL event lines.
 
 ## Watch UI and session inspection
 
-`/ui/watch` is a separate operational view for live model-serving traffic. It should stay focused on the active server/runtime rather than duplicate the playground or benchmark UI. Track parsed request/response pairs for `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, including failed calls that reach those endpoint handlers. Do not record the watch/stats/health polling endpoints themselves.
+`/ui/watch` is a separate operational view for decision traffic. Track parsed request/response pairs for `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, including failed calls that reach those endpoint handlers. Direct `deqio benchmark` case execution must write equivalent events to the same Watch store for the same workspace. Do not record watch/stats/health polling endpoints or internal readiness/warmup probes as user decision traffic.
 
-Full watch payloads are memory-only and must not be appended to the normal JSONL request log. A watch session is scoped to one active model/runtime session and must reset on process restart, successful live model switch, or explicit watch clear. If a request finishes after its original watch session has already been replaced, drop it rather than inserting old-model data into the new session. The summary endpoint may return lightweight rows; detailed request/response bodies should be fetched by event ID.
+Full Watch payloads are temporary disk-backed session data under `.deqio/watch/`, not unbounded RAM state and not part of the normal persistent JSONL request log. Store one JSON event per line and rotate to a new `events-*.jsonl` file after 10,000 event lines. Listing must be paginated/lightweight and must not read an entire potentially large event file into memory just to render one page; detailed request/response bodies should be fetched by event ID.
+
+Delete Watch event files when the server starts, on explicit Watch clear, and when the configured automatic cleanup interval expires. Retention preferences may survive those resets. Model switches do not clear a running server's Watch history: each event must carry source, engine, model ID, backend, and runtime instance identity so UI filtering can separate models safely. If a reset/auto-clear replaces the session while a request is still in flight, reject that stale append instead of inserting it into the new session.
+
+The server and benchmark CLI can be separate processes writing the same workspace store. Keep appends/rotation/session metadata cross-process safe and keep file permissions private where the host supports it.
 
 The main `/ui` must link to `/ui/watch`, and the watch page must link back to `/ui`. Keep both pages dependency-free.
 

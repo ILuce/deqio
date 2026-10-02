@@ -423,6 +423,19 @@ class SystemOneRuntime:
                 "--port", str(port),
             ]
 
+        if engine == "basal":
+            if settings.backend not in {"mlx", "cuda"}:
+                raise RuntimeError("Basal's Deqio profiles support mlx and cuda")
+            executable = _runtime_executable(env_dir, "basal-serve")
+            if not executable.is_file():
+                raise RuntimeError(f"Basal executable was not installed: {executable}")
+            command = [str(executable), "--model", model]
+            mode = profile.get("basal_mode")
+            if mode:
+                command.extend(["--mode", str(mode)])
+            command.extend(["--port", str(port)])
+            return command
+
         if engine == "decider":
             env["DECIDER_MODEL"] = model
             env["DECIDER_DEVICE"] = "cuda" if settings.backend == "cuda" else "mps"

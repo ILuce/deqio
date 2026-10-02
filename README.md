@@ -82,6 +82,7 @@ deqio version
 | Open-Jev 9B | — | — | ✓ |
 | Open-Jev 27B v1.1 | — | — | ✓ |
 | CLM 8B | — | — | ✓ |
+| Basal 1.0 1.5B | ✓ | — | ✓ |
 | Decider 0.8B | — | ✓ | ✓ |
 | Decider 2B | — | ✓ | ✓ |
 | Decider 4B | — | ✓ | ✓ |
@@ -90,6 +91,8 @@ deqio version
 | Laya Typed Decisions 421M | ✓ | ✓ | ✓ |
 | Von | — | ✓ | ✓ |
 | Bespoke Nimble 9B v2 | ✓ | — | ✓ |
+
+Basal 1.0 1.5B uses its native System One server. The CUDA profile follows the upstream v1.0.1 installation path; the MLX profile follows the current upstream multi-backend branch because Apple/MLX support was added after that tagged release. Basal is kept in its own isolated runtime like the other engines.
 
 ## 1. Installation
 
@@ -354,7 +357,7 @@ Use **Shared** when several decisions should be evaluated against the same conte
 
 Enter the shared `State`, add the decisions and their options, then send them together. This is preferable to several separate requests when an engine can reuse the common state efficiently.
 
-### Watch — current model session
+### Watch — server-session request history
 
 Click **Watch requests** in the main UI or open:
 
@@ -362,15 +365,21 @@ Click **Watch requests** in the main UI or open:
 http://127.0.0.1:8787/ui/watch
 ```
 
-Watch is a server-focused view for the currently loaded model. It keeps an **in-memory session history** of model-serving calls to `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`. The table shows endpoint, status, decision, probability, latency, and input-token information. Click any row to inspect the complete parsed request and Deqio response, including provenance/attestation fields when present.
+Watch is a server-focused view of decision traffic. It records API calls to `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, and benchmark cases executed directly by `deqio benchmark`. Each row keeps its own source, model, backend, and runtime identity, so a benchmark that switches across several installed models remains inspectable in one server session. Use the filters to narrow the table to a source, endpoint, status, or model. Click a row to inspect the complete parsed request and Deqio response, including provenance/attestation fields when present.
 
-The watch session is intentionally ephemeral: it resets when the server restarts, when the active model is switched, or when **Clear session** is used. Full request/response bodies are not added to the normal JSONL request log. This keeps the existing persistent logging behavior unchanged while still making live debugging possible.
+Full Watch payloads are **temporary disk-backed data**, not an unbounded in-memory history. They are written under `.deqio/watch/` as JSONL with at most **10,000 events per file**; the next event automatically starts a new rotated history file. The lightweight session summary keeps only bounded recent latency samples in RAM. Watch files use local private permissions where supported and are deleted when the server starts, when **Clear session** is used, or when the configured automatic cleanup interval expires. A model switch does not clear the current server session; events remain self-identifying and can be filtered by model.
+
+Automatic cleanup can be configured from either `/ui` or `/ui/watch` (off, 15 min, 30 min, 1 h, 2 h, or 4 h). The preference survives a history clear/restart so the same retention policy applies to the next server session. Watch data is separate from the normal request JSONL log; full request/response payloads are not copied into that persistent log.
+
+Benchmark cases use the same Watch store when they run from the same Deqio workspace. Internal readiness/warmup probes are lifecycle traffic and are not shown as user decision requests.
 
 Watch API endpoints are:
 
 ```text
 GET  /v1/watch
+GET  /v1/watch/settings
 GET  /v1/watch/{event_id}
+POST /v1/watch/settings
 POST /v1/watch/clear
 ```
 
@@ -414,7 +423,7 @@ A response contains a local attestation digest binding the request result to its
   "provenance": {
     "schema_version": 1,
     "runtime": {
-      "deqio_version": "0.2.1",
+      "deqio_version": "0.3.0",
       "runtime_instance_id": "...",
       "engine": "decider",
       "model_id": "decider-4b",

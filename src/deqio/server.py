@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -55,6 +56,7 @@ from .input_contract import (
     validate_json_without_duplicate_keys,
 )
 from .ui import DASHBOARD, WATCH_DASHBOARD
+from .watch_store import WATCH_AUTO_CLEAR_OPTIONS, WatchStore
 
 
 # ---------------------------------------------------------------------------
@@ -75,16 +77,11 @@ switching_runtime = False
 inference_lock = threading.Lock()
 stats_lock = threading.Lock()
 log_lock = threading.Lock()
-watch_lock = threading.Lock()
 
 started_at = time.time()
 
 latencies = deque(maxlen=2000)
 recent_requests = deque(maxlen=50)
-watch_session_id = uuid4().hex
-watch_started_at = time.time()
-watch_session_model: dict[str, Any] = {}
-watch_events: list[dict[str, Any]] = []
 
 stats = {
     "requests": 0,
@@ -144,6 +141,10 @@ class SharedRequest(BaseModel):
 class ModelActivateRequest(BaseModel):
     model_id: str
     backend: Literal["mlx", "mps", "cuda"]
+
+
+class WatchSettingsRequest(BaseModel):
+    auto_clear_minutes: int
 
 
 # ---------------------------------------------------------------------------
@@ -346,30 +347,16 @@ def _installation_rows() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return catalog, rows
 
 
-def _reset_watch_session() -> None:
-    global watch_session_id
-    global watch_started_at
-    global watch_session_model
-    identity = (
-        _runtime_identity_snapshot(runtime, SETTINGS)
-        if runtime is not None
-        else {}
-    )
-    with watch_lock:
-        watch_events.clear()
-        watch_session_id = uuid4().hex
-        watch_started_at = time.time()
-        watch_session_model = {
-            "engine": identity.get("engine", SETTINGS.engine),
-            "model_id": identity.get("model_id", SETTINGS.model_id),
-            "backend": identity.get("backend", SETTINGS.backend),
-            "runtime_instance_id": identity.get("runtime_instance_id"),
-        }
+def _watch_store() -> WatchStore:
+    return WatchStore(SETTINGS.config_path)
+
+
+def _reset_watch_session(*, reason: str = "manual-clear") -> dict[str, Any]:
+    return _watch_store().reset(reason=reason)
 
 
 def _watch_session_token() -> str:
-    with watch_lock:
-        return watch_session_id
+    return _watch_store().session_token()
 
 
 def _watch_json_snapshot(value: Any) -> Any:
@@ -380,7 +367,7 @@ def _watch_json_snapshot(value: Any) -> Any:
 
 def _record_watch_event(
     *,
-    expected_session_id: str,
+    expected_session_id: str | None,
     endpoint: str,
     request_payload: dict[str, Any],
     response_payload: dict[str, Any],
@@ -389,7 +376,8 @@ def _record_watch_event(
     mode: str,
     decisions: int,
     settings_snapshot: Settings,
-) -> None:
+    source: str = "api",
+) -> str | None:
     provenance = response_payload.get("provenance") if isinstance(response_payload, dict) else None
     runtime_identity = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
     timing = (
@@ -413,8 +401,8 @@ def _record_watch_event(
             input_tokens = sum(token_values) if token_values else None
 
     event = {
-        "event_id": uuid4().hex,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": source,
         "endpoint": endpoint,
         "method": "POST",
         "status_code": int(status_code),
@@ -432,42 +420,12 @@ def _record_watch_event(
         "request": _watch_json_snapshot(request_payload),
         "response": _watch_json_snapshot(response_payload),
     }
-    with watch_lock:
-        # A model switch resets the session. A request finishing after that reset
-        # must never leak its old-model payload into the new model session.
-        if expected_session_id != watch_session_id:
-            return
-        watch_events.append(event)
+    return _watch_store().append(event, expected_session_id=expected_session_id)
 
 
-def _watch_rows_snapshot() -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    with watch_lock:
-        events = list(watch_events)
-        session = {
-            "id": watch_session_id,
-            "started_at": datetime.fromtimestamp(watch_started_at, timezone.utc).isoformat(),
-            **watch_session_model,
-        }
-    latencies_ms = [
-        float(event["latency_ms"])
-        for event in events
-        if isinstance(event.get("latency_ms"), (int, float))
-    ]
-    session["requests"] = len(events)
-    session["decisions"] = sum(int(event.get("decisions", 0)) for event in events)
-    session["errors"] = sum(1 for event in events if int(event.get("status_code", 500)) >= 400)
-    session["latency_ms"] = {
-        "p50": percentile(latencies_ms, 0.50),
-        "p95": percentile(latencies_ms, 0.95),
-        "samples": len(latencies_ms),
-    }
-    row_keys = (
-        "event_id", "timestamp", "endpoint", "method", "status_code",
-        "request_id", "engine", "model_id", "backend", "runtime_instance_id",
-        "mode", "decisions", "decision", "top_probability", "latency_ms", "input_tokens",
-    )
-    rows = [{key: event.get(key) for key in row_keys} for event in reversed(events)]
-    return session, rows
+def _watch_rows_snapshot(*, limit: int = 500, offset: int = 0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    snapshot = _watch_store().list_events(limit=limit, offset=offset)
+    return snapshot["session"], snapshot["events"]
 
 
 def _reset_session_metrics() -> None:
@@ -478,7 +436,7 @@ def _reset_session_metrics() -> None:
         latencies.clear()
         recent_requests.clear()
         started_at = time.time()
-    _reset_watch_session()
+
 
 def _warmup_runtime(target: BackendRuntime, *, announce: bool) -> None:
     warmup_row = {
@@ -867,10 +825,28 @@ def run_decision(
 # ---------------------------------------------------------------------------
 
 
+async def _watch_auto_clear_loop() -> None:
+    """Apply the configured Watch retention interval on wall-clock time."""
+
+    store = _watch_store()
+    while True:
+        await asyncio.sleep(15.0)
+        try:
+            store.auto_clear_if_due()
+        except Exception as error:
+            # Watch observability must never take the inference server down.
+            info(f"Watch auto-clear check failed: {error}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global runtime
     global started_at
+
+    # Watch history is session-temporary by contract. Clear it as soon as a
+    # server process starts, even if model loading later fails. Preferences
+    # (such as auto-clear interval) intentionally survive the reset.
+    _reset_watch_session(reason="server-start")
 
     startup_header(
         engine=SETTINGS.engine,
@@ -887,7 +863,6 @@ async def lifespan(app: FastAPI):
 
     with inference_lock:
         _warmup_runtime(runtime, announce=True)
-    _reset_watch_session()
 
     mark_installed(
         SETTINGS.config_path,
@@ -902,10 +877,16 @@ async def lifespan(app: FastAPI):
     started_at = time.time()
 
     server_ready()
+    watch_cleanup_task = asyncio.create_task(_watch_auto_clear_loop())
 
     try:
         yield
     finally:
+        watch_cleanup_task.cancel()
+        try:
+            await watch_cleanup_task
+        except asyncio.CancelledError:
+            pass
         with inference_lock:
             if runtime is not None:
                 runtime.close()
@@ -1573,27 +1554,42 @@ def get_recent():
 
 
 @app.get("/v1/watch")
-def get_watch():
-    session, rows = _watch_rows_snapshot()
+def get_watch(limit: int = 500, offset: int = 0):
+    snapshot = _watch_store().list_events(limit=limit, offset=offset)
+    snapshot["session"]["switching"] = switching_runtime
+    return snapshot
+
+
+@app.get("/v1/watch/settings")
+def get_watch_settings():
+    settings = _watch_store().preferences()
+    return {**settings, "allowed_auto_clear_minutes": list(WATCH_AUTO_CLEAR_OPTIONS)}
+
+
+@app.post("/v1/watch/settings")
+def update_watch_settings(payload: WatchSettingsRequest):
+    try:
+        settings = _watch_store().set_auto_clear_minutes(payload.auto_clear_minutes)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return {
-        "session": {**session, "switching": switching_runtime},
-        "events": rows,
+        "status": "ok",
+        **settings,
+        "allowed_auto_clear_minutes": list(WATCH_AUTO_CLEAR_OPTIONS),
     }
 
 
 @app.get("/v1/watch/{event_id}")
 def get_watch_event(event_id: str):
-    with watch_lock:
-        event = next((item for item in watch_events if item.get("event_id") == event_id), None)
-        if event is None:
-            raise HTTPException(status_code=404, detail="Watch event not found in the current model session")
-        return _watch_json_snapshot(event)
+    event = _watch_store().get_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Watch event not found in the current server session")
+    return _watch_json_snapshot(event)
 
 
 @app.post("/v1/watch/clear")
 def clear_watch():
-    _reset_watch_session()
-    session, _rows = _watch_rows_snapshot()
+    session = _reset_watch_session(reason="manual-clear")
     return {"status": "ok", "session": session}
 
 

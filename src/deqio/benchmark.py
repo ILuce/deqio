@@ -14,6 +14,7 @@ from .backends import BackendRuntime
 from .catalog import apply_selection, get_model, get_profile, load_catalog
 from .config import read_config_data, settings_from_data
 from .installations import installed_profiles
+from .watch_store import WatchStore
 
 
 DEFAULT_SUITE = Path("benchmarks/basic.json")
@@ -85,50 +86,221 @@ def _choice_row(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _run_case(runtime: BackendRuntime, model: dict[str, str], case: dict[str, Any]) -> BenchResult:
+def _runtime_identity(runtime: BackendRuntime, model: dict[str, str]) -> dict[str, Any]:
+    identity = getattr(runtime, "identity_snapshot", None)
+    if callable(identity):
+        value = identity()
+        if isinstance(value, dict):
+            return value
+    return {
+        "engine": model["engine"],
+        "model_id": model["model_id"],
+        "backend": model["backend"],
+        "runtime_instance_id": getattr(runtime, "runtime_instance_id", None),
+    }
+
+
+def _probability_map(raw: dict[str, Any]) -> dict[str, float]:
+    return {
+        str(option_id): float(probability)
+        for option_id, probability in zip(raw.get("option_ids", []), raw.get("probabilities", []))
+    }
+
+
+def _watch_response(raw: dict[str, Any], *, identity: dict[str, Any], latency_ms: float) -> dict[str, Any]:
+    decision, top = _choice(raw)
+    response = {
+        "id": raw.get("id"),
+        "decision": decision,
+        "probabilities": _probability_map(raw),
+        "top_probability": top,
+        "input_tokens": raw.get("input_tokens"),
+        "input_tokens_source": raw.get("input_tokens_source", "unknown"),
+        "timing": {"total_ms": latency_ms},
+        "prompt_sha256": raw.get("prompt_sha256"),
+        "probability_status": raw.get("probability_status"),
+        "provenance": {"runtime": identity},
+    }
+    score = raw.get("score_provenance")
+    if isinstance(score, dict):
+        response["score_provenance"] = score
+    return response
+
+
+def _append_benchmark_watch(
+    watch: WatchStore | None,
+    *,
+    endpoint: str,
+    request_payload: dict[str, Any],
+    response_payload: dict[str, Any],
+    status_code: int,
+    request_id: str,
+    mode: str,
+    decisions: int,
+    model: dict[str, str],
+    identity: dict[str, Any],
+    latency_ms: float,
+    expected_session_id: str | None = None,
+) -> None:
+    if watch is None:
+        return
+    response_payload = dict(response_payload)
+    provenance = response_payload.get("provenance")
+    if not isinstance(provenance, dict):
+        provenance = {}
+    provenance.setdefault("runtime", identity)
+    response_payload["provenance"] = provenance
+    watch.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "source": "benchmark",
+        "endpoint": endpoint,
+        "method": "INTERNAL",
+        "status_code": int(status_code),
+        "request_id": request_id,
+        "engine": identity.get("engine", model["engine"]),
+        "model_id": identity.get("model_id", model["model_id"]),
+        "backend": identity.get("backend", model["backend"]),
+        "runtime_instance_id": identity.get("runtime_instance_id"),
+        "mode": mode,
+        "decisions": int(decisions),
+        "decision": response_payload.get("decision"),
+        "top_probability": response_payload.get("top_probability"),
+        "latency_ms": float(latency_ms),
+        "input_tokens": response_payload.get("input_tokens"),
+        "request": request_payload,
+        "response": response_payload,
+    }, expected_session_id=expected_session_id)
+
+
+def _run_case(
+    runtime: BackendRuntime,
+    model: dict[str, str],
+    case: dict[str, Any],
+    *,
+    watch: WatchStore | None = None,
+) -> BenchResult:
     kind = str(case["type"])
+    case_id = str(case["id"])
+    identity = _runtime_identity(runtime, model)
+    watch_session_id = watch.session_token() if watch is not None else None
     started = time.perf_counter()
+    endpoint = f"/v1/{kind}"
+    request_payload: dict[str, Any]
+    decisions = 1
     try:
         if kind == "noul":
-            row = {"id": str(case["id"]), "state": case["state"], "question": str(case["question"])}
+            row = {"id": case_id, "state": case["state"], "question": str(case["question"])}
+            request_payload = dict(row)
+            request_payload["mode"] = "serial"
             raw = runtime.score_noul(row, "serial")
             actual, top = _choice(raw)
             expected = str(case["expected"])
             latency_ms = float(raw.get("total_seconds", time.perf_counter() - started)) * 1000.0
-            return BenchResult(**model, case_id=str(case["id"]), kind=kind, passed=actual == expected,
+            response_payload = _watch_response(raw, identity=identity, latency_ms=latency_ms)
+            _append_benchmark_watch(
+                watch, endpoint=endpoint, request_payload=request_payload,
+                response_payload=response_payload, status_code=200, request_id=case_id,
+                mode="serial", decisions=1, model=model, identity=identity, latency_ms=latency_ms,
+                expected_session_id=watch_session_id,
+            )
+            return BenchResult(**model, case_id=case_id, kind=kind, passed=actual == expected,
                                expected=expected, actual=actual, latency_ms=latency_ms,
                                assertions=1, correct=int(actual == expected), top_probability=top)
 
         if kind == "choice":
-            raw = runtime.score(_choice_row(case), "serial")
+            row = _choice_row(case)
+            request_payload = {**row, "mode": "serial"}
+            raw = runtime.score(row, "serial")
             actual, top = _choice(raw)
             expected = str(case["expected"])
             latency_ms = float(raw.get("total_seconds", time.perf_counter() - started)) * 1000.0
-            return BenchResult(**model, case_id=str(case["id"]), kind=kind, passed=actual == expected,
+            response_payload = _watch_response(raw, identity=identity, latency_ms=latency_ms)
+            _append_benchmark_watch(
+                watch, endpoint=endpoint, request_payload=request_payload,
+                response_payload=response_payload, status_code=200, request_id=case_id,
+                mode="serial", decisions=1, model=model, identity=identity, latency_ms=latency_ms,
+                expected_session_id=watch_session_id,
+            )
+            return BenchResult(**model, case_id=case_id, kind=kind, passed=actual == expected,
                                expected=expected, actual=actual, latency_ms=latency_ms,
                                assertions=1, correct=int(actual == expected), top_probability=top)
 
         rows = []
         expected: list[str] = []
+        request_decisions: list[dict[str, Any]] = []
         for decision in case["decisions"]:
-            rows.append({
+            row = {
                 "id": str(decision["id"]),
                 "state": case["state"],
                 "question": str(decision["question"]),
                 "options": list(decision["options"]),
+            }
+            rows.append(row)
+            request_decisions.append({
+                "id": row["id"],
+                "question": row["question"],
+                "options": row["options"],
             })
             expected.append(str(decision["expected"]))
+        decisions = len(rows)
+        request_payload = {"id": case_id, "state": case["state"], "decisions": request_decisions}
         raw_results, timing = runtime.score_shared(rows)
         actual = [_choice(raw)[0] for raw in raw_results]
         correct = sum(a == e for a, e in zip(actual, expected))
         latency_ms = float(timing.get("total_seconds", time.perf_counter() - started)) * 1000.0
-        return BenchResult(**model, case_id=str(case["id"]), kind=kind, passed=correct == len(expected),
+        response_results = [
+            _watch_response(raw, identity=identity, latency_ms=float(raw.get("total_seconds", 0.0)) * 1000.0)
+            for raw in raw_results
+        ]
+        response_payload = {
+            "results": response_results,
+            "shared_timing": {"total_ms": latency_ms, "batch_size": len(response_results)},
+            "provenance": {"runtime": identity},
+            "decision": f"{len(response_results)} decisions",
+        }
+        token_values = [
+            int(item["input_tokens"])
+            for item in response_results
+            if isinstance(item.get("input_tokens"), int)
+        ]
+        if token_values:
+            response_payload["input_tokens"] = sum(token_values)
+        _append_benchmark_watch(
+            watch, endpoint=endpoint, request_payload=request_payload,
+            response_payload=response_payload, status_code=200, request_id=case_id,
+            mode="shared", decisions=decisions, model=model, identity=identity, latency_ms=latency_ms,
+            expected_session_id=watch_session_id,
+        )
+        return BenchResult(**model, case_id=case_id, kind=kind, passed=correct == len(expected),
                            expected=expected, actual=actual, latency_ms=latency_ms,
                            assertions=len(expected), correct=correct)
     except Exception as error:
-        return BenchResult(**model, case_id=str(case["id"]), kind=kind, passed=False,
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        if kind == "shared":
+            request_payload = {
+                "id": case_id,
+                "state": case.get("state"),
+                "decisions": list(case.get("decisions", [])),
+            }
+            decisions = max(1, len(case.get("decisions", [])))
+        else:
+            request_payload = {
+                "id": case_id,
+                "state": case.get("state"),
+                "question": case.get("question"),
+                "options": case.get("options") if kind == "choice" else None,
+                "mode": "serial",
+            }
+        _append_benchmark_watch(
+            watch, endpoint=endpoint, request_payload=request_payload,
+            response_payload={"detail": str(error), "provenance": {"runtime": identity}},
+            status_code=500, request_id=case_id, mode="shared" if kind == "shared" else "serial",
+            decisions=decisions, model=model, identity=identity, latency_ms=latency_ms,
+            expected_session_id=watch_session_id,
+        )
+        return BenchResult(**model, case_id=case_id, kind=kind, passed=False,
                            expected=case.get("expected") or [d.get("expected") for d in case.get("decisions", [])],
-                           actual=None, latency_ms=(time.perf_counter() - started) * 1000.0,
+                           actual=None, latency_ms=latency_ms,
                            assertions=max(1, len(case.get("decisions", []))), correct=0, error=str(error))
 
 
@@ -248,6 +420,8 @@ def run(args: argparse.Namespace) -> int:
     if not catalog_path.is_absolute():
         catalog_path = config_path.parent / catalog_path
     catalog = load_catalog(catalog_path)
+    watch = WatchStore(config_path)
+    watch.session_token()
     suite_path = Path(args.suite).expanduser().resolve()
     suite = load_suite(suite_path)
     profiles = _select_profiles(_installed(config_path, config_data, catalog), args)
@@ -283,7 +457,12 @@ def run(args: argparse.Namespace) -> int:
                 for case in suite["cases"]:
                     kind = str(case["type"])
                     seen[kind] += 1
-                    result = _run_case(runtime, {"model_id": settings.model_id, "backend": settings.backend, "engine": settings.engine}, case)
+                    result = _run_case(
+                        runtime,
+                        {"model_id": settings.model_id, "backend": settings.backend, "engine": settings.engine},
+                        case,
+                        watch=watch,
+                    )
                     model_results.append(result)
                     log.write(json.dumps(result.as_dict(), ensure_ascii=False) + "\n")
                     log.flush()

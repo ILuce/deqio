@@ -344,9 +344,66 @@ def _install_nimble(
     return env_dir
 
 
+def _install_basal(
+    config_path: Path,
+    data: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    upgrade: bool,
+) -> Path:
+    """Install the Basal runtime with backend-specific dependencies.
+
+    CUDA follows the upstream v1.0.1 installation order and pins PyTorch from
+    the CUDA 12.8 index before installing Basal. The MLX profile follows the
+    current upstream multi-backend branch and installs MLX explicitly so the
+    isolated runtime never depends on the host Python environment.
+    """
+
+    backend = str(profile.get("basal_backend") or data.get("backend") or "")
+    if backend not in {"mlx", "cuda"}:
+        raise RuntimeError("Basal supports mlx and cuda profiles in Deqio")
+
+    runtime_key = str(profile.get("runtime_key", f"basal-{backend}"))
+    env_dir = _runtime_root(config_path, data) / runtime_key
+    python_version = str(profile.get("python", "3.12"))
+    python_path = _ensure_venv(env_dir, python_version)
+
+    if backend == "cuda":
+        torch_command = [
+            "uv", "pip", "install", "--python", str(python_path),
+        ]
+        if upgrade:
+            torch_command.append("--upgrade")
+        torch_command.extend([
+            "torch==2.11.0",
+            "--index-url", "https://download.pytorch.org/whl/cu128",
+        ])
+        _run(torch_command)
+    else:
+        mlx_command = [
+            "uv", "pip", "install", "--python", str(python_path),
+        ]
+        if upgrade:
+            mlx_command.append("--upgrade")
+        mlx_command.append("mlx>=0.32,<0.33")
+        _run(mlx_command)
+
+    package = str(profile.get("basal_package", "")).strip()
+    if not package:
+        raise RuntimeError("Basal profile is missing basal_package")
+    command = ["uv", "pip", "install", "--python", str(python_path)]
+    if upgrade:
+        command.append("--upgrade")
+    command.append(package)
+    _run(command)
+    return env_dir
+
+
 def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool) -> Path:
     if profile.get("installer") == "nimble":
         return _install_nimble(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "basal":
+        return _install_basal(config_path, data, profile, upgrade=upgrade)
 
     runtime_key = profile.get("runtime_key")
     packages = profile.get("packages")
