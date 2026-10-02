@@ -17,6 +17,7 @@ class HostCapabilities:
     backends: tuple[str, ...]
     system_memory_gib: float | None
     cuda_memory_gib: float | None
+    cuda_compute_capability: float | None = None
 
     def memory_for_backend(self, backend: str) -> float | None:
         if backend in {"mlx", "mps"}:
@@ -91,6 +92,33 @@ def _cuda_memory_gib() -> float | None:
     return max(values) if values else None
 
 
+def _cuda_compute_capability() -> float | None:
+    executable = shutil.which("nvidia-smi")
+    if not executable:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                executable,
+                "--query-gpu=compute_cap",
+                "--format=csv,noheader,nounits",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+    values: list[float] = []
+    for line in result.stdout.splitlines():
+        try:
+            values.append(float(line.strip()))
+        except ValueError:
+            continue
+    return max(values) if values else None
+
+
 def detect_host() -> HostCapabilities:
     return HostCapabilities(
         system=platform.system(),
@@ -98,6 +126,7 @@ def detect_host() -> HostCapabilities:
         backends=host_backends(),
         system_memory_gib=_system_memory_gib(),
         cuda_memory_gib=_cuda_memory_gib(),
+        cuda_compute_capability=_cuda_compute_capability(),
     )
 
 
@@ -126,6 +155,32 @@ def profile_compatibility(
             "minimum_memory_gib": profile.get("min_memory_gib"),
             "recommended_memory_gib": profile.get("recommended_memory_gib"),
         }
+
+    if backend == "cuda" and profile.get("min_cuda_compute_capability") is not None:
+        required = float(profile["min_cuda_compute_capability"])
+        detected = host.cuda_compute_capability
+        if detected is None:
+            return {
+                "compatible": False,
+                "reason": (
+                    f"requires CUDA compute capability >= {required:.1f}; "
+                    "host capability could not be detected"
+                ),
+                "available_memory_gib": host.memory_for_backend(backend),
+                "minimum_memory_gib": profile.get("min_memory_gib"),
+                "recommended_memory_gib": profile.get("recommended_memory_gib"),
+            }
+        if detected < required:
+            return {
+                "compatible": False,
+                "reason": (
+                    f"requires CUDA compute capability >= {required:.1f}; "
+                    f"host reports {detected:.1f}"
+                ),
+                "available_memory_gib": host.memory_for_backend(backend),
+                "minimum_memory_gib": profile.get("min_memory_gib"),
+                "recommended_memory_gib": profile.get("recommended_memory_gib"),
+            }
 
     available = host.memory_for_backend(backend)
     minimum_raw = profile.get("min_memory_gib")

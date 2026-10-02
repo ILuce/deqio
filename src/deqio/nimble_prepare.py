@@ -15,7 +15,15 @@ def _adapter_sha(snapshot: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def prepare(*, source_root: Path, repo_id: str, output_dir: Path, config_path: Path, force: bool) -> None:
+def prepare(
+    *,
+    source_root: Path,
+    repo_id: str,
+    revision: str | None,
+    output_dir: Path,
+    config_path: Path,
+    force: bool,
+) -> None:
     source_root = source_root.resolve()
     if not (source_root / "nimble").is_dir():
         raise RuntimeError(f"Nimble source checkout is missing: {source_root}")
@@ -23,7 +31,10 @@ def prepare(*, source_root: Path, repo_id: str, output_dir: Path, config_path: P
 
     from huggingface_hub import snapshot_download
 
-    snapshot = Path(snapshot_download(repo_id=repo_id)).resolve()
+    download_args = {"repo_id": repo_id}
+    if revision and revision != "upstream-latest":
+        download_args["revision"] = revision
+    snapshot = Path(snapshot_download(**download_args)).resolve()
     revision = snapshot.name
     contract_file = snapshot / "schema_config.json"
     contract = json.loads(contract_file.read_text(encoding="utf-8")) if contract_file.is_file() else {}
@@ -101,6 +112,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare a Bespoke Nimble checkpoint for Deqio.")
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--repo-id", required=True)
+    parser.add_argument("--revision")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--force", action="store_true")
@@ -108,6 +120,7 @@ def main() -> int:
     prepare(
         source_root=args.source_root,
         repo_id=args.repo_id,
+        revision=args.revision,
         output_dir=args.output_dir.resolve(),
         config_path=args.config.resolve(),
         force=bool(args.force),

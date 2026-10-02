@@ -215,7 +215,12 @@ def _nimble_profile_matches(runtime_root: Path, profile: dict[str, Any]) -> bool
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    return data.get("model_id") == expected
+    if data.get("model_id") != expected:
+        return False
+    expected_revision = profile.get("model_revision")
+    if expected_revision and expected_revision != "upstream-latest":
+        return data.get("revision") == expected_revision
+    return True
 
 
 def _looks_like_hf_repo(value: Any) -> bool:

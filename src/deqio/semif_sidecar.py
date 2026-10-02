@@ -58,6 +58,7 @@ def build_app(
     revision: str,
     max_tokens: int,
     mlx_cache_mib: int,
+    mlx_bits: int | None,
     torch_dtype: str,
 ):
     from fastapi import FastAPI, HTTPException
@@ -85,7 +86,7 @@ def build_app(
                 model, tokenizer, metadata = mlx_backend.load_model(
                     model_id,
                     revision,
-                    bits=None,
+                    bits=mlx_bits,
                     cache_limit_mib=mlx_cache_mib,
                 )
                 serial_factory = mlx_backend.SerialPrefixScorer
@@ -199,6 +200,7 @@ def main() -> int:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--max-tokens", type=int, required=True)
     parser.add_argument("--mlx-cache-mib", type=int, required=True)
+    parser.add_argument("--mlx-bits", type=int, choices=(4, 8))
     parser.add_argument("--torch-dtype", required=True)
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
@@ -211,6 +213,7 @@ def main() -> int:
         revision=args.revision,
         max_tokens=args.max_tokens,
         mlx_cache_mib=args.mlx_cache_mib,
+        mlx_bits=args.mlx_bits,
         torch_dtype=args.torch_dtype,
     )
     uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False, log_level="warning")

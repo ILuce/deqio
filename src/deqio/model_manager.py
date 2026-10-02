@@ -334,7 +334,8 @@ def _install_nimble(
     prepare = [
         str(prep_python), str(helper),
         "--source-root", str(source_dir),
-        "--repo-id", str(profile.get("repo_id", "bespokelabs/Bespoke-Nimble-9B-v2")),
+        "--repo-id", str(profile.get("repo_id", "bespokelabs/Bespoke-Nimble-9B")),
+        "--revision", str(profile.get("model_revision", "upstream-latest")),
         "--output-dir", str(model_dir),
         "--config", str(model_config),
     ]
@@ -355,7 +356,7 @@ def _install_basal(
 
     CUDA follows the upstream v1.0.1 installation order and pins PyTorch from
     the CUDA 12.8 index before installing Basal. The MLX profile follows the
-    current upstream multi-backend branch and installs MLX explicitly so the
+    upstream-documented Apple Silicon fork and installs MLX explicitly so the
     isolated runtime never depends on the host Python environment.
     """
 
@@ -369,16 +370,20 @@ def _install_basal(
     python_path = _ensure_venv(env_dir, python_version)
 
     if backend == "cuda":
-        torch_command = [
-            "uv", "pip", "install", "--python", str(python_path),
-        ]
-        if upgrade:
-            torch_command.append("--upgrade")
-        torch_command.extend([
-            "torch==2.11.0",
-            "--index-url", "https://download.pytorch.org/whl/cu128",
-        ])
-        _run(torch_command)
+        # Basal's vLLM profile must live in a separate environment and let
+        # vLLM resolve its own compatible PyTorch build.  The native CUDA
+        # profiles keep the upstream pinned torch-first installation order.
+        if str(profile.get("basal_mode", "")) != "vllm":
+            torch_command = [
+                "uv", "pip", "install", "--python", str(python_path),
+            ]
+            if upgrade:
+                torch_command.append("--upgrade")
+            torch_command.extend([
+                "torch==2.11.0",
+                "--index-url", "https://download.pytorch.org/whl/cu128",
+            ])
+            _run(torch_command)
     else:
         mlx_command = [
             "uv", "pip", "install", "--python", str(python_path),

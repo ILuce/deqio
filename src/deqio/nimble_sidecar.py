@@ -163,7 +163,7 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
             result = ensure_scorer().score(state, schema)
             answers = _answers_from_result(schema, kinds, result)
             return {
-                "model": config.get("model_id", "bespokelabs/Bespoke-Nimble-9B-v2"),
+                "model": config.get("model_id", "bespokelabs/Bespoke-Nimble-9B"),
                 "answers": answers,
                 "latency_ms": (time.perf_counter() - started) * 1000.0,
                 "usage": {"input_tokens": 0},

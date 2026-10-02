@@ -65,7 +65,7 @@ deqio version
 
 </details>
 
-> These are machine-specific results from one local run, not universal model rankings. Results can change with hardware, runtime versions, model revisions, and benchmark changes.
+> These are machine-specific results from one local run, not universal model rankings. Results can change with hardware, runtime versions, model revisions, and benchmark changes. The snapshot predates the 2026-10-02 catalog/quantization audit; rerun the benchmark before comparing the refreshed SemIf MLX, Basal MLX, Kev 1.0, or Nimble profiles against these historical numbers.
 
 ### Supported models
 
@@ -83,6 +83,9 @@ deqio version
 | Open-Jev 27B v1.1 | — | — | ✓ |
 | CLM 8B | — | — | ✓ |
 | Basal 1.0 1.5B | ✓ | — | ✓ |
+| Basal 1.0 4.5B | ✓ | — | ✓ |
+| Clef Flash 9B | ✓ | — | — |
+| Clef 27B | ✓ | — | — |
 | Decider 0.8B | — | ✓ | ✓ |
 | Decider 2B | — | ✓ | ✓ |
 | Decider 4B | — | ✓ | ✓ |
@@ -90,9 +93,23 @@ deqio version
 | Laya Multilingual 322M | ✓ | ✓ | ✓ |
 | Laya Typed Decisions 421M | ✓ | ✓ | ✓ |
 | Von | — | ✓ | ✓ |
-| Bespoke Nimble 9B v2 | ✓ | — | ✓ |
+| Bespoke Nimble 9B | ✓ | — | ✓ |
 
-Basal 1.0 1.5B uses its native System One server. The CUDA profile follows the upstream v1.0.1 installation path; the MLX profile follows the current upstream multi-backend branch because Apple/MLX support was added after that tagged release. Basal is kept in its own isolated runtime like the other engines.
+Basal uses its native System One server. The 1.5B MLX profile uses the upstream-documented Apple Silicon fork and community 8-bit checkpoint; the 4.5B MLX profile uses the validated 8-bit conversion from the same Apple path. Basal 4.5B CUDA uses the official FP8 checkpoint through a separate vLLM environment and is offered only when Deqio detects CUDA compute capability 9.0 or newer. MLX, native CUDA, and vLLM runtimes stay isolated so dependency resolution for one profile cannot mutate another.
+
+Clef Flash and Clef use the `mlx-community` 8-bit conversions that retain Cloudflare's joint schema decision head. Deqio launches the `clef_mlx.py` System One server bundled in the exact pinned model snapshot and disables silent state truncation. Clef Flash is the practical Apple Silicon profile; full Clef has substantially higher memory requirements.
+
+### Model source and quantization audit (2026-10-02)
+
+- **SemIf MLX** now loads the canonical pinned `Qwen/Qwen3.5-4B` checkpoint and applies the upstream SemIf MLX **8-bit** quantization path at load time. The old third-party 4-bit snapshot is no longer the default.
+- **Kev** profiles are pinned to the upstream **Kev 1.0** release. Kev 9B still uses the upstream BF16 adapter + pointer-head contract; no compatible 8-bit or 6-bit MLX release was found, so Deqio keeps the conservative ~22 GiB minimum instead of substituting a backbone-only quant.
+- **Basal 1.5B MLX** uses the pinned `pawelkiszczak/basal-1.0-1.5B-MLX-8bit` community checkpoint with the Apple Silicon fork documented by Basal upstream.
+- **Basal 4.5B** adds the pinned `pawelkiszczak/basal-1.0-4.5B-MLX-8bit` checkpoint on Apple Silicon and the official pinned `Remek/basal-1.0-4.5B-FP8` checkpoint on CUDA. The MLX conversion preserves the published decision set in upstream validation. CUDA runs through `basal[vllm]` in its own environment and is fail-closed below CUDA compute capability 9.0 or when capability detection is unavailable.
+- **Clef Flash / Clef** use pinned `mlx-community` 8-bit checkpoints with the joint schema head kept in BF16 and the upstream-bundled MLX System One server. The audited community CUDA FP8 conversions are not catalogued yet because Deqio does not have equivalent published probability-parity/runtime validation for that path; MPS is not aliased to MLX.
+- **Solar Decide** was audited but is not a local catalog profile: Upstage currently exposes it as a hosted `/v1/systemone` API rather than downloadable local weights. Adding it correctly requires an explicit remote-provider/authentication backend, not an MLX/MPS/CUDA alias.
+- **Bespoke Nimble 9B** tracks the newer upstream checkpoint published after the older `-v2` repository; Deqio pins the audited adapter revision and requires the prepared local model to match it.
+- **GGUF** variants exist upstream for models including JevK5, Decider, and Basal (including validated Basal 4.5B Q8), but they are not exposed as MLX/MPS/CUDA profiles. They require an explicit llama.cpp/llama-server style backend, which Deqio does not currently claim.
+- The remaining catalog families (Open-Jev, CLM, Decider, Laya, Von, JevK5) were checked against their current upstream sources. No additional 8-bit/6-bit path was adopted where the quantized route would bypass or change the engine-specific decision head/API contract.
 
 ## 1. Installation
 
@@ -645,7 +662,7 @@ deqio benchmark \
 
 The console shows live PASS/FAIL and latency for every request. Full `results.jsonl` and `summary.json` files are written under `.deqio/benchmarks/<timestamp>/`. Add or edit cases in `benchmarks/basic.json` as the benchmark grows.
 
-> **Nimble note:** `Bespoke Nimble 9B v2` follows the upstream MLX/CUDA workflow. Its first installation downloads the adapter and pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
+> **Nimble note:** `Bespoke Nimble 9B` follows the upstream MLX/CUDA workflow. Deqio pins the audited adapter revision; its first installation downloads that adapter and the pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
 
 > **CUDA-only model note:** JevK5, Open-Jev and CLM use their upstream Linux/NVIDIA serving paths. CLM starts a local vLLM pooling encoder plus `clm-serve` inside one Deqio-managed sidecar. Kev 27B requires an 80 GB-class NVIDIA GPU.
 

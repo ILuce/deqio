@@ -51,7 +51,7 @@ Keep runtime environments separate from local model checkpoints. Downloaded or p
 models/
 ```
 
-For example, the SemIf MLX snapshot and prepared Nimble checkpoint use this directory. Do not move these weights into `.model-runtimes/`: runtime environments should be rebuildable without forcing large model downloads or checkpoint merges again.
+Prepared local checkpoints such as Nimble use this directory. Do not move managed weights into `.model-runtimes/`: runtime environments should be rebuildable without forcing large model downloads or checkpoint merges again. SemIf MLX now consumes the canonical Hugging Face checkpoint directly and applies the upstream 8-bit MLX quantization path at load time.
 
 The model catalog is `models.json`.
 
@@ -197,6 +197,8 @@ Every entry needs:
 - model identifier/path for each backend
 - isolated runtime install packages when applicable
 
+When a runnable profile uses quantized weights, record the quantization contract in the profile (`quantization` metadata and any engine-specific loader option) so provenance and tests can distinguish it from full precision. Prefer verified 8-bit MLX variants, then verified 6-bit variants, but never replace an engine-specific adapter/head with a backbone-only quant. GGUF availability alone is not a Deqio backend: if a model requires llama.cpp/llama-server, keep it out of the MLX/MPS/CUDA catalog until that backend is intentionally implemented.
+
 Do not silently fall back from an unsupported backend to CPU or another backend.
 
 Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
@@ -217,7 +219,11 @@ Live model switching must keep one resident model at a time. Unload the old runt
 
 Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime stacks.
 
-Basal `basal-1.5b` uses the upstream System One API. Keep the MLX and CUDA runtimes isolated and backend-specific. CUDA follows the pinned upstream v1.0.1 install path; MLX currently follows the upstream multi-backend branch because Apple/MLX support was added after that release. Do not claim MPS support for Basal or silently substitute it for MLX.
+Basal `basal-1.5b` and `basal-4.5b` use the upstream System One API. Keep MLX, native CUDA, and vLLM runtimes isolated and backend-specific. The 1.5B CUDA profile follows the pinned upstream v1.0.1 native install path. Basal 4.5B CUDA uses the official FP8 checkpoint through `basal[vllm]` and must not be offered unless CUDA compute capability 9.0+ is detected; vLLM owns its PyTorch dependency resolution in that environment. MLX uses the upstream-documented Apple Silicon fork plus the pinned community 8-bit MLX checkpoints and must run in `mlx` mode. Do not claim MPS support for Basal or silently substitute it for MLX.
+
+Clef Flash and Clef are currently MLX-only Deqio profiles. Use the pinned `mlx-community` 8-bit snapshots, retain the BF16 joint schema head, and launch the `clef_mlx.py` System One server from the already-prefetched snapshot with truncation disabled. Do not replace the joint head with a normal text-generation path. Community CUDA FP8 conversions were audited but are intentionally not catalogued until their decision-probability/runtime parity is validated to the same standard. Do not alias MPS to MLX.
+
+Solar Decide is currently a hosted Upstage `/v1/systemone` service, not downloadable local weights. It must not appear in the local model catalog until Deqio intentionally implements a remote-provider backend and credential/authentication contract. Never represent it as MLX, MPS, or CUDA just to make it selectable.
 
 ## Change workflow
 

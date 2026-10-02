@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .catalog import SUPPORTED_ENGINES
 from .workspace import ensure_workspace
 
 
@@ -71,9 +72,10 @@ def _resolve_model_source(value: str, base: Path, backend: str, engine: str) -> 
     path = Path(value).expanduser()
     candidate = path if path.is_absolute() else base / path
 
-    # MLX is intentionally local in this server configuration. Torch backends
-    # keep Hugging Face repo IDs as remote model sources.
-    if (engine == "semif" and backend == "mlx") or path.is_absolute() or value.startswith(("./", "../", "~")):
+    # Explicit/managed local paths are resolved relative to the workspace.
+    # Backend labels do not imply locality: an MLX profile may legitimately
+    # load a pinned Hugging Face repo directly.
+    if path.is_absolute() or value.startswith(("./", "../", "~", "models/")):
         return str(candidate.resolve())
     if candidate.exists():
         return str(candidate.resolve())
@@ -151,10 +153,8 @@ def settings_from_data(
         raise RuntimeError(f"Configuration is missing fields: {missing}")
 
     engine = str(data["engine"]).lower().strip()
-    if engine not in {"semif", "kev", "jevk5", "open-jev", "clm", "decider", "laya", "von", "nimble"}:
-        raise RuntimeError(
-            "engine must be one of: semif, kev, jevk5, open-jev, clm, decider, laya, von, nimble"
-        )
+    if engine not in SUPPORTED_ENGINES:
+        raise RuntimeError(f"engine must be one of: {', '.join(SUPPORTED_ENGINES)}")
     model_id = str(data["model_id"]).strip()
     if not model_id:
         raise RuntimeError("model_id must be a nonempty string")

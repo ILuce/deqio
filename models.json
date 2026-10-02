@@ -5,17 +5,12 @@
       "id": "semif-qwen3.5-4b",
       "engine": "semif",
       "label": "SemIf / Qwen3.5 4B",
-      "description": "SemIf option-logit readout over Qwen3.5-4B. This is the original runtime supported by Deqio.",
+      "description": "SemIf option-logit readout over Qwen3.5-4B; MLX uses the upstream native 8-bit load-time quantization path.",
       "source": "https://github.com/TheoLeeCJ/SemIf-OpenJev",
       "backends": {
         "mlx": {
-          "model": "models/semif-qwen3.5-4b-mlx-4bit",
-          "model_revision": "local-vinci00-semif-qwen35-4b-mlx4",
-          "download": {
-            "type": "snapshot",
-            "repo_id": "vinci00/semif-qwen3.5-4b-mlx-4bit",
-            "local_dir": "models/semif-qwen3.5-4b-mlx-4bit"
-          },
+          "model": "Qwen/Qwen3.5-4B",
+          "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           "runtime_key": "semif",
           "python": "3.12",
           "packages": [
@@ -23,8 +18,16 @@
             "fastapi>=0.110",
             "uvicorn[standard]>=0.27"
           ],
-          "min_memory_gib": 6,
-          "recommended_memory_gib": 8
+          "min_memory_gib": 8,
+          "recommended_memory_gib": 12,
+          "semif_mlx_bits": 8,
+          "quantization": {
+            "kind": "mlx-affine",
+            "bits": 8,
+            "group_size": 64,
+            "applied": "load-time",
+            "source_precision": "bf16"
+          }
         },
         "cuda": {
           "model": "Qwen/Qwen3.5-4B",
@@ -62,37 +65,55 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-0.8b",
+          "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 4,
-          "recommended_memory_gib": 8
+          "recommended_memory_gib": 8,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "revision": "v1.0"
+          }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-0.8b",
+          "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 4,
-          "recommended_memory_gib": 8
+          "recommended_memory_gib": 8,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "revision": "v1.0"
+          }
         },
         "mps": {
-          "model": "jaredpalmer/kev-0.8b",
+          "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 4,
-          "recommended_memory_gib": 8
+          "recommended_memory_gib": 8,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "revision": "v1.0"
+          }
         }
       }
     },
@@ -104,37 +125,55 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-4b",
+          "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 12,
-          "recommended_memory_gib": 16
+          "recommended_memory_gib": 16,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-4b",
+            "revision": "v1.0"
+          }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-4b",
+          "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 14,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-4b",
+            "revision": "v1.0"
+          }
         },
         "mps": {
-          "model": "jaredpalmer/kev-4b",
+          "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 14,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-4b",
+            "revision": "v1.0"
+          }
         }
       }
     },
@@ -142,41 +181,59 @@
       "id": "kev-9b",
       "engine": "kev",
       "label": "Kev 9B",
-      "description": "Largest currently catalogued Kev checkpoint.",
+      "description": "Kev 1.0 9B (v2) pointer-head decision checkpoint. Official MLX serving remains BF16; no compatible 8/6-bit MLX release is catalogued.",
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-9b",
+          "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 22,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-9b",
+            "revision": "v1.0"
+          }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-9b",
+          "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 22,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-9b",
+            "revision": "v1.0"
+          }
         },
         "mps": {
-          "model": "jaredpalmer/kev-9b",
+          "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "min_memory_gib": 22,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-9b",
+            "revision": "v1.0"
+          }
         }
       }
     },
@@ -184,22 +241,28 @@
       "id": "kev-27b",
       "engine": "kev",
       "label": "Kev 27B",
-      "description": "Largest Kev decision checkpoint, based on Qwen3.8-27B and intended for 80 GB data-centre NVIDIA GPUs.",
+      "description": "Kev 1.0 27B decision checkpoint, intended for 80 GB-class NVIDIA GPUs.",
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "cuda": {
-          "model": "jaredpalmer/kev-27b",
+          "model": "jaredpalmer/kev-27b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
           ],
           "systems": [
             "Linux"
           ],
           "min_memory_gib": 66,
-          "recommended_memory_gib": 80
+          "recommended_memory_gib": 80,
+          "model_revision": "v1.0",
+          "download": {
+            "type": "snapshot",
+            "repo_id": "jaredpalmer/kev-27b",
+            "revision": "v1.0"
+          }
         }
       }
     },
@@ -408,28 +471,36 @@
       "id": "basal-1.5b",
       "engine": "basal",
       "label": "Basal 1.5B",
-      "description": "Basal 1.0 1.5B calibrated typed-decision model for Polish and English with a System One API.",
+      "description": "Basal 1.0 1.5B calibrated typed-decision model; Apple Silicon uses the upstream-documented community MLX 8-bit checkpoint, CUDA keeps the upstream v1.0.1 path.",
       "source": "https://github.com/rkinas/basal",
       "backends": {
         "mlx": {
-          "model": "Remek/basal-1.0-1.5B",
-          "wire_model": "Remek/basal-1.0-1.5B",
-          "model_revision": "upstream-latest",
+          "model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
+          "wire_model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
+          "model_revision": "097465843096292389d039e22265de8b972d2b7b",
           "runtime_key": "basal-mlx",
           "python": "3.12",
           "installer": "basal",
           "basal_backend": "mlx",
-          "basal_package": "basal @ git+https://github.com/rkinas/basal.git",
+          "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main",
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 4,
-          "recommended_memory_gib": 8
+          "min_memory_gib": 3,
+          "recommended_memory_gib": 4,
+          "basal_mode": "mlx",
+          "quantization": {
+            "kind": "mlx-affine",
+            "bits": 8,
+            "group_size": 64,
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.0-1.5B"
+          }
         },
         "cuda": {
           "model": "Remek/basal-1.0-1.5B",
           "wire_model": "Remek/basal-1.0-1.5B",
-          "model_revision": "upstream-latest",
+          "model_revision": "81a74acc6e7f7604008697b2daa83b3652d85b68",
           "runtime_key": "basal-cuda",
           "python": "3.12",
           "installer": "basal",
@@ -441,6 +512,136 @@
           ],
           "min_memory_gib": 5,
           "recommended_memory_gib": 8
+        }
+      }
+    },
+    {
+      "id": "basal-4.5b",
+      "engine": "basal",
+      "label": "Basal 4.5B",
+      "description": "Basal 1.0 4.5B typed-decision model; Apple Silicon uses the validated MLX 8-bit checkpoint and CUDA uses the upstream FP8 vLLM checkpoint on Hopper/Blackwell-class GPUs.",
+      "source": "https://github.com/rkinas/basal",
+      "backends": {
+        "mlx": {
+          "model": "pawelkiszczak/basal-1.0-4.5B-MLX-8bit",
+          "wire_model": "pawelkiszczak/basal-1.0-4.5B-MLX-8bit",
+          "model_revision": "7c8291bce44c9096da1ca52ba2136a9722975c3e",
+          "runtime_key": "basal-mlx-45",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mlx",
+          "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@feat/gguf-llamacpp",
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 6,
+          "recommended_memory_gib": 8,
+          "basal_mode": "mlx",
+          "quantization": {
+            "kind": "mlx-affine",
+            "bits": 8,
+            "group_size": 64,
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.0-4.5B"
+          }
+        },
+        "cuda": {
+          "model": "Remek/basal-1.0-4.5B-FP8",
+          "wire_model": "Remek/basal-1.0-4.5B-FP8",
+          "model_revision": "6a4718943f85d80612242be688eb57e3037ec88e",
+          "runtime_key": "basal-cuda-vllm",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "cuda",
+          "basal_package": "basal[vllm] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+          "basal_mode": "vllm",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 12,
+          "recommended_memory_gib": 16,
+          "min_cuda_compute_capability": 9.0,
+          "quantization": {
+            "kind": "fp8",
+            "bits": 8,
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.0-4.5B",
+            "output_head_precision": "bf16"
+          }
+        }
+      }
+    },
+    {
+      "id": "clef-flash",
+      "engine": "clef",
+      "label": "Clef Flash 9B",
+      "description": "Cloudflare Clef Flash System One model; Deqio uses the validated MLX 8-bit conversion with the joint schema head preserved in BF16.",
+      "source": "https://huggingface.co/Cloudflare/clef-flash",
+      "backends": {
+        "mlx": {
+          "model": "mlx-community/clef-flash-8bit",
+          "wire_model": "clef-flash",
+          "model_revision": "dfa0993decb4f8507a0eae01afd1b2d33a4bb734",
+          "runtime_key": "clef-mlx",
+          "python": "3.12",
+          "packages": [
+            "mlx==0.32.3",
+            "mlx-lm==0.32.0",
+            "mlx-vlm==0.7.4",
+            "huggingface-hub>=1,<2"
+          ],
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 11.6,
+          "recommended_memory_gib": 20,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "quantization": {
+            "kind": "mlx-affine",
+            "bits": 8,
+            "group_size": 64,
+            "applied": "checkpoint",
+            "source_model": "Cloudflare/clef-flash",
+            "joint_head_precision": "bf16"
+          }
+        }
+      }
+    },
+    {
+      "id": "clef",
+      "engine": "clef",
+      "label": "Clef 27B",
+      "description": "Cloudflare Clef System One model; Deqio uses the validated MLX 8-bit conversion with the joint schema head preserved in BF16.",
+      "source": "https://huggingface.co/Cloudflare/clef",
+      "backends": {
+        "mlx": {
+          "model": "mlx-community/clef-8bit",
+          "wire_model": "clef",
+          "model_revision": "ffcdb6132b3cc94e523860321dd9ed58bc1ee9a1",
+          "runtime_key": "clef-mlx",
+          "python": "3.12",
+          "packages": [
+            "mlx==0.32.3",
+            "mlx-lm==0.32.0",
+            "mlx-vlm==0.7.4",
+            "huggingface-hub>=1,<2"
+          ],
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 30.8,
+          "recommended_memory_gib": 44,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "quantization": {
+            "kind": "mlx-affine",
+            "bits": 8,
+            "group_size": 64,
+            "applied": "checkpoint",
+            "source_model": "Cloudflare/clef",
+            "joint_head_precision": "bf16"
+          }
         }
       }
     },
@@ -740,18 +941,18 @@
     {
       "id": "nimble-9b",
       "engine": "nimble",
-      "label": "Bespoke Nimble 9B v2",
-      "description": "Bespoke Labs Nimble 9B v2 decision model with calibrated one-pass typed probabilities.",
+      "label": "Bespoke Nimble 9B",
+      "description": "Bespoke Labs latest Nimble 9B checkpoint (2026-09-24), with 8,192-token context and up to 255 choices per field.",
       "source": "https://github.com/bespokelabsai/nimble",
       "backends": {
         "mlx": {
           "model": "models/nimble-9b",
-          "model_revision": "upstream-latest",
-          "wire_model": "nimble-v2",
+          "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
+          "wire_model": "nimble-latest",
           "runtime_key": "nimble-mlx",
           "source_key": "nimble-src",
           "model_config": "nimble-model.json",
-          "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
           "installer": "nimble",
           "nimble_backend": "mlx",
           "python": "3.12",
@@ -760,12 +961,12 @@
         },
         "cuda": {
           "model": "models/nimble-9b",
-          "model_revision": "upstream-latest",
-          "wire_model": "nimble-v2",
+          "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
+          "wire_model": "nimble-latest",
           "runtime_key": "nimble-cuda",
           "source_key": "nimble-src",
           "model_config": "nimble-model.json",
-          "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+          "repo_id": "bespokelabs/Bespoke-Nimble-9B",
           "installer": "nimble",
           "nimble_backend": "cuda",
           "python": "3.12",

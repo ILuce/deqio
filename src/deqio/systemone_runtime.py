@@ -220,7 +220,7 @@ def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: 
         for item in artifacts
         if isinstance(item, dict)
     )
-    return {
+    identity = {
         "deqio_version": __version__,
         "runtime_instance_id": instance_id,
         "engine": settings.engine,
@@ -233,6 +233,10 @@ def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: 
         "installation_verified_at": record.get("verified_at"),
         "max_input_tokens": int(record.get("max_input_tokens", settings.max_tokens)),
     }
+    quantization = profile.get("quantization")
+    if isinstance(quantization, dict):
+        identity["quantization"] = deepcopy(quantization)
+    return identity
 
 
 class SystemOneRuntime:
@@ -359,16 +363,22 @@ class SystemOneRuntime:
 
         if engine == "semif":
             sidecar = Path(__file__).with_name("semif_sidecar.py").resolve()
-            return [
+            command = [
                 str(python), str(sidecar),
                 "--backend", settings.backend,
                 "--model", settings.model,
                 "--revision", settings.model_revision,
                 "--max-tokens", str(settings.max_tokens),
                 "--mlx-cache-mib", str(settings.mlx_cache_mib),
+            ]
+            mlx_bits = profile.get("semif_mlx_bits")
+            if settings.backend == "mlx" and mlx_bits is not None:
+                command.extend(["--mlx-bits", str(int(mlx_bits))])
+            command.extend([
                 "--torch-dtype", settings.torch_dtype,
                 "--port", str(port),
-            ]
+            ])
+            return command
 
         if engine == "kev":
             if settings.backend in {"cuda", "mps"}:
@@ -435,6 +445,22 @@ class SystemOneRuntime:
                 command.extend(["--mode", str(mode)])
             command.extend(["--port", str(port)])
             return command
+
+        if engine == "clef":
+            if settings.backend != "mlx":
+                raise RuntimeError("Clef's current Deqio profiles require MLX")
+            sidecar = Path(__file__).with_name("clef_sidecar.py").resolve()
+            max_length = int(
+                getattr(settings, "max_tokens", profile.get("max_input_tokens", 16384))
+            )
+            return [
+                str(python), str(sidecar),
+                "--model", model,
+                "--revision", str(profile.get("model_revision", "upstream-latest")),
+                "--name", str(profile.get("wire_model", model)),
+                "--max-length", str(max_length),
+                "--port", str(port),
+            ]
 
         if engine == "decider":
             env["DECIDER_MODEL"] = model

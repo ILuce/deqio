@@ -189,8 +189,8 @@ def test_model_catalog_contains_multi_engine_profiles() -> None:
 
     assert {"semif", "kev", "decider", "laya", "von"}.issubset(engines)
     assert get_profile(catalog, "semif-qwen3.5-4b", "mps")["model"] == "Qwen/Qwen3.5-4B"
-    assert get_profile(catalog, "kev-4b", "mlx")["model"] == "jaredpalmer/kev-4b"
-    assert get_profile(catalog, "kev-4b", "mps")["model"] == "jaredpalmer/kev-4b"
+    assert get_profile(catalog, "kev-4b", "mlx")["model"] == "jaredpalmer/kev-4b@v1.0"
+    assert get_profile(catalog, "kev-4b", "mps")["model"] == "jaredpalmer/kev-4b@v1.0"
     assert get_profile(catalog, "decider-2b", "mps")["model"] == "Mapika/decider-2b"
     assert get_profile(catalog, "decider-2b", "cuda")["model"] == "Mapika/decider-2b"
     with pytest.raises(RuntimeError, match="does not support backend"):
@@ -199,6 +199,31 @@ def test_model_catalog_contains_multi_engine_profiles() -> None:
     assert get_profile(catalog, "laya-multilingual", "mps")["model"] == "convaiinnovations/laya-multilingual"
     assert get_profile(catalog, "von", "mps")["wire_model"] == "von-1.2.0"
     assert get_profile(catalog, "von", "cuda")["wire_model"] == "von-1.2.0"
+
+
+def test_config_engine_validation_covers_every_catalog_engine() -> None:
+    from deqio.catalog import SUPPORTED_ENGINES, apply_selection, load_catalog
+    from deqio.config import settings_from_data
+
+    config_path = Path("config.json").resolve()
+    base_data = json.loads(config_path.read_text(encoding="utf-8"))
+    catalog = load_catalog(Path("models.json"))
+    catalog_engines = {str(entry["engine"]) for entry in catalog["models"]}
+
+    assert catalog_engines == set(SUPPORTED_ENGINES)
+
+    validated_engines: set[str] = set()
+    for entry in catalog["models"]:
+        engine = str(entry["engine"])
+        if engine in validated_engines:
+            continue
+        backend, profile = next(iter(entry["backends"].items()))
+        selected = apply_selection(base_data, entry, profile, str(backend))
+        settings = settings_from_data(config_path, selected, apply_environment=False)
+        assert settings.engine == engine
+        validated_engines.add(engine)
+
+    assert validated_engines == catalog_engines
 
 
 def test_catalog_rejects_unsupported_backend() -> None:
@@ -627,6 +652,139 @@ def test_models_setup_marks_installed_profiles(
     assert "Maximum input tokens for semif-qwen3.5-4b / mlx:" in output
     assert "4096 tokens" in output
     assert "Select max input tokens" not in output  # prompt text is supplied to input(), not printed by the test stub
+
+
+def test_models_use_lists_only_installed_host_compatible_profiles_and_persists_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from types import SimpleNamespace
+
+    import deqio.model_manager as manager
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "engine": "kev",
+                "model_id": "kev-0.8b",
+                "backend": "mlx",
+                "model": "jaredpalmer/kev-0.8b",
+                "model_revision": "kev-0.8b",
+                "max_tokens": 4096,
+                "mlx_cache_mib": 256,
+                "log": "logs/requests.jsonl",
+                "torch_dtype": "bfloat16",
+                "runtime_dir": ".model-runtimes",
+                "model_catalog": "models.json",
+                "sidecar_startup_seconds": 1800,
+                "sidecar_process_ready_seconds": 300,
+                "hf_offline_runtime": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    catalog = {
+        "models": [
+            {
+                "id": "kev-0.8b",
+                "engine": "kev",
+                "label": "Kev 0.8B",
+                "backends": {
+                    "mlx": {
+                        "model": "jaredpalmer/kev-0.8b",
+                        "model_revision": "kev-0.8b",
+                    }
+                },
+            },
+            {
+                "id": "basal-1.5b",
+                "engine": "basal",
+                "label": "Basal 1.5B",
+                "backends": {
+                    "mlx": {
+                        "model": "Remek/basal-1.0-1.5B",
+                        "model_revision": "basal-1.5b",
+                    }
+                },
+            },
+            {
+                "id": "hidden-uninstalled",
+                "engine": "kev",
+                "label": "Hidden Uninstalled",
+                "backends": {"mlx": {"model": "example/uninstalled"}},
+            },
+            {
+                "id": "hidden-incompatible",
+                "engine": "kev",
+                "label": "Hidden Incompatible",
+                "backends": {"mlx": {"model": "example/incompatible"}},
+            },
+        ]
+    }
+    (tmp_path / "models.json").write_text(json.dumps(catalog), encoding="utf-8")
+
+    rows = [
+        {
+            "model_id": "kev-0.8b",
+            "backend": "mlx",
+            "engine": "kev",
+            "label": "Kev 0.8B",
+            "installed": True,
+            "host_compatible": True,
+            "active": True,
+            "max_input_tokens": 4096,
+        },
+        {
+            "model_id": "basal-1.5b",
+            "backend": "mlx",
+            "engine": "basal",
+            "label": "Basal 1.5B",
+            "installed": True,
+            "host_compatible": True,
+            "active": False,
+            "max_input_tokens": 8192,
+        },
+        {
+            "model_id": "hidden-uninstalled",
+            "backend": "mlx",
+            "engine": "kev",
+            "label": "Hidden Uninstalled",
+            "installed": False,
+            "host_compatible": True,
+            "active": False,
+            "max_input_tokens": 4096,
+        },
+        {
+            "model_id": "hidden-incompatible",
+            "backend": "mlx",
+            "engine": "kev",
+            "label": "Hidden Incompatible",
+            "installed": True,
+            "host_compatible": False,
+            "active": False,
+            "max_input_tokens": 4096,
+        },
+    ]
+    monkeypatch.setattr(manager, "_installation_rows", lambda *_args, **_kwargs: rows)
+    monkeypatch.setattr(manager, "_prompt_index", lambda label, count: 1)
+
+    result = manager.cmd_use(SimpleNamespace(config=str(config_path), model_id=None, backend=None))
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Kev 0.8B — mlx (kev) [active]" in output
+    assert "Basal 1.5B — mlx (basal)" in output
+    assert "Hidden Uninstalled" not in output
+    assert "Hidden Incompatible" not in output
+    assert "Selected installed profile basal-1.5b / mlx" in output
+
+    selected = json.loads(config_path.read_text(encoding="utf-8"))
+    assert selected["engine"] == "basal"
+    assert selected["model_id"] == "basal-1.5b"
+    assert selected["backend"] == "mlx"
+    assert selected["model"] == "Remek/basal-1.0-1.5B"
+    assert selected["model_revision"] == "basal-1.5b"
+    assert selected["max_tokens"] == 8192
 
 
 def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> None:
@@ -1097,6 +1255,93 @@ def test_semif_profiles_use_isolated_runtime() -> None:
         assert any("github.com/TheoLeeCJ/SemIf-OpenJev.git" in package for package in profile["packages"])
 
 
+def test_semif_mlx_profile_uses_canonical_8bit_runtime_quantization() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    profile = get_profile(load_catalog(Path("models.json")), "semif-qwen3.5-4b", "mlx")
+
+    assert profile["model"] == "Qwen/Qwen3.5-4B"
+    assert profile["model_revision"] == "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+    assert "download" not in profile
+    assert profile["semif_mlx_bits"] == 8
+    assert profile["quantization"] == {
+        "kind": "mlx-affine",
+        "bits": 8,
+        "group_size": 64,
+        "applied": "load-time",
+        "source_precision": "bf16",
+    }
+
+
+def test_semif_mlx_command_passes_quantization_bits(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    settings = SimpleNamespace(
+        engine="semif",
+        backend="mlx",
+        model="Qwen/Qwen3.5-4B",
+        model_revision="851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+        max_tokens=8192,
+        mlx_cache_mib=256,
+        torch_dtype="bfloat16",
+    )
+    command = SystemOneRuntime._command(
+        settings,
+        {"model": settings.model, "semif_mlx_bits": 8},
+        tmp_path / "runtime",
+        tmp_path / "python",
+        9009,
+        {},
+    )
+
+    assert command[command.index("--mlx-bits") + 1] == "8"
+    assert command[command.index("--model") + 1] == "Qwen/Qwen3.5-4B"
+
+
+def test_kev_profiles_are_pinned_to_release_1_0_and_9b_guardrail_stays_bf16() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    for model_id in ("kev-0.8b", "kev-4b", "kev-9b", "kev-27b"):
+        entry = next(item for item in catalog["models"] if item["id"] == model_id)
+        for profile in entry["backends"].values():
+            assert profile["model"].endswith("@v1.0")
+            assert profile["model_revision"] == "v1.0"
+            assert profile["download"]["revision"] == "v1.0"
+            assert profile["packages"] == [
+                "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            ]
+
+    kev9 = get_profile(catalog, "kev-9b", "mlx")
+    assert kev9["min_memory_gib"] == 22
+    assert kev9["recommended_memory_gib"] == 32
+    assert "quantization" not in kev9
+
+
+def test_runtime_identity_binds_catalog_quantization(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import deqio.systemone_runtime as runtime_module
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(runtime_module, "installation_record", lambda *a, **k: {
+        "artifacts": [{"source": "huggingface", "resolved_revision": "abc"}],
+        "verified_at": "now",
+        "max_input_tokens": 8192,
+    })
+    settings = SimpleNamespace(
+        config_path=tmp_path / "config.json", model_id="demo", backend="mlx",
+        engine="semif", model="owner/model", model_revision="rev", max_tokens=8192,
+    )
+    quantization = {"kind": "mlx-affine", "bits": 8, "group_size": 64}
+
+    identity = runtime_module._runtime_identity(
+        settings, {"model": "owner/model", "model_revision": "rev", "quantization": quantization}, "instance"
+    )
+
+    assert identity["quantization"] == quantization
+    assert identity["quantization"] is not quantization
+
+
 def test_backend_loader_routes_semif_through_systemone(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
 
@@ -1463,12 +1708,12 @@ def test_delete_cleanup_preserves_shared_runtime_until_last_profile(tmp_path: Pa
     assert not runtime_dir.exists()
 
 
-def test_catalog_contains_new_decision_families_and_nimble_v2() -> None:
+def test_catalog_contains_current_decision_families_and_nimble() -> None:
     from deqio.catalog import get_profile, load_catalog
 
     catalog = load_catalog(Path("models.json"))
 
-    assert get_profile(catalog, "kev-27b", "cuda")["model"] == "jaredpalmer/kev-27b"
+    assert get_profile(catalog, "kev-27b", "cuda")["model"] == "jaredpalmer/kev-27b@v1.0"
     assert get_profile(catalog, "jevk5-4b", "cuda")["model"] == "alibiserikbay/JevK5"
     assert get_profile(catalog, "jevk5-9b", "cuda")["model"] == "alibiserikbay/JevK5-9B"
     assert get_profile(catalog, "open-jev-2b", "cuda")["model"].endswith("open-jev-2b/package/checkpoint")
@@ -1480,8 +1725,8 @@ def test_catalog_contains_new_decision_families_and_nimble_v2() -> None:
     assert get_profile(catalog, "clm-8b", "cuda")["packages"] == [
         "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git"
     ]
-    assert get_profile(catalog, "nimble-9b", "mlx")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B-v2"
-    assert get_profile(catalog, "nimble-9b", "cuda")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B-v2"
+    assert get_profile(catalog, "nimble-9b", "mlx")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
+    assert get_profile(catalog, "nimble-9b", "cuda")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
 
     for model_id in ("kev-27b", "jevk5-4b", "jevk5-9b", "open-jev-2b", "open-jev-9b", "open-jev-27b-v1.1", "clm-8b"):
         with pytest.raises(RuntimeError, match="does not support backend"):
@@ -1530,7 +1775,49 @@ def test_prefetch_declared_weights_fetches_every_declared_download(
     assert "CLM_v0.1-8B.pt" in message
 
 
-def test_nimble_v1_preparation_is_not_reported_as_v2_installed(
+
+def test_nimble_installer_passes_audited_revision_to_preparer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    source_dir = tmp_path / "nimble-src"
+    requirements = source_dir / "requirements"
+    requirements.mkdir(parents=True)
+    (requirements / "mlx.txt").write_text("", encoding="utf-8")
+    (requirements / "training.txt").write_text("", encoding="utf-8")
+
+    runtime_root = tmp_path / ".model-runtimes"
+    for runtime_name in ("nimble-mlx", "nimble-prep"):
+        python_path = runtime_root / runtime_name / "bin" / "python"
+        python_path.parent.mkdir(parents=True)
+        python_path.write_text("", encoding="utf-8")
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(manager, "_checkout_nimble", lambda *a, **k: source_dir)
+    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+
+    revision = "bd792f44ec8e265be861bfcdf4e05967ffe0e858"
+    manager._install_nimble(
+        tmp_path / "config.json",
+        {"runtime_dir": ".model-runtimes", "backend": "mlx"},
+        {
+            "model": "models/nimble-9b",
+            "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+            "model_revision": revision,
+            "runtime_key": "nimble-mlx",
+            "model_config": "nimble-model.json",
+            "nimble_backend": "mlx",
+            "python": "3.12",
+        },
+        upgrade=False,
+    )
+
+    prepare = next(command for command in commands if "nimble_prepare.py" in " ".join(command))
+    assert prepare[prepare.index("--repo-id") + 1] == "bespokelabs/Bespoke-Nimble-9B"
+    assert prepare[prepare.index("--revision") + 1] == revision
+
+def test_stale_nimble_preparation_is_not_reported_as_latest_installed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import deqio.installations as installations
@@ -1546,13 +1833,14 @@ def test_nimble_v1_preparation_is_not_reported_as_v2_installed(
     model_dir.mkdir(parents=True)
     (model_dir / "READY.json").write_text("{}")
     nimble_config = tmp_path / ".model-runtimes" / "nimble-model.json"
-    nimble_config.write_text(json.dumps({"model_id": "bespokelabs/Bespoke-Nimble-9B"}))
+    nimble_config.write_text(json.dumps({"model_id": "bespokelabs/Bespoke-Nimble-9B-v2", "revision": "old"}))
 
     profile = {
         "model": "models/nimble-9b",
         "runtime_key": "nimble-mlx",
         "model_config": "nimble-model.json",
-        "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+        "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+        "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
         "installer": "nimble",
     }
     catalog = {"models": [{"id": "nimble-9b", "engine": "nimble", "backends": {"mlx": profile}}]}
@@ -1568,6 +1856,51 @@ def test_nimble_v1_preparation_is_not_reported_as_v2_installed(
         config_path=config_path,
         config_data={"runtime_dir": ".model-runtimes"},
         catalog=catalog,
+    )[0]
+
+    assert row["installed"] is False
+    assert row["status"] == "weights-missing"
+
+
+def test_nimble_preparation_requires_pinned_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime = tmp_path / ".model-runtimes" / "nimble-mlx"
+    runtime_python = runtime / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    model_dir = tmp_path / "models" / "nimble-9b"
+    model_dir.mkdir(parents=True)
+    (model_dir / "READY.json").write_text("{}")
+    model_config = tmp_path / ".model-runtimes" / "nimble-model.json"
+    model_config.write_text(json.dumps({
+        "model_id": "bespokelabs/Bespoke-Nimble-9B",
+        "revision": "older-revision",
+    }))
+    profile = {
+        "model": "models/nimble-9b",
+        "runtime_key": "nimble-mlx",
+        "model_config": "nimble-model.json",
+        "repo_id": "bespokelabs/Bespoke-Nimble-9B",
+        "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
+        "installer": "nimble",
+        "min_memory_gib": 20,
+    }
+    catalog = {"models": [{"id": "nimble-9b", "engine": "nimble", "backends": {"mlx": profile}}]}
+    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(
+        installations, "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
+    )
+    installations.mark_installed(config_path, "nimble-9b", "mlx", verified=True)
+
+    row = installations.installed_profiles(
+        config_path=config_path, config_data={"runtime_dir": ".model-runtimes"}, catalog=catalog
     )[0]
 
     assert row["installed"] is False
@@ -2137,8 +2470,14 @@ def test_basal_15b_catalog_profiles_are_mlx_and_cuda_only() -> None:
     assert set(basal["backends"]) == {"mlx", "cuda"}
     mlx = get_profile(catalog, "basal-1.5b", "mlx")
     cuda = get_profile(catalog, "basal-1.5b", "cuda")
-    assert mlx["model"] == "Remek/basal-1.0-1.5B"
+    assert mlx["model"] == "pawelkiszczak/basal-1.0-1.5B-MLX-8bit"
     assert mlx["installer"] == "basal"
+    assert mlx["basal_mode"] == "mlx"
+    assert mlx["quantization"]["bits"] == 8
+    assert mlx["model_revision"] == "097465843096292389d039e22265de8b972d2b7b"
+    assert cuda["model_revision"] == "81a74acc6e7f7604008697b2daa83b3652d85b68"
+    assert mlx["min_memory_gib"] == 3
+    assert mlx["recommended_memory_gib"] == 4
     assert mlx["systems"] == ["Darwin"]
     assert cuda["model"] == "Remek/basal-1.0-1.5B"
     assert cuda["installer"] == "basal"
@@ -2167,12 +2506,12 @@ def test_basal_installer_uses_backend_specific_packages(
             "runtime_key": "basal-mlx",
             "python": "3.12",
             "basal_backend": "mlx",
-            "basal_package": "basal @ git+https://github.com/rkinas/basal.git",
+            "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main",
         },
         upgrade=False,
     )
     assert commands[0][-1] == "mlx>=0.32,<0.33"
-    assert commands[1][-1] == "basal @ git+https://github.com/rkinas/basal.git"
+    assert commands[1][-1] == "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main"
 
     commands.clear()
     cuda_env = tmp_path / ".model-runtimes" / "basal-cuda"
@@ -2209,7 +2548,10 @@ def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
     mlx = SimpleNamespace(engine="basal", backend="mlx")
     command = SystemOneRuntime._command(
         mlx,
-        {"model": "Remek/basal-1.0-1.5B"},
+        {
+            "model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
+            "basal_mode": "mlx",
+        },
         env_dir,
         python,
         9020,
@@ -2217,7 +2559,8 @@ def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
     )
     assert command == [
         str(executable),
-        "--model", "Remek/basal-1.0-1.5B",
+        "--model", "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
+        "--mode", "mlx",
         "--port", "9020",
     ]
 
@@ -2239,3 +2582,248 @@ def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
         "--mode", "fast-nocompile",
         "--port", "9021",
     ]
+
+
+def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    ids = {str(entry["id"]) for entry in catalog["models"]}
+
+    flash = get_profile(catalog, "clef-flash", "mlx")
+    assert flash["model"] == "mlx-community/clef-flash-8bit"
+    assert flash["model_revision"] == "dfa0993decb4f8507a0eae01afd1b2d33a4bb734"
+    assert flash["wire_model"] == "clef-flash"
+    assert flash["runtime_key"] == "clef-mlx"
+    assert flash["quantization"] == {
+        "kind": "mlx-affine",
+        "bits": 8,
+        "group_size": 64,
+        "applied": "checkpoint",
+        "source_model": "Cloudflare/clef-flash",
+        "joint_head_precision": "bf16",
+    }
+    assert flash["min_memory_gib"] == pytest.approx(11.6)
+    assert flash["recommended_memory_gib"] == 20
+    assert flash["max_input_tokens"] == 16384
+    assert flash["default_max_input_tokens"] == 4096
+
+    clef = get_profile(catalog, "clef", "mlx")
+    assert clef["model"] == "mlx-community/clef-8bit"
+    assert clef["model_revision"] == "ffcdb6132b3cc94e523860321dd9ed58bc1ee9a1"
+    assert clef["wire_model"] == "clef"
+    assert clef["quantization"]["bits"] == 8
+    assert clef["quantization"]["joint_head_precision"] == "bf16"
+    assert clef["min_memory_gib"] == pytest.approx(30.8)
+    assert clef["recommended_memory_gib"] == 44
+
+    basal = get_profile(catalog, "basal-4.5b", "mlx")
+    assert basal["model"] == "pawelkiszczak/basal-1.0-4.5B-MLX-8bit"
+    assert basal["model_revision"] == "7c8291bce44c9096da1ca52ba2136a9722975c3e"
+    assert basal["runtime_key"] == "basal-mlx-45"
+    assert basal["basal_mode"] == "mlx"
+    assert basal["quantization"]["bits"] == 8
+    assert basal["min_memory_gib"] == 6
+    assert basal["recommended_memory_gib"] == 8
+
+    basal_cuda = get_profile(catalog, "basal-4.5b", "cuda")
+    assert basal_cuda["model"] == "Remek/basal-1.0-4.5B-FP8"
+    assert basal_cuda["model_revision"] == "6a4718943f85d80612242be688eb57e3037ec88e"
+    assert basal_cuda["runtime_key"] == "basal-cuda-vllm"
+    assert basal_cuda["basal_mode"] == "vllm"
+    assert basal_cuda["min_cuda_compute_capability"] == 9.0
+    assert basal_cuda["quantization"]["kind"] == "fp8"
+    assert basal_cuda["quantization"]["output_head_precision"] == "bf16"
+
+    for model_id in ("clef-flash", "clef"):
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "cuda")
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "mps")
+
+    with pytest.raises(RuntimeError, match="does not support backend"):
+        get_profile(catalog, "basal-4.5b", "mps")
+
+    # Solar Decide is currently a hosted API product, not downloadable local
+    # weights. Keep it out of the local MLX/MPS/CUDA catalog until Deqio grows
+    # an explicit remote-provider backend and credential contract.
+    assert "solar-decide" not in ids
+
+
+def test_clef_systemone_command_uses_pinned_mlx_sidecar(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    env_dir = tmp_path / "runtime"
+    python = env_dir / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+
+    settings = SimpleNamespace(engine="clef", backend="mlx", max_tokens=4096)
+    profile = {
+        "model": "mlx-community/clef-flash-8bit",
+        "model_revision": "dfa0993decb4f8507a0eae01afd1b2d33a4bb734",
+        "wire_model": "clef-flash",
+        "max_input_tokens": 16384,
+    }
+    command = SystemOneRuntime._command(settings, profile, env_dir, python, 9030, {})
+
+    assert command[0] == str(python)
+    assert command[1].endswith("/deqio/clef_sidecar.py")
+    assert command[2:] == [
+        "--model", "mlx-community/clef-flash-8bit",
+        "--revision", "dfa0993decb4f8507a0eae01afd1b2d33a4bb734",
+        "--name", "clef-flash",
+        "--max-length", "4096",
+        "--port", "9030",
+    ]
+
+    with pytest.raises(RuntimeError, match="require MLX"):
+        SystemOneRuntime._command(
+            SimpleNamespace(engine="clef", backend="cuda", max_tokens=4096),
+            profile,
+            env_dir,
+            python,
+            9031,
+            {},
+        )
+
+
+def test_clef_sidecar_executes_cached_upstream_server_without_truncation(tmp_path: Path) -> None:
+    from deqio.clef_sidecar import _serve_command
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    script = snapshot / "clef_mlx.py"
+    script.write_text("# upstream launcher\n", encoding="utf-8")
+
+    command = _serve_command(
+        python="/runtime/python",
+        snapshot=snapshot,
+        name="clef-flash",
+        max_length=4096,
+        port=9032,
+    )
+    assert command == [
+        "/runtime/python",
+        str(script),
+        "serve",
+        "--model", str(snapshot),
+        "--name", "clef-flash",
+        "--max-length", "4096",
+        "--no-truncate",
+        "--host", "127.0.0.1",
+        "--port", "9032",
+        "--quiet",
+    ]
+
+
+def test_basal_vllm_installer_leaves_torch_resolution_to_vllm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    commands: list[list[str]] = []
+    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+
+    env = tmp_path / ".model-runtimes" / "basal-cuda-vllm"
+    python = env / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+
+    manager._install_basal(
+        tmp_path / "config.json",
+        {"backend": "cuda", "runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "basal-cuda-vllm",
+            "python": "3.12",
+            "basal_backend": "cuda",
+            "basal_mode": "vllm",
+            "basal_package": "basal[vllm] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+        },
+        upgrade=False,
+    )
+
+    assert len(commands) == 1
+    assert commands[0][-1].endswith("basal/archive/refs/tags/v1.0.1.tar.gz")
+    assert all("torch==" not in part for part in commands[0])
+
+
+def test_basal_45b_systemone_cuda_uses_vllm_mode(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="basal", backend="cuda"),
+        {
+            "model": "Remek/basal-1.0-4.5B-FP8",
+            "basal_mode": "vllm",
+        },
+        env_dir,
+        python,
+        9033,
+        {},
+    )
+    assert command == [
+        str(executable),
+        "--model", "Remek/basal-1.0-4.5B-FP8",
+        "--mode", "vllm",
+        "--port", "9033",
+    ]
+
+
+def test_cuda_compute_capability_guard_is_fail_closed_for_fp8_profiles() -> None:
+    from deqio.hardware import HostCapabilities, profile_compatibility
+
+    profile = {
+        "systems": ["Linux"],
+        "min_memory_gib": 12,
+        "recommended_memory_gib": 16,
+        "min_cuda_compute_capability": 9.0,
+    }
+    unknown = HostCapabilities("Linux", "x86_64", ("cuda",), 64.0, 24.0)
+    ada = HostCapabilities("Linux", "x86_64", ("cuda",), 64.0, 24.0, 8.9)
+    hopper = HostCapabilities("Linux", "x86_64", ("cuda",), 64.0, 24.0, 9.0)
+
+    unknown_result = profile_compatibility("cuda", profile, host=unknown)
+    assert unknown_result["compatible"] is False
+    assert "could not be detected" in unknown_result["reason"]
+
+    ada_result = profile_compatibility("cuda", profile, host=ada)
+    assert ada_result["compatible"] is False
+    assert "host reports 8.9" in ada_result["reason"]
+
+    hopper_result = profile_compatibility("cuda", profile, host=hopper)
+    assert hopper_result["compatible"] is True
+
+
+def test_clef_flash_8bit_is_short_context_compatible_on_16gib_apple_host() -> None:
+    import deqio.model_manager as manager
+    from deqio.catalog import get_profile, load_catalog
+    from deqio.hardware import HostCapabilities, profile_compatibility
+
+    profile = get_profile(load_catalog(Path("models.json")), "clef-flash", "mlx")
+    host = HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 16.0, None)
+    compatibility = profile_compatibility("mlx", profile, host=host)
+
+    assert compatibility["compatible"] is True
+    assert compatibility["available_memory_gib"] == 12.0
+    assert compatibility["warning"] is not None
+
+    available, blocked = manager._token_budget_options(
+        profile,
+        compatibility,
+        default=profile["default_max_input_tokens"],
+    )
+    assert available == [4096]
+    assert any(value == 8192 for value, _reason in blocked)
+    assert any(value == 32768 and "profile limit is 16384" in reason for value, reason in blocked)

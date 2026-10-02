@@ -7,6 +7,19 @@ from typing import Any
 
 DEFAULT_CATALOG_NAME = "models.json"
 SUPPORTED_BACKENDS = ("mlx", "mps", "cuda")
+SUPPORTED_ENGINES = (
+    "semif",
+    "kev",
+    "jevk5",
+    "open-jev",
+    "clm",
+    "basal",
+    "clef",
+    "decider",
+    "laya",
+    "von",
+    "nimble",
+)
 
 
 def load_catalog(path: str | Path) -> dict[str, Any]:
