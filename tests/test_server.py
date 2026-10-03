@@ -450,7 +450,7 @@ def test_installed_profiles_require_registry_or_local_evidence(
     }
     from deqio.hardware import HostCapabilities
 
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"Mapika/decider-0.8b"})
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {"Mapika/decider-0.8b": set()})
     monkeypatch.setattr(
         installations,
         "detect_host",
@@ -515,7 +515,7 @@ def test_installed_profiles_accept_managed_local_model_path(
             }
         ]
     }
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {})
     monkeypatch.setattr(
         installations,
         "detect_host",
@@ -568,7 +568,7 @@ def test_installed_profiles_use_declared_downloads_as_artifact_contract(
             }
         ]
     }
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"example/model-artifacts"})
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {"example/model-artifacts": set()})
     monkeypatch.setattr(
         installations,
         "detect_host",
@@ -587,6 +587,118 @@ def test_installed_profiles_use_declared_downloads_as_artifact_contract(
     assert row["installed"] is True
     assert row["verified"] is True
     assert row["weights_cached"] is True
+    assert row["status"] == "verified"
+
+
+def test_installed_profiles_require_exact_cached_hf_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime_python = tmp_path / ".model-runtimes" / "kev" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    catalog = {
+        "models": [
+            {
+                "id": "kev-0.8b",
+                "engine": "kev",
+                "label": "Kev 0.8B",
+                "backends": {
+                    "mlx": {
+                        "model": "jaredpalmer/kev-0.8b@v1.0",
+                        "model_revision": "v1.0",
+                        "runtime_key": "kev",
+                        "download": {
+                            "type": "snapshot",
+                            "repo_id": "jaredpalmer/kev-0.8b",
+                            "revision": "v1.0",
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    state = {"jaredpalmer/kev-0.8b": {"old-tag", "a" * 40}}
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: state)
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
+    )
+    installations.mark_installed(config_path, "kev-0.8b", "mlx", verified=True)
+
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+    )[0]
+    assert row["installed"] is False
+    assert row["verified"] is False
+    assert row["weights_cached"] is False
+    assert row["status"] == "weights-missing"
+
+    state["jaredpalmer/kev-0.8b"].add("v1.0")
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+    )[0]
+    assert row["installed"] is True
+    assert row["verified"] is True
+    assert row["weights_cached"] is True
+    assert row["status"] == "verified"
+
+
+def test_installed_profiles_require_model_revision_for_direct_hf_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    runtime_python = tmp_path / ".model-runtimes" / "demo" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("")
+    revision = "b" * 40
+    catalog = {
+        "models": [{
+            "id": "demo",
+            "engine": "demo",
+            "label": "Demo",
+            "backends": {"mlx": {
+                "model": "owner/demo",
+                "model_revision": revision,
+                "runtime_key": "demo",
+            }},
+        }]
+    }
+    state = {"owner/demo": {"a" * 40}}
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: state)
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx",), 32.0, None),
+    )
+    installations.mark_installed(config_path, "demo", "mlx", verified=True)
+
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+    )[0]
+    assert row["status"] == "weights-missing"
+
+    state["owner/demo"].add(revision)
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+    )[0]
     assert row["status"] == "verified"
 
 
@@ -1054,10 +1166,44 @@ def test_benchmark_basic_suite_has_fifty_cases_per_request_type() -> None:
     from deqio.benchmark import load_suite
 
     suite = load_suite(Path("benchmarks/basic.json"))
+    assert suite["label"] == "ENG Bench"
     counts = {kind: 0 for kind in ("noul", "choice", "shared")}
     for case in suite["cases"]:
         counts[case["type"]] += 1
     assert counts == {"noul": 50, "choice": 50, "shared": 50}
+
+
+def test_benchmark_polish_suite_is_dedicated_and_balanced() -> None:
+    from deqio.benchmark import load_suite
+
+    suite = load_suite(Path("benchmarks/pl.json"))
+    assert suite["label"] == "PL Bench"
+    assert "Polski benchmark" in suite["description"]
+    counts = {kind: 0 for kind in ("noul", "choice", "shared")}
+    for case in suite["cases"]:
+        counts[case["type"]] += 1
+    assert counts == {"noul": 20, "choice": 20, "shared": 20}
+    encoded = json.dumps(suite, ensure_ascii=False)
+    assert "Czy" in encoded
+    assert "ż" in encoded or "ł" in encoded
+
+
+def test_benchmark_discovers_every_valid_workspace_suite(tmp_path: Path) -> None:
+    from deqio.benchmark import discover_suites
+
+    benchmarks = tmp_path / "benchmarks"
+    benchmarks.mkdir()
+    minimal = {
+        "schema_version": 1,
+        "name": "custom-suite",
+        "label": "Custom Bench",
+        "cases": [{"id": "n1", "type": "noul", "state": "x", "question": "y", "expected": "yes"}],
+    }
+    (benchmarks / "custom.json").write_text(json.dumps(minimal), encoding="utf-8")
+    (benchmarks / "broken.json").write_text("{", encoding="utf-8")
+
+    suites = discover_suites(benchmarks)
+    assert [(suite["label"], suite["cases"]) for suite in suites] == [("Custom Bench", 1)]
 
 
 def test_benchmark_summary_tracks_case_and_decision_accuracy() -> None:
@@ -1211,6 +1357,9 @@ def _asgi_post_json(path: str, body: bytes | str, headers: dict[str, str]) -> tu
     assert "Accuracy" in DASHBOARD
     assert "Median latency" in DASHBOARD
     assert "PASS + FAIL" in DASHBOARD
+    assert 'id="detailRuntime" class="runtime-id"' in WATCH_DASHBOARD
+    assert "navigator.clipboard.writeText" in WATCH_DASHBOARD
+    assert "text-overflow:ellipsis" in WATCH_DASHBOARD
 
 
 def test_default_workspace_bootstraps_from_packaged_assets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1227,6 +1376,7 @@ def test_default_workspace_bootstraps_from_packaged_assets(tmp_path: Path, monke
     assert config_path.is_file()
     assert (tmp_path / "models.json").is_file()
     assert (tmp_path / "benchmarks" / "basic.json").is_file()
+    assert (tmp_path / "benchmarks" / "pl.json").is_file()
     assert data["model_catalog"] == "models.json"
     assert len(load_catalog(tmp_path / "models.json")["models"]) >= 1
     suite = load_suite(tmp_path / "benchmarks" / "basic.json")
@@ -1387,6 +1537,11 @@ def test_packaged_workspace_templates_are_current_and_self_consistent(tmp_path: 
     )
     repository_benchmark = json.loads(Path("benchmarks/basic.json").read_text(encoding="utf-8"))
     assert packaged_benchmark == repository_benchmark
+    packaged_pl_benchmark = json.loads(
+        package_data.joinpath("benchmarks").joinpath("pl.json").read_text(encoding="utf-8")
+    )
+    repository_pl_benchmark = json.loads(Path("benchmarks/pl.json").read_text(encoding="utf-8"))
+    assert packaged_pl_benchmark == repository_pl_benchmark
 
     # The repository-root config.json is local mutable state and is intentionally
     # ignored by Git. It changes whenever the active model changes, so it must not
@@ -1460,7 +1615,7 @@ def test_installed_registry_does_not_leak_shared_kev_runtime_across_backends(
             }
         ]
     }
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: {"jaredpalmer/kev-0.8b"})
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {"jaredpalmer/kev-0.8b": set()})
     monkeypatch.setattr(
         installations,
         "detect_host",
@@ -1844,7 +1999,7 @@ def test_stale_nimble_preparation_is_not_reported_as_latest_installed(
         "installer": "nimble",
     }
     catalog = {"models": [{"id": "nimble-9b", "engine": "nimble", "backends": {"mlx": profile}}]}
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {})
     monkeypatch.setattr(
         installations,
         "detect_host",
@@ -1892,7 +2047,7 @@ def test_nimble_preparation_requires_pinned_revision(
         "min_memory_gib": 20,
     }
     catalog = {"models": [{"id": "nimble-9b", "engine": "nimble", "backends": {"mlx": profile}}]}
-    monkeypatch.setattr(installations, "_cached_hf_repos", lambda: set())
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {})
     monkeypatch.setattr(
         installations, "detect_host",
         lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps"), 32.0, None),
@@ -2001,6 +2156,31 @@ def test_benchmark_interactive_selection_accepts_q(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("builtins.input", lambda prompt="": "q")
     selected = benchmark._select_profiles(rows, argparse.Namespace(all=False, model=None))
     assert selected is None
+
+
+def test_benchmark_interactive_suite_selection_lists_workspace_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import argparse
+    import deqio.benchmark as benchmark
+
+    benchmarks = tmp_path / "benchmarks"
+    benchmarks.mkdir()
+    for filename, label in (("basic.json", "ENG Bench"), ("pl.json", "PL Bench")):
+        payload = {
+            "schema_version": 1,
+            "name": filename.removesuffix(".json"),
+            "label": label,
+            "cases": [{"id": filename, "type": "noul", "state": "x", "question": "y", "expected": "yes"}],
+        }
+        (benchmarks / filename).write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "2")
+    selected = benchmark._select_suite(tmp_path / "config.json", argparse.Namespace(suite=None))
+    assert selected == (benchmarks / "pl.json").resolve()
+    output = capsys.readouterr().out
+    assert "ENG Bench" in output
+    assert "PL Bench" in output
 
 
 def test_external_choice_score_provenance_marks_synthetic_one_hot() -> None:
@@ -2643,11 +2823,6 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
 
     with pytest.raises(RuntimeError, match="does not support backend"):
         get_profile(catalog, "basal-4.5b", "mps")
-
-    # Solar Decide is currently a hosted API product, not downloadable local
-    # weights. Keep it out of the local MLX/MPS/CUDA catalog until Deqio grows
-    # an explicit remote-provider backend and credential contract.
-    assert "solar-decide" not in ids
 
 
 def test_clef_systemone_command_uses_pinned_mlx_sidecar(tmp_path: Path) -> None:

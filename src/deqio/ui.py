@@ -1019,8 +1019,10 @@ dialog::backdrop { background:rgba(0,0,0,.45); }
 .dialog-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid color-mix(in srgb, CanvasText 12%, transparent); position:sticky; top:0; background:Canvas; }
 .dialog-body { padding:18px; overflow:auto; }
 .detail-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
-.detail-grid div { border:1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius:9px; padding:10px; }
+.detail-grid div { min-width:0; border:1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius:9px; padding:10px; }
 .detail-grid small { display:block; opacity:.6; margin-bottom:4px; }
+.runtime-id { display:block; width:100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:0; background:transparent; color:inherit; padding:0; text-align:left; font:inherit; font-weight:700; cursor:copy; }
+.runtime-id:focus-visible { outline:2px solid CanvasText; outline-offset:2px; border-radius:3px; }
 .json-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, Canvas 94%, CanvasText 6%); overflow:auto; max-height:52vh; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
 .session-note { font-size:12px; opacity:.65; margin-top:8px; }
@@ -1103,7 +1105,7 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
     <div class="detail-grid">
       <div><small>Source</small><strong id="detailSource">-</strong></div>
       <div><small>Model</small><strong id="detailModel">-</strong></div>
-      <div><small>Runtime instance</small><strong id="detailRuntime">-</strong></div>
+      <div><small>Runtime instance</small><button id="detailRuntime" class="runtime-id" type="button" title="Click to copy runtime instance ID">-</button></div>
       <div><small>Latency</small><strong id="detailLatency">-</strong></div>
       <div><small>Input tokens</small><strong id="detailTokens">-</strong></div>
     </div>
@@ -1211,7 +1213,12 @@ async function openDetail(eventId) {
   byId('detailSubtitle').textContent = `${new Date(item.timestamp).toLocaleString()} · ${item.request_id || '-'}`;
   byId('detailSource').textContent = item.source || 'api';
   byId('detailModel').textContent = `${item.engine} · ${item.model_id} · ${item.backend}`;
-  byId('detailRuntime').textContent = item.runtime_instance_id || '-';
+  const runtimeInstance = item.runtime_instance_id || '-';
+  byId('detailRuntime').textContent = runtimeInstance;
+  byId('detailRuntime').dataset.copyValue = item.runtime_instance_id || '';
+  byId('detailRuntime').title = item.runtime_instance_id
+    ? `${item.runtime_instance_id}\nClick to copy`
+    : 'Runtime instance ID unavailable';
   byId('detailLatency').textContent = fmtMs(item.latency_ms);
   byId('detailTokens').textContent = item.input_tokens ?? '-';
   byId('detailRequest').textContent = JSON.stringify(item.request, null, 2);
@@ -1238,6 +1245,16 @@ byId('watchAutoClear').addEventListener('change', async () => {
 });
 byId('clearSession').addEventListener('click', clearSession);
 byId('closeDetail').addEventListener('click', () => byId('detailDialog').close());
+byId('detailRuntime').addEventListener('click', async () => {
+  const value = byId('detailRuntime').dataset.copyValue || '';
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    byId('detailRuntime').title = `${value}\nCopied`;
+  } catch (error) {
+    window.prompt('Copy runtime instance ID:', value);
+  }
+});
 setInterval(() => { if (byId('autoRefresh').checked) refresh(); }, 2000);
 refresh();
 </script>

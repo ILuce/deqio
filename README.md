@@ -20,52 +20,101 @@ deqio --version
 deqio version
 ```
 
-## Benchmark snapshot
+## Benchmark snapshots
 
 > **Apple Silicon macOS · 16.0 GiB unified memory**<br>
-> `deqio-basic-150` · **150 requests** · **250 scored decisions** · 50 Noul / 50 Choice / 50 Shared<br>
-> Results captured on **2026-09-26**. Higher accuracy is better; lower latency is better.
+> Results captured on **2026-10-03** after the model-source/quantization refresh. The same 10 installed profiles were tested in both suites.<br>
+> These are machine-specific results from one local run, not universal model rankings. ENG and PL use different case sets and sizes, so cross-suite differences are not a pure language-effect measurement.
+
+### ENG Bench
+
+> `deqio-basic-150` · **150 requests** · **250 scored decisions** · 50 Noul / 50 Choice / 50 Shared
 
 **Highlights from this run**
 
-- **Highest overall accuracy:** Decider 4B / MPS — **95.3%** case accuracy, **97.2%** decision accuracy.
-- **Lowest median latency:** Laya Multilingual / MLX — **13.2 ms**.
+- **Highest overall accuracy:** Clef Flash 9B / MLX — **98.0%** case accuracy, **98.8%** decision accuracy.
 - **Perfect Noul + Choice accuracy:** Kev 4B / MLX — **100.0% / 100.0%**.
+- **Lowest median latency overall:** Laya English 421M / MLX — **33.5 ms**, with 54.7% case accuracy.
 
 | Model | Backend | Accuracy | Decision accuracy | Median | P95 |
 | --- | :---: | ---: | ---: | ---: | ---: |
-| **Decider 4B** | MPS | **95.3%** | 97.2% | 435.7 ms | 1,358.6 ms |
-| **Kev 4B** | MLX | **92.7%** | 95.2% | 317.6 ms | 507.9 ms |
-| **Decider 2B** | MPS | **90.7%** | 94.0% | 185.3 ms | 524.5 ms |
-| **SemIf / Qwen3.5 4B** | MLX | **90.7%** | 93.6% | 552.3 ms | 997.0 ms |
-| Decider 0.8B | MPS | 84.0% | 88.8% | 292.2 ms | 376.8 ms |
-| Kev 0.8B | MLX | 77.3% | 84.4% | 60.2 ms | 96.9 ms |
-| Von | MPS | 64.0% | 72.8% | 61.0 ms | 104.5 ms |
-| Laya Typed Decisions 421M | MLX | 62.0% | 72.4% | 34.2 ms | 74.6 ms |
-| Laya English 421M | MLX | 54.7% | 66.8% | 34.5 ms | 74.9 ms |
-| Laya Multilingual 322M | MLX | 44.7% | 56.4% | 13.2 ms | 27.1 ms |
+| Clef Flash 9B | MLX | 98.0% | 98.8% | 1,183.3 ms | 2,369.0 ms |
+| Decider 4B | MPS | 95.3% | 97.2% | 537.6 ms | 1,352.3 ms |
+| SemIf / Qwen3.5 4B | MLX | 93.3% | 95.6% | 644.6 ms | 1,234.0 ms |
+| Kev 4B | MLX | 92.7% | 95.2% | 315.5 ms | 538.9 ms |
+| Decider 2B | MPS | 90.7% | 94.0% | 310.7 ms | 582.7 ms |
+| Basal 4.5B | MLX | 90.0% | 94.0% | 1,578.9 ms | 4,581.9 ms |
+| Basal 1.5B | MLX | 85.3% | 90.0% | 407.8 ms | 1,216.4 ms |
+| Kev 0.8B | MLX | 76.7% | 84.0% | 57.8 ms | 94.0 ms |
+| Von | MPS | 64.0% | 73.2% | 63.2 ms | 130.7 ms |
+| Laya English 421M | MLX | 54.7% | 66.8% | 33.5 ms | 77.4 ms |
 
-*Sorted by overall case accuracy; ties are ordered by decision accuracy. A Shared case passes only when every expected decision in that request is correct, while decision accuracy scores each decision independently.*
+*Sorted by overall case accuracy, then decision accuracy, then median latency. A Shared case passes only when every expected decision in that request is correct, while decision accuracy scores each decision independently.*
 
 <details>
-<summary><strong>Per-type case accuracy</strong></summary>
+<summary><strong>ENG per-type case accuracy</strong></summary>
 
 | Model | Backend | Noul | Choice | Shared |
 | --- | :---: | ---: | ---: | ---: |
+| Clef Flash 9B | MLX | 100.0% | 98.0% | 96.0% |
 | Decider 4B | MPS | 100.0% | 98.0% | 88.0% |
+| SemIf / Qwen3.5 4B | MLX | 98.0% | 96.0% | 86.0% |
 | Kev 4B | MLX | 100.0% | 100.0% | 78.0% |
 | Decider 2B | MPS | 94.0% | 94.0% | 84.0% |
-| SemIf / Qwen3.5 4B | MLX | 96.0% | 96.0% | 80.0% |
-| Decider 0.8B | MPS | 88.0% | 94.0% | 70.0% |
-| Kev 0.8B | MLX | 86.0% | 86.0% | 60.0% |
+| Basal 4.5B | MLX | 92.0% | 96.0% | 82.0% |
+| Basal 1.5B | MLX | 84.0% | 90.0% | 82.0% |
+| Kev 0.8B | MLX | 84.0% | 86.0% | 60.0% |
 | Von | MPS | 86.0% | 58.0% | 48.0% |
-| Laya Typed Decisions 421M | MLX | 74.0% | 78.0% | 34.0% |
 | Laya English 421M | MLX | 68.0% | 66.0% | 30.0% |
-| Laya Multilingual 322M | MLX | 62.0% | 48.0% | 24.0% |
 
 </details>
 
-> These are machine-specific results from one local run, not universal model rankings. Results can change with hardware, runtime versions, model revisions, and benchmark changes. The snapshot predates the 2026-10-02 catalog/quantization audit; rerun the benchmark before comparing the refreshed SemIf MLX, Basal MLX, Kev 1.0, or Nimble profiles against these historical numbers.
+[Full ENG benchmark summary](benchmarks/summary_eng.md)
+
+### PL Bench
+
+> `deqio-pl-60` · **60 requests** · **93 scored decisions** · 20 Noul / 20 Choice / 20 Shared · written natively in Polish
+
+**Highlights from this run**
+
+- **Highest overall accuracy:** Kev 4B / MLX, Decider 4B / MPS, Clef Flash 9B / MLX — each at **96.7%** case accuracy and **97.8%** decision accuracy.
+- **Basal 4.5B / MLX:** **93.3%** case accuracy and **95.7%** decision accuracy, versus 85.0% / 89.2% for Basal 1.5B.
+- **Lowest median latency overall:** Laya English 421M / MLX — **37.8 ms**, with 38.3% case accuracy.
+
+| Model | Backend | Accuracy | Decision accuracy | Median | P95 |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Kev 4B | MLX | 96.7% | 97.8% | 312.5 ms | 494.9 ms |
+| Decider 4B | MPS | 96.7% | 97.8% | 438.8 ms | 1,328.5 ms |
+| Clef Flash 9B | MLX | 96.7% | 97.8% | 1,177.4 ms | 1,897.9 ms |
+| SemIf / Qwen3.5 4B | MLX | 95.0% | 96.8% | 580.3 ms | 1,019.6 ms |
+| Basal 4.5B | MLX | 93.3% | 95.7% | 891.4 ms | 2,318.5 ms |
+| Decider 2B | MPS | 91.7% | 93.5% | 363.0 ms | 581.3 ms |
+| Basal 1.5B | MLX | 85.0% | 89.2% | 290.6 ms | 754.3 ms |
+| Kev 0.8B | MLX | 66.7% | 78.5% | 58.9 ms | 91.5 ms |
+| Von | MPS | 51.7% | 62.4% | 76.3 ms | 142.3 ms |
+| Laya English 421M | MLX | 38.3% | 53.8% | 37.8 ms | 103.5 ms |
+
+*Sorted by overall case accuracy, then decision accuracy, then median latency. PL Bench is a separate, smaller suite with Polish-native scenarios; do not read ENG-vs-PL deltas as language-only effects.*
+
+<details>
+<summary><strong>PL per-type case accuracy</strong></summary>
+
+| Model | Backend | Noul | Choice | Shared |
+| --- | :---: | ---: | ---: | ---: |
+| Kev 4B | MLX | 100.0% | 100.0% | 90.0% |
+| Decider 4B | MPS | 100.0% | 95.0% | 95.0% |
+| Clef Flash 9B | MLX | 100.0% | 95.0% | 95.0% |
+| SemIf / Qwen3.5 4B | MLX | 100.0% | 95.0% | 90.0% |
+| Basal 4.5B | MLX | 95.0% | 95.0% | 90.0% |
+| Decider 2B | MPS | 95.0% | 95.0% | 85.0% |
+| Basal 1.5B | MLX | 80.0% | 85.0% | 90.0% |
+| Kev 0.8B | MLX | 80.0% | 70.0% | 50.0% |
+| Von | MPS | 50.0% | 70.0% | 35.0% |
+| Laya English 421M | MLX | 45.0% | 55.0% | 15.0% |
+
+</details>
+
+[Full PL benchmark summary](benchmarks/summary_pl.md)
 
 ### Supported models
 
@@ -106,7 +155,6 @@ Clef Flash and Clef use the `mlx-community` 8-bit conversions that retain Cloudf
 - **Basal 1.5B MLX** uses the pinned `pawelkiszczak/basal-1.0-1.5B-MLX-8bit` community checkpoint with the Apple Silicon fork documented by Basal upstream.
 - **Basal 4.5B** adds the pinned `pawelkiszczak/basal-1.0-4.5B-MLX-8bit` checkpoint on Apple Silicon and the official pinned `Remek/basal-1.0-4.5B-FP8` checkpoint on CUDA. The MLX conversion preserves the published decision set in upstream validation. CUDA runs through `basal[vllm]` in its own environment and is fail-closed below CUDA compute capability 9.0 or when capability detection is unavailable.
 - **Clef Flash / Clef** use pinned `mlx-community` 8-bit checkpoints with the joint schema head kept in BF16 and the upstream-bundled MLX System One server. The audited community CUDA FP8 conversions are not catalogued yet because Deqio does not have equivalent published probability-parity/runtime validation for that path; MPS is not aliased to MLX.
-- **Solar Decide** was audited but is not a local catalog profile: Upstage currently exposes it as a hosted `/v1/systemone` API rather than downloadable local weights. Adding it correctly requires an explicit remote-provider/authentication backend, not an MLX/MPS/CUDA alias.
 - **Bespoke Nimble 9B** tracks the newer upstream checkpoint published after the older `-v2` repository; Deqio pins the audited adapter revision and requires the prepared local model to match it.
 - **GGUF** variants exist upstream for models including JevK5, Decider, and Basal (including validated Basal 4.5B Q8), but they are not exposed as MLX/MPS/CUDA profiles. They require an explicit llama.cpp/llama-server style backend, which Deqio does not currently claim.
 - The remaining catalog families (Open-Jev, CLM, Decider, Laya, Von, JevK5) were checked against their current upstream sources. No additional 8-bit/6-bit path was adopted where the quantized route would bypass or change the engine-specific decision head/API contract.
@@ -163,7 +211,7 @@ deqio models install MODEL_ID --backend BACKEND --max-input-tokens 8192
 
 This value is the Deqio-configured input budget for that installed profile. A backend/model may have a stricter effective limit; Deqio never treats the configured number alone as proof that an input reached the model intact.
 
-On first setup Deqio creates editable `config.json`, `models.json`, and `benchmarks/basic.json` files in this workspace. Model runtimes and weights are kept outside the PyPI package.
+On first setup Deqio creates editable `config.json`, `models.json`, `benchmarks/basic.json` (**ENG Bench**), and `benchmarks/pl.json` (**PL Bench**) files in this workspace. Model runtimes and weights are kept outside the PyPI package.
 
 5. Start Deqio:
 
@@ -382,7 +430,7 @@ Click **Watch requests** in the main UI or open:
 http://127.0.0.1:8787/ui/watch
 ```
 
-Watch is a server-focused view of decision traffic. It records API calls to `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, and benchmark cases executed directly by `deqio benchmark`. Each row keeps its own source, model, backend, and runtime identity, so a benchmark that switches across several installed models remains inspectable in one server session. Use the filters to narrow the table to a source, endpoint, status, or model. Click a row to inspect the complete parsed request and Deqio response, including provenance/attestation fields when present.
+Watch is a server-focused view of decision traffic. It records API calls to `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, and benchmark cases executed directly by `deqio benchmark`. Each row keeps its own source, model, backend, and runtime identity, so a benchmark that switches across several installed models remains inspectable in one server session. Use the filters to narrow the table to a source, endpoint, status, or model. Click a row to inspect the complete parsed request and Deqio response, including provenance/attestation fields when present. Long runtime-instance IDs are truncated in the detail grid so they cannot overlap latency; hover to see the full ID and click it to copy.
 
 Full Watch payloads are **temporary disk-backed data**, not an unbounded in-memory history. They are written under `.deqio/watch/` as JSONL with at most **10,000 events per file**; the next event automatically starts a new rotated history file. The lightweight session summary keeps only bounded recent latency samples in RAM. Watch files use local private permissions where supported and are deleted when the server starts, when **Clear session** is used, or when the configured automatic cleanup interval expires. A model switch does not clear the current server session; events remain self-identifying and can be filtered by model.
 
@@ -638,9 +686,14 @@ The decision API URL does not change when the active model changes.
 
 ## Benchmarking installed models
 
-Deqio includes an editable starter suite in `benchmarks/basic.json`: **50 Noul**, **50 Choice**, and **50 Shared** requests. Stop `deqio serve` before benchmarking so the benchmark can load each model with the machine's memory available.
+Deqio includes two editable benchmark suites by default:
 
-Run it interactively and choose all installed models or selected profiles:
+- `benchmarks/basic.json` — **ENG Bench**, with **50 Noul**, **50 Choice**, and **50 Shared** requests;
+- `benchmarks/pl.json` — **PL Bench**, with **20 Noul**, **20 Choice**, and **20 Shared** requests written natively in Polish.
+
+`deqio benchmark` discovers every valid `*.json` suite in the workspace `benchmarks/` directory. Drop another suite there using the same schema and it appears automatically in the benchmark selector. Stop `deqio serve` before benchmarking so the benchmark can load each model with the machine's memory available.
+
+Run interactively. Deqio first asks which benchmark suite to use, then asks which installed models/profiles to run:
 
 ```bash
 deqio benchmark
@@ -652,6 +705,12 @@ Run every installed model compatible with the current machine:
 deqio benchmark --all
 ```
 
+`--all` still uses the interactive benchmark-suite selector. For automation or an explicit suite, bypass the selector with `--suite`:
+
+```bash
+deqio benchmark --suite benchmarks/pl.json --all
+```
+
 Or select profiles explicitly:
 
 ```bash
@@ -660,7 +719,9 @@ deqio benchmark \
   --model laya-typed-decisions:mlx
 ```
 
-The console shows live PASS/FAIL and latency for every request. Full `results.jsonl` and `summary.json` files are written under `.deqio/benchmarks/<timestamp>/`. Add or edit cases in `benchmarks/basic.json` as the benchmark grows.
+The console shows live PASS/FAIL and latency for every request. Full `results.jsonl` and `summary.json` files are written under `.deqio/benchmarks/<timestamp>/`. Add new benchmark JSON files under `benchmarks/` or edit the supplied ENG/PL suites as they grow.
+
+The latest checked-in reference reports from the 2026-10-03 Apple Silicon run are [ENG Bench](benchmarks/summary_eng.md) and [PL Bench](benchmarks/summary_pl.md).
 
 > **Nimble note:** `Bespoke Nimble 9B` follows the upstream MLX/CUDA workflow. Deqio pins the audited adapter revision; its first installation downloads that adapter and the pinned Qwen3.5-9B base, then prepares merged local weights, so it needs substantially more disk/RAM than the smaller models.
 

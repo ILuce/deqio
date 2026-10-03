@@ -207,7 +207,7 @@ Successful install/update should also record model artifact provenance in the lo
 
 Each installed profile may also record `max_input_tokens`. `models setup` must present a bounded interactive token-budget list after model selection. Prefer the standard presets `4096`, `8192`, `12288`, `16384`, and `32768`, while honoring runtime-specific hard limits and conservative host-memory guardrails; values that fail those guards should be shown as unavailable rather than selectable. Direct install/update may accept `--max-input-tokens`, and selecting/activating an installed profile must restore its recorded token budget. The memory calculation is only a provisioning guardrail and may not be presented as proof of a backend's effective context capacity or completeness.
 
-`models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete.
+`models setup` / `models install` are the network-enabled provisioning phase. They must install the runtime, resolve/download all weights (including transitive base-model dependencies), start the engine, and pass a real typed-decision model-readiness probe before marking a profile verified. Normal serving/benchmarking should run Hugging Face in offline mode by default and fail clearly if the prepared cache is incomplete. Installed-state detection for Hub-backed artifacts must validate the exact requested revision/tag/commit when the catalog pins one; repository presence alone is insufficient because offline `snapshot_download(..., revision=...)` may still fail.
 
 Model installation must run the host compatibility preflight. Catalogued memory requirements are conservative guardrails; direct install may expose an explicit force override, but interactive setup should not offer profiles below their minimum requirement.
 
@@ -222,8 +222,6 @@ Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime s
 Basal `basal-1.5b` and `basal-4.5b` use the upstream System One API. Keep MLX, native CUDA, and vLLM runtimes isolated and backend-specific. The 1.5B CUDA profile follows the pinned upstream v1.0.1 native install path. Basal 4.5B CUDA uses the official FP8 checkpoint through `basal[vllm]` and must not be offered unless CUDA compute capability 9.0+ is detected; vLLM owns its PyTorch dependency resolution in that environment. MLX uses the upstream-documented Apple Silicon fork plus the pinned community 8-bit MLX checkpoints and must run in `mlx` mode. Do not claim MPS support for Basal or silently substitute it for MLX.
 
 Clef Flash and Clef are currently MLX-only Deqio profiles. Use the pinned `mlx-community` 8-bit snapshots, retain the BF16 joint schema head, and launch the `clef_mlx.py` System One server from the already-prefetched snapshot with truncation disabled. Do not replace the joint head with a normal text-generation path. Community CUDA FP8 conversions were audited but are intentionally not catalogued until their decision-probability/runtime parity is validated to the same standard. Do not alias MPS to MLX.
-
-Solar Decide is currently a hosted Upstage `/v1/systemone` service, not downloadable local weights. It must not appear in the local model catalog until Deqio intentionally implements a remote-provider backend and credential/authentication contract. Never represent it as MLX, MPS, or CUDA just to make it selectable.
 
 ## Change workflow
 
@@ -313,7 +311,11 @@ Delete Watch event files when the server starts, on explicit Watch clear, and wh
 
 The server and benchmark CLI can be separate processes writing the same workspace store. Keep appends/rotation/session metadata cross-process safe and keep file permissions private where the host supports it.
 
-The main `/ui` must link to `/ui/watch`, and the watch page must link back to `/ui`. Keep both pages dependency-free.
+The main `/ui` must link to `/ui/watch`, and the watch page must link back to `/ui`. Keep both pages dependency-free. Runtime-instance IDs in Watch details must not expand the grid into neighboring latency fields: show a compact/ellipsized value, expose the full value on hover, and keep a direct copy action.
+
+## Benchmark suites
+
+Benchmark suites are editable schema-version-1 JSON files under the workspace `benchmarks/` directory. `deqio benchmark` without `--suite` must discover all valid `*.json` files there and present a suite selector before model selection. Packaged defaults currently include `basic.json` (`ENG Bench`) and `pl.json` (`PL Bench`), but the runtime must not hard-code those two filenames for discovery. `--suite PATH` remains the explicit/non-interactive override. Invalid JSON/suites should be skipped with a clear warning rather than making every other valid suite unusable.
 
 ## Logging
 

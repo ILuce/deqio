@@ -38,6 +38,7 @@ def main() -> int:
         "data/config.json",
         "data/models.json",
         "data/benchmarks/basic.json",
+        "data/benchmarks/pl.json",
     ]
     for relative in required:
         node = package_root
@@ -90,7 +91,7 @@ def main() -> int:
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
 
-        for relative in ("config.json", "models.json", "benchmarks/basic.json"):
+        for relative in ("config.json", "models.json", "benchmarks/basic.json", "benchmarks/pl.json"):
             if not (work / relative).is_file():
                 raise RuntimeError(f"workspace bootstrap did not create {relative}")
 
@@ -100,6 +101,13 @@ def main() -> int:
             counts[case["type"]] += 1
         if counts != {"noul": 50, "choice": 50, "shared": 50}:
             raise RuntimeError(f"unexpected packaged benchmark counts: {counts}")
+
+        pl_suite = json.loads((work / "benchmarks/pl.json").read_text(encoding="utf-8"))
+        pl_counts = {kind: 0 for kind in ("noul", "choice", "shared")}
+        for case in pl_suite["cases"]:
+            pl_counts[case["type"]] += 1
+        if pl_counts != {"noul": 20, "choice": 20, "shared": 20}:
+            raise RuntimeError(f"unexpected packaged Polish benchmark counts: {pl_counts}")
 
         subprocess.run(
             [

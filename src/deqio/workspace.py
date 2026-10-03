@@ -7,7 +7,6 @@ from pathlib import Path
 
 DEFAULT_CONFIG_NAME = "config.json"
 DEFAULT_CATALOG_NAME = "models.json"
-DEFAULT_BENCHMARK = Path("benchmarks/basic.json")
 
 
 def _resource(relative: str):
@@ -38,11 +37,22 @@ def ensure_workspace(root: Path | None = None) -> Path:
     targets = {
         "config.json": base / DEFAULT_CONFIG_NAME,
         "models.json": base / DEFAULT_CATALOG_NAME,
-        "benchmarks/basic.json": base / DEFAULT_BENCHMARK,
     }
     for resource_name, destination in targets.items():
         if not destination.exists():
             _copy_resource(resource_name, destination)
+
+    benchmark_dir = base / "benchmarks"
+    benchmark_dir.mkdir(parents=True, exist_ok=True)
+    packaged_benchmarks = _resource("benchmarks")
+    for resource in packaged_benchmarks.iterdir():
+        if not resource.is_file() or not resource.name.endswith(".json"):
+            continue
+        destination = benchmark_dir / resource.name
+        if destination.exists():
+            continue
+        with resource.open("rb") as source, destination.open("wb") as target:
+            shutil.copyfileobj(source, target)
 
     (base / "models").mkdir(parents=True, exist_ok=True)
     (base / "logs").mkdir(parents=True, exist_ok=True)

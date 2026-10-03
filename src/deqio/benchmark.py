@@ -17,7 +17,7 @@ from .installations import installed_profiles
 from .watch_store import WatchStore
 
 
-DEFAULT_SUITE = Path("benchmarks/basic.json")
+DEFAULT_BENCHMARK_DIR = Path("benchmarks")
 
 
 @dataclass
@@ -60,6 +60,52 @@ def load_suite(path: Path) -> dict[str, Any]:
         seen.add(case_id)
         counts[kind] += 1
     return data
+
+
+def discover_suites(directory: Path) -> list[dict[str, Any]]:
+    """Discover valid benchmark suites from one editable workspace directory."""
+    if not directory.is_dir():
+        return []
+    suites: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json"), key=lambda item: item.name.lower()):
+        try:
+            suite = load_suite(path)
+        except (RuntimeError, ValueError, OSError, json.JSONDecodeError) as error:
+            print(f"[bench] Skipping invalid suite {path.name}: {error}", file=sys.stderr)
+            continue
+        suites.append({
+            "path": path.resolve(),
+            "label": str(suite.get("label") or suite.get("name") or path.stem),
+            "name": str(suite.get("name") or path.stem),
+            "description": str(suite.get("description") or ""),
+            "cases": len(suite["cases"]),
+        })
+    return suites
+
+
+def _select_suite(config_path: Path, args: argparse.Namespace) -> Path | None:
+    if args.suite:
+        return Path(args.suite).expanduser().resolve()
+
+    directory = (config_path.parent / DEFAULT_BENCHMARK_DIR).resolve()
+    suites = discover_suites(directory)
+    if not suites:
+        raise RuntimeError(f"No valid benchmark suites found in {directory}")
+
+    print("Available benchmark suites:")
+    for index, suite in enumerate(suites, start=1):
+        print(f"  {index}. {suite['label']} — {suite['cases']} cases")
+    print("  Q. quit")
+    value = input(f"Select benchmark [1-{len(suites)}, q]: ").strip().lower()
+    if value in {"q", "quit", "exit"}:
+        return None
+    try:
+        index = int(value) - 1
+    except ValueError as error:
+        raise RuntimeError("Invalid benchmark selection") from error
+    if index not in range(len(suites)):
+        raise RuntimeError("Invalid benchmark selection")
+    return Path(suites[index]["path"])
 
 
 def _percentile(values: list[float], p: float) -> float | None:
@@ -422,7 +468,10 @@ def run(args: argparse.Namespace) -> int:
     catalog = load_catalog(catalog_path)
     watch = WatchStore(config_path)
     watch.session_token()
-    suite_path = Path(args.suite).expanduser().resolve()
+    suite_path = _select_suite(config_path, args)
+    if suite_path is None:
+        print("Cancelled.")
+        return 0
     suite = load_suite(suite_path)
     profiles = _select_profiles(_installed(config_path, config_data, catalog), args)
     if profiles is None:
@@ -518,7 +567,10 @@ def run(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="deqio benchmark", description="Benchmark installed Deqio model profiles.")
     parser.add_argument("--config", help="Path to config.json (default: ./config.json)")
-    parser.add_argument("--suite", default=str(DEFAULT_SUITE), help="Benchmark suite JSON file")
+    parser.add_argument(
+        "--suite",
+        help="Benchmark suite JSON file; omit to choose from ./benchmarks/*.json",
+    )
     parser.add_argument("--output", help="Output directory (default: .deqio/benchmarks/<timestamp>)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--all", action="store_true", help="Benchmark every installed host-compatible profile")

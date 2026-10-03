@@ -45,7 +45,7 @@ Usage:
 Commands:
   serve      Start the API and browser UI
   models     Install, inspect, select, and update decision models
-  benchmark  Run the editable local benchmark suite
+  benchmark  Run an editable local benchmark suite
   status     Show the currently selected model/runtime
   version    Show the installed Deqio version
 

@@ -117,11 +117,34 @@ def _runtime_root(config_path: Path, data: dict[str, Any]) -> Path:
     return path.resolve()
 
 
-def _cached_hf_repos() -> set[str]:
+def _cached_hf_state() -> dict[str, set[str]]:
+    """Return locally resolvable Hub revisions keyed by repo id.
+
+    The set contains both immutable commit hashes and cached refs/tags.  A repo
+    being present in the Hub cache is not enough for offline serving when a
+    profile requests a specific revision (for example ``v1.0``): that exact ref
+    must also be locally resolvable.
+    """
     try:
-        return {str(repo.repo_id) for repo in scan_cache_dir().repos}
+        state: dict[str, set[str]] = {}
+        for repo in scan_cache_dir().repos:
+            revisions: set[str] = set()
+            for revision in repo.revisions:
+                revisions.add(str(revision.commit_hash))
+                revisions.update(str(ref) for ref in revision.refs)
+            state[str(repo.repo_id)] = revisions
+        return state
     except Exception:
-        return set()
+        return {}
+
+
+def _hf_artifact_cached(repo_id: str, revision: Any, hf_state: dict[str, set[str]]) -> bool:
+    cached = hf_state.get(repo_id)
+    if cached is None:
+        return False
+    if revision is None or str(revision) in {"", "upstream-latest"}:
+        return True
+    return str(revision) in cached
 
 
 def _declared_downloads(profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -172,7 +195,11 @@ def _looks_like_local_model_path(value: Any) -> bool:
     return value.startswith(("./", "../", "~/", "/", "models/"))
 
 
-def _artifact_ready(config_path: Path, profile: dict[str, Any], hf_repos: set[str]) -> tuple[bool, bool]:
+def _artifact_ready(
+    config_path: Path,
+    profile: dict[str, Any],
+    hf_state: dict[str, set[str]],
+) -> tuple[bool, bool]:
     """Validate the artifacts that provision this exact profile.
 
     Explicit ``download``/``downloads`` declarations are the artifact contract.
@@ -189,14 +216,26 @@ def _artifact_ready(config_path: Path, profile: dict[str, Any], hf_repos: set[st
         if local_dir:
             checks.append(_local_dir_present(config_path, local_dir))
         elif _looks_like_hf_repo(download.get("repo_id")):
-            checks.append(str(download["repo_id"]) in hf_repos)
+            checks.append(
+                _hf_artifact_cached(
+                    str(download["repo_id"]),
+                    download.get("revision"),
+                    hf_state,
+                )
+            )
 
     model = profile.get("model")
     if downloads:
         if _looks_like_local_model_path(model):
             checks.append(_local_model_present(config_path, profile))
     elif _looks_like_hf_repo(model):
-        checks.append(str(model) in hf_repos)
+        checks.append(
+            _hf_artifact_cached(
+                str(model),
+                profile.get("model_revision"),
+                hf_state,
+            )
+        )
     elif _looks_like_local_model_path(model):
         checks.append(_local_model_present(config_path, profile))
 
@@ -248,7 +287,7 @@ def installed_profiles(
     """
     registry = load_registry(config_path)
     records = registry.get("profiles", {}) if isinstance(registry, dict) else {}
-    hf_repos = _cached_hf_repos()
+    hf_state = _cached_hf_state()
     runtime_root = _runtime_root(config_path, config_data)
     host = detect_host()
     rows: list[dict[str, Any]] = []
@@ -275,7 +314,7 @@ def installed_profiles(
             env_dir = runtime_root / str(runtime_key) if runtime_key else runtime_root / "__missing__"
             runtime_ready = bool(runtime_key) and _runtime_python(env_dir).is_file()
 
-            artifact_ready, has_declared_artifact = _artifact_ready(config_path, profile, hf_repos)
+            artifact_ready, has_declared_artifact = _artifact_ready(config_path, profile, hf_state)
             artifact_ready = artifact_ready and _nimble_profile_matches(runtime_root, profile)
             weights_cached = artifact_ready if has_declared_artifact else False
 

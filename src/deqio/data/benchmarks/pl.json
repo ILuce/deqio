@@ -1,0 +1,1511 @@
+{
+  "schema_version": 1,
+  "name": "deqio-pl-60",
+  "label": "PL Bench",
+  "description": "Polski benchmark decyzji: 20 Noul, 20 Choice i 20 Shared. Obejmuje walidację wymagań, routing, progi liczbowe i czasowe, uprawnienia, incydenty, kompletność dowodów, niepewność oraz odporność na rozpraszacze.",
+  "cases": [
+    {
+      "id": "pl-noul-01",
+      "type": "noul",
+      "state": "Wdrożenie zakończono. Testy jednostkowe, integracyjne, health check i migracja bazy przeszły. Nie udało się wysłać opcjonalnej telemetrii, która zgodnie z polityką nie blokuje wydania.",
+      "question": "Czy wszystkie wymagania blokujące wydanie są spełnione?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-02",
+      "type": "noul",
+      "state": "Zadanie utworzyło wszystkie pliki, ale walidacja końcowa przerwała się przed sprawdzeniem dwóch obowiązkowych kryteriów akceptacji. Nie ma późniejszego wyniku weryfikacji.",
+      "question": "Czy istnieją wystarczające dowody, że zadanie zakończyło się poprawnie?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-03",
+      "type": "noul",
+      "state": "Bank zaksięgował przelew i saldo faktury wynosi 0 zł. Starszy e-mail sprzed zaksięgowania nadal ma temat „oczekuje na płatność”.",
+      "question": "Czy faktura jest opłacona?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-04",
+      "type": "noul",
+      "state": "Polityka pozwala publikować produkcyjne sekrety wyłącznie administratorom. Użytkownik ma rolę edytora, ale nie administratora.",
+      "question": "Czy użytkownik może opublikować sekret produkcyjny?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-05",
+      "type": "noul",
+      "state": "Termin zgłoszenia upływa 15 października o 23:59. Zgłoszenie zapisano 14 października o 18:20.",
+      "question": "Czy zgłoszenie wpłynęło w terminie?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-06",
+      "type": "noul",
+      "state": "Instrukcja urządzenia określa maksymalną temperaturę pracy na 80°C. Czujnik pokazuje stabilne 82°C.",
+      "question": "Czy urządzenie pracuje w dozwolonym zakresie temperatury?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-07",
+      "type": "noul",
+      "state": "Polityka wymaga zweryfikowanej kopii zapasowej wykonanej w ciągu ostatnich 24 godzin. Ostatnia poprawnie zweryfikowana kopia ma 12 godzin.",
+      "question": "Czy wymóg świeżej kopii zapasowej jest spełniony?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-08",
+      "type": "noul",
+      "state": "Pobrany pakiet ma sumę SHA-256 inną niż suma opublikowana przez wydawcę.",
+      "question": "Czy integralność pakietu została potwierdzona?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-09",
+      "type": "noul",
+      "state": "Migracja jest obowiązkowa tylko wtedy, gdy flaga feature_x jest włączona. Flaga feature_x jest wyłączona.",
+      "question": "Czy brak wykonania tej migracji blokuje wdrożenie?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-10",
+      "type": "noul",
+      "state": "Umowa staje się ważna dopiero po podpisie obu stron. Dokument podpisała tylko jedna strona.",
+      "question": "Czy umowa jest już skutecznie zawarta według podanej zasady?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-11",
+      "type": "noul",
+      "state": "SLA wymaga dostępności co najmniej 99,9%. Raport miesięczny pokazuje 99,95%.",
+      "question": "Czy cel SLA został osiągnięty?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-12",
+      "type": "noul",
+      "state": "Usługa wymaga ukończenia 18 lat. Użytkownik ma 17 lat.",
+      "question": "Czy użytkownik spełnia kryterium wieku?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-13",
+      "type": "noul",
+      "state": "Regulamin pozwala odstąpić od zakupu w ciągu 14 dni. Klient składa odstąpienie 10. dnia.",
+      "question": "Czy odstąpienie mieści się w podanym terminie?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-14",
+      "type": "noul",
+      "state": "Wszystkie usługi wymagane przez produkcję mają status healthy. Niedostępne jest tylko środowisko deweloperskie, które nie uczestniczy w produkcyjnym przepływie.",
+      "question": "Czy produkcyjne zależności są dostępne?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-15",
+      "type": "noul",
+      "state": "Przed wydaniem wymagany jest brak nierozwiązanych podatności krytycznych. Jedna podatność krytyczna nadal ma status open.",
+      "question": "Czy wydanie spełnia wymóg bezpieczeństwa?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-16",
+      "type": "noul",
+      "state": "Magazyn musi zachować minimum 5 sztuk zapasu bezpieczeństwa. Po realizacji zamówienia pozostanie 6 sztuk.",
+      "question": "Czy realizacja zamówienia zachowuje minimalny zapas?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-17",
+      "type": "noul",
+      "state": "Badanie laboratoryjne zostało zlecone, ale wynik nie został jeszcze opublikowany.",
+      "question": "Czy na podstawie podanych danych można stwierdzić, że wynik badania jest prawidłowy?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-18",
+      "type": "noul",
+      "state": "Pierwsze żądanie zwróciło przejściowy błąd 429. Polityka pozwala na ponowienie, a drugie żądanie zakończyło się kodem 200.",
+      "question": "Czy operacja ostatecznie zakończyła się sukcesem?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-noul-19",
+      "type": "noul",
+      "state": "Dostęp do panelu wymaga włączonego uwierzytelniania dwuskładnikowego. Konto ma 2FA wyłączone.",
+      "question": "Czy konto spełnia wymaganie dostępu?",
+      "expected": "no"
+    },
+    {
+      "id": "pl-noul-20",
+      "type": "noul",
+      "state": "Limit budżetu projektu wynosi 10 000 zł, a zatwierdzone wydatki po planowanej zmianie wyniosą 9 800 zł.",
+      "question": "Czy plan mieści się w limicie budżetu?",
+      "expected": "yes"
+    },
+    {
+      "id": "pl-choice-01",
+      "type": "choice",
+      "state": "Incydent dotyczy 7% użytkowników i istnieje pewne obejście. Skala: low=brak wpływu, medium=ograniczona grupa z obejściem, high=duża grupa lub brak obejścia, critical=cały kluczowy przepływ niedostępny.",
+      "question": "Jaki poziom ma incydent?",
+      "options": [
+        {
+          "id": "low",
+          "description": "Brak wpływu."
+        },
+        {
+          "id": "medium",
+          "description": "Ograniczona grupa z obejściem."
+        },
+        {
+          "id": "high",
+          "description": "Duża grupa lub brak obejścia."
+        },
+        {
+          "id": "critical",
+          "description": "Cały kluczowy przepływ niedostępny."
+        }
+      ],
+      "expected": "medium"
+    },
+    {
+      "id": "pl-choice-02",
+      "type": "choice",
+      "state": "Klient pisze: „Na fakturze naliczono mi dwa razy tę samą opłatę”.",
+      "question": "Do jakiego zespołu skierować sprawę?",
+      "options": [
+        {
+          "id": "billing",
+          "description": "Płatności i faktury."
+        },
+        {
+          "id": "technical",
+          "description": "Problemy techniczne."
+        },
+        {
+          "id": "sales",
+          "description": "Nowa sprzedaż."
+        }
+      ],
+      "expected": "billing"
+    },
+    {
+      "id": "pl-choice-03",
+      "type": "choice",
+      "state": "Serwer odpowiada na health check, ale baza danych jest niedostępna, a aplikacja bez niej nie obsłuży żadnego żądania.",
+      "question": "Jaki status najlepiej opisuje usługę?",
+      "options": [
+        {
+          "id": "healthy",
+          "description": "Wszystkie krytyczne zależności działają."
+        },
+        {
+          "id": "degraded",
+          "description": "Część funkcji działa."
+        },
+        {
+          "id": "unavailable",
+          "description": "Kluczowy przepływ jest niedostępny."
+        }
+      ],
+      "expected": "unavailable"
+    },
+    {
+      "id": "pl-choice-04",
+      "type": "choice",
+      "state": "Priorytety: P0=całkowita awaria produkcji, P1=poważna degradacja bez obejścia, P2=ograniczony problem z obejściem. Błąd dotyczy 3% użytkowników i ma niezawodne obejście.",
+      "question": "Jaki priorytet nadać?",
+      "options": [
+        {
+          "id": "p0",
+          "description": "Całkowita awaria produkcji."
+        },
+        {
+          "id": "p1",
+          "description": "Poważna degradacja bez obejścia."
+        },
+        {
+          "id": "p2",
+          "description": "Ograniczony problem z obejściem."
+        }
+      ],
+      "expected": "p2"
+    },
+    {
+      "id": "pl-choice-05",
+      "type": "choice",
+      "state": "Reguła: kwoty poniżej 1000 zł zatwierdza lider, 1000–9999 zł dyrektor, od 10 000 zł zarząd. Wniosek opiewa na 7500 zł.",
+      "question": "Kto powinien zatwierdzić wydatek?",
+      "options": [
+        {
+          "id": "leader",
+          "description": "Lider."
+        },
+        {
+          "id": "director",
+          "description": "Dyrektor."
+        },
+        {
+          "id": "board",
+          "description": "Zarząd."
+        }
+      ],
+      "expected": "director"
+    },
+    {
+      "id": "pl-choice-06",
+      "type": "choice",
+      "state": "Zgłoszenie mówi: „Po aktualizacji aplikacja zamyka się natychmiast po uruchomieniu”.",
+      "question": "Jaka kategoria najlepiej pasuje?",
+      "options": [
+        {
+          "id": "crash",
+          "description": "Awaria aplikacji."
+        },
+        {
+          "id": "billing",
+          "description": "Płatność."
+        },
+        {
+          "id": "feature_request",
+          "description": "Prośba o nową funkcję."
+        }
+      ],
+      "expected": "crash"
+    },
+    {
+      "id": "pl-choice-07",
+      "type": "choice",
+      "state": "Kopia zapasowa zakończyła się sukcesem, ale test odtworzenia nie został wykonany, mimo że polityka wymaga obu kroków.",
+      "question": "Jaki status kontroli wybrać?",
+      "options": [
+        {
+          "id": "passed",
+          "description": "Wszystkie wymagania spełnione."
+        },
+        {
+          "id": "failed",
+          "description": "Co najmniej jedno wymaganie obowiązkowe niespełnione."
+        },
+        {
+          "id": "not_applicable",
+          "description": "Kontrola nie dotyczy systemu."
+        }
+      ],
+      "expected": "failed"
+    },
+    {
+      "id": "pl-choice-08",
+      "type": "choice",
+      "state": "W magazynie jest 12 sztuk. Zamówienie wymaga 8, a zapas bezpieczeństwa wynosi 5.",
+      "question": "Co zrobić z zamówieniem?",
+      "options": [
+        {
+          "id": "ship",
+          "description": "Wysłać bez naruszenia zapasu."
+        },
+        {
+          "id": "hold",
+          "description": "Wstrzymać, bo po wysyłce zapas byłby za niski."
+        },
+        {
+          "id": "cancel",
+          "description": "Anulować niezależnie od stanu."
+        }
+      ],
+      "expected": "hold"
+    },
+    {
+      "id": "pl-choice-09",
+      "type": "choice",
+      "state": "Wiadomość brzmi: „Proszę usunąć moje konto i wszystkie dane powiązane z profilem”.",
+      "question": "Jaka intencja jest najbliższa?",
+      "options": [
+        {
+          "id": "delete_account",
+          "description": "Usunięcie konta."
+        },
+        {
+          "id": "reset_password",
+          "description": "Reset hasła."
+        },
+        {
+          "id": "upgrade",
+          "description": "Zmiana planu."
+        }
+      ],
+      "expected": "delete_account"
+    },
+    {
+      "id": "pl-choice-10",
+      "type": "choice",
+      "state": "Dokument ma status „zaakceptowany”, wszystkie wymagane podpisy istnieją, ale data wejścia w życie przypada na jutro.",
+      "question": "Jaki jest aktualny stan?",
+      "options": [
+        {
+          "id": "draft",
+          "description": "Projekt."
+        },
+        {
+          "id": "signed_pending_effective",
+          "description": "Podpisany, ale jeszcze niewchodzący w życie."
+        },
+        {
+          "id": "effective",
+          "description": "Już obowiązuje."
+        }
+      ],
+      "expected": "signed_pending_effective"
+    },
+    {
+      "id": "pl-choice-11",
+      "type": "choice",
+      "state": "Czas odpowiedzi wynosi 280 ms. Progi: fast <200 ms, acceptable 200–500 ms, slow >500 ms.",
+      "question": "Jak sklasyfikować czas odpowiedzi?",
+      "options": [
+        {
+          "id": "fast",
+          "description": "Poniżej 200 ms."
+        },
+        {
+          "id": "acceptable",
+          "description": "Od 200 do 500 ms."
+        },
+        {
+          "id": "slow",
+          "description": "Powyżej 500 ms."
+        }
+      ],
+      "expected": "acceptable"
+    },
+    {
+      "id": "pl-choice-12",
+      "type": "choice",
+      "state": "Użytkownik podał prawidłowe hasło, ale kod jednorazowy wygasł.",
+      "question": "Jaki wynik uwierzytelnienia jest właściwy?",
+      "options": [
+        {
+          "id": "success",
+          "description": "Wszystkie czynniki poprawne."
+        },
+        {
+          "id": "retry_mfa",
+          "description": "Hasło poprawne, trzeba ponowić drugi czynnik."
+        },
+        {
+          "id": "locked",
+          "description": "Konto zablokowane."
+        }
+      ],
+      "expected": "retry_mfa"
+    },
+    {
+      "id": "pl-choice-13",
+      "type": "choice",
+      "state": "Zespół ma trzy zadania: A blokuje wydanie, B poprawia dokumentację, C jest eksperymentem.",
+      "question": "Które zadanie wykonać najpierw?",
+      "options": [
+        {
+          "id": "a",
+          "description": "Zadanie blokujące wydanie."
+        },
+        {
+          "id": "b",
+          "description": "Dokumentacja."
+        },
+        {
+          "id": "c",
+          "description": "Eksperyment."
+        }
+      ],
+      "expected": "a"
+    },
+    {
+      "id": "pl-choice-14",
+      "type": "choice",
+      "state": "Klient prosi o „fakturę z poprawionym numerem NIP”, bez zgłoszenia problemu technicznego.",
+      "question": "Która kategoria jest właściwa?",
+      "options": [
+        {
+          "id": "invoice_correction",
+          "description": "Korekta danych faktury."
+        },
+        {
+          "id": "technical",
+          "description": "Wsparcie techniczne."
+        },
+        {
+          "id": "security",
+          "description": "Incydent bezpieczeństwa."
+        }
+      ],
+      "expected": "invoice_correction"
+    },
+    {
+      "id": "pl-choice-15",
+      "type": "choice",
+      "state": "Próg alarmowy to CPU >= 90% utrzymujące się przez 5 minut. CPU ma 92%, ale dopiero od 2 minut.",
+      "question": "Jaki stan alarmu wybrać?",
+      "options": [
+        {
+          "id": "fire",
+          "description": "Warunek czasowy został spełniony."
+        },
+        {
+          "id": "pending",
+          "description": "Próg przekroczony, ale za krótko."
+        },
+        {
+          "id": "clear",
+          "description": "Próg nie jest przekroczony."
+        }
+      ],
+      "expected": "pending"
+    },
+    {
+      "id": "pl-choice-16",
+      "type": "choice",
+      "state": "Polityka retencji: logi operacyjne 30 dni, faktury 5 lat, tymczasowe pliki eksportu 24 godziny. Obiekt jest fakturą.",
+      "question": "Jaki okres retencji zastosować?",
+      "options": [
+        {
+          "id": "24h",
+          "description": "24 godziny."
+        },
+        {
+          "id": "30d",
+          "description": "30 dni."
+        },
+        {
+          "id": "5y",
+          "description": "5 lat."
+        }
+      ],
+      "expected": "5y"
+    },
+    {
+      "id": "pl-choice-17",
+      "type": "choice",
+      "state": "Zadanie ma estymatę 2 godziny i deadline za 3 dni. Drugie zadanie blokujące produkcję ma estymatę 30 minut i deadline za godzinę.",
+      "question": "Które zadanie ma wyższy priorytet operacyjny?",
+      "options": [
+        {
+          "id": "first",
+          "description": "Pierwsze zadanie."
+        },
+        {
+          "id": "second",
+          "description": "Drugie, pilne i blokujące produkcję."
+        }
+      ],
+      "expected": "second"
+    },
+    {
+      "id": "pl-choice-18",
+      "type": "choice",
+      "state": "System wykrył trzy kopie tego samego dokumentu o identycznej sumie kontrolnej.",
+      "question": "Jaka akcja jest właściwa?",
+      "options": [
+        {
+          "id": "deduplicate",
+          "description": "Zachować jedną kopię logiczną."
+        },
+        {
+          "id": "encrypt",
+          "description": "Szyfrować tylko z powodu duplikacji."
+        },
+        {
+          "id": "ignore_identity",
+          "description": "Traktować każdą kopię jako inny dokument."
+        }
+      ],
+      "expected": "deduplicate"
+    },
+    {
+      "id": "pl-choice-19",
+      "type": "choice",
+      "state": "Wymagane pole „kraj” jest puste, a nie ma reguły pozwalającej je wywnioskować z języka interfejsu.",
+      "question": "Jaki wynik walidacji zwrócić?",
+      "options": [
+        {
+          "id": "valid",
+          "description": "Zaakceptować."
+        },
+        {
+          "id": "missing_required",
+          "description": "Brakuje wymaganego pola."
+        },
+        {
+          "id": "infer_poland",
+          "description": "Założyć Polskę."
+        }
+      ],
+      "expected": "missing_required"
+    },
+    {
+      "id": "pl-choice-20",
+      "type": "choice",
+      "state": "Mapa stanów mówi wprost: kod X7 = beta. W opisie historycznym kilka razy pojawia się słowo alfa.",
+      "question": "Którą etykietę wybrać dla X7?",
+      "options": [
+        {
+          "id": "alpha",
+          "description": "Historyczny rozpraszacz."
+        },
+        {
+          "id": "beta",
+          "description": "Bezpośrednie mapowanie kodu."
+        },
+        {
+          "id": "gamma",
+          "description": "Brak mapowania."
+        }
+      ],
+      "expected": "beta"
+    },
+    {
+      "id": "pl-shared-01",
+      "type": "shared",
+      "state": "Wdrożenie ma trzy kontrole: testy przeszły, migracja przeszła, ale obowiązkowy skan bezpieczeństwa nadal trwa.",
+      "decisions": [
+        {
+          "id": "release",
+          "question": "Czy można już wydać wersję?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Wszystkie kontrole zakończone."
+            },
+            {
+              "id": "no",
+              "description": "Jedna obowiązkowa kontrola nie jest zakończona."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "tests",
+          "question": "Czy testy aplikacji przeszły?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Przeszły."
+            },
+            {
+              "id": "no",
+              "description": "Nie przeszły."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "scan",
+          "question": "Jaki jest stan skanu?",
+          "options": [
+            {
+              "id": "done",
+              "description": "Zakończony."
+            },
+            {
+              "id": "pending",
+              "description": "W toku."
+            }
+          ],
+          "expected": "pending"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-02",
+      "type": "shared",
+      "state": "Klient ma aktywną subskrypcję Pro, płatność zaksięgowano, ale dostęp do funkcji Pro nadal jest wyłączony.",
+      "decisions": [
+        {
+          "id": "payment",
+          "question": "Czy płatność jest potwierdzona?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Zaksięgowana."
+            },
+            {
+              "id": "no",
+              "description": "Nieopłacona."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "access",
+          "question": "Czy dostęp jest zgodny ze stanem subskrypcji?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Dostęp odpowiada planowi."
+            },
+            {
+              "id": "no",
+              "description": "Funkcja Pro powinna być włączona."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "route",
+          "question": "Gdzie skierować problem?",
+          "options": [
+            {
+              "id": "billing",
+              "description": "Płatność niezaksięgowana."
+            },
+            {
+              "id": "entitlements",
+              "description": "Uprawnienia po poprawnej płatności."
+            },
+            {
+              "id": "sales",
+              "description": "Nowa sprzedaż."
+            }
+          ],
+          "expected": "entitlements"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-03",
+      "type": "shared",
+      "state": "Serwis API działa, baza działa, ale kolejka zadań ma 40 minut opóźnienia. Krytyczne żądania synchroniczne nie korzystają z kolejki.",
+      "decisions": [
+        {
+          "id": "api",
+          "question": "Czy synchroniczne API jest dostępne?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Krytyczny przepływ działa."
+            },
+            {
+              "id": "no",
+              "description": "Nie działa."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "queue",
+          "question": "Czy kolejka działa prawidłowo?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Brak problemu."
+            },
+            {
+              "id": "no",
+              "description": "Ma znaczne opóźnienie."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "severity",
+          "question": "Czy jest to całkowita awaria?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Wszystko niedostępne."
+            },
+            {
+              "id": "no",
+              "description": "Tylko część asynchroniczna jest zdegradowana."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-04",
+      "type": "shared",
+      "state": "Polityka: edytor może zmieniać treść, administrator może zmieniać role i usuwać projekt. Użytkownik jest edytorem.",
+      "decisions": [
+        {
+          "id": "content",
+          "question": "Czy może edytować treść?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Dozwolone edytorowi."
+            },
+            {
+              "id": "no",
+              "description": "Niedozwolone."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "roles",
+          "question": "Czy może zmieniać role?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Dozwolone."
+            },
+            {
+              "id": "no",
+              "description": "Tylko administrator."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "delete",
+          "question": "Czy może usunąć projekt?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Dozwolone."
+            },
+            {
+              "id": "no",
+              "description": "Tylko administrator."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-05",
+      "type": "shared",
+      "state": "Budżet to 20 000 zł. Wydano 12 000 zł. Planowany zakup kosztuje 6 000 zł, a drugi opcjonalny zakup 3 000 zł.",
+      "decisions": [
+        {
+          "id": "first",
+          "question": "Czy pierwszy zakup mieści się w budżecie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Łącznie 18 000 zł."
+            },
+            {
+              "id": "no",
+              "description": "Przekracza budżet."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "both",
+          "question": "Czy oba zakupy razem mieszczą się w budżecie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Łącznie nie więcej niż 20 000 zł."
+            },
+            {
+              "id": "no",
+              "description": "Łącznie 21 000 zł."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-06",
+      "type": "shared",
+      "state": "Kopia zapasowa ma 8 godzin, test odtworzenia zakończył się sukcesem, a polityka wymaga kopii młodszej niż 24 godziny i udanego odtworzenia.",
+      "decisions": [
+        {
+          "id": "fresh",
+          "question": "Czy kopia jest wystarczająco świeża?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Mniej niż 24 godziny."
+            },
+            {
+              "id": "no",
+              "description": "Za stara."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "restore",
+          "question": "Czy odtworzenie jest zweryfikowane?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Test przeszedł."
+            },
+            {
+              "id": "no",
+              "description": "Brak testu."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "compliant",
+          "question": "Czy cała kontrola jest spełniona?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Oba warunki spełnione."
+            },
+            {
+              "id": "no",
+              "description": "Co najmniej jeden niespełniony."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-07",
+      "type": "shared",
+      "state": "Zamówienie wymaga 4 sztuk produktu A i 3 sztuk B. Magazyn ma A=10, B=2.",
+      "decisions": [
+        {
+          "id": "a",
+          "question": "Czy A jest dostępny w wystarczającej ilości?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "10 >= 4."
+            },
+            {
+              "id": "no",
+              "description": "Brak."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "b",
+          "question": "Czy B jest dostępny w wystarczającej ilości?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Wystarcza."
+            },
+            {
+              "id": "no",
+              "description": "2 < 3."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "ship",
+          "question": "Czy można wysłać całe zamówienie bez częściowej realizacji?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Wszystko dostępne."
+            },
+            {
+              "id": "no",
+              "description": "Brakuje B."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-08",
+      "type": "shared",
+      "state": "Incydent: logowanie działa, reset hasła działa, ale rejestracja nowych kont zwraca 500 wszystkim użytkownikom.",
+      "decisions": [
+        {
+          "id": "login",
+          "question": "Czy istniejący użytkownicy mogą się logować?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Logowanie działa."
+            },
+            {
+              "id": "no",
+              "description": "Nie działa."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "signup",
+          "question": "Czy rejestracja działa?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Działa."
+            },
+            {
+              "id": "no",
+              "description": "Zwraca 500."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "scope",
+          "question": "Czy cały system tożsamości jest niedostępny?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Żaden przepływ nie działa."
+            },
+            {
+              "id": "no",
+              "description": "Część przepływów działa."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-09",
+      "type": "shared",
+      "state": "Dokument ma poprawny format i podpis autora, ale brakuje wymaganego podpisu recenzenta.",
+      "decisions": [
+        {
+          "id": "format",
+          "question": "Czy format jest poprawny?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Poprawny."
+            },
+            {
+              "id": "no",
+              "description": "Błędny."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "author",
+          "question": "Czy podpis autora istnieje?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Istnieje."
+            },
+            {
+              "id": "no",
+              "description": "Brakuje."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "approve",
+          "question": "Czy dokument jest kompletnie zatwierdzony?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Wszystkie podpisy są."
+            },
+            {
+              "id": "no",
+              "description": "Brakuje recenzenta."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-10",
+      "type": "shared",
+      "state": "Reguła czasu: zadanie jest terminowe, jeśli zakończy się przed 18:00. Zadanie A zakończyło się 17:55, B 18:05.",
+      "decisions": [
+        {
+          "id": "a",
+          "question": "Czy A jest terminowe?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Przed 18:00."
+            },
+            {
+              "id": "no",
+              "description": "Po terminie."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "b",
+          "question": "Czy B jest terminowe?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Przed terminem."
+            },
+            {
+              "id": "no",
+              "description": "Po 18:00."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-11",
+      "type": "shared",
+      "state": "System ma limit 100 żądań/min. Klient wysłał 90 żądań, następne żądanie będzie 91., a paczka 15 kolejnych podniosłaby liczbę do 105.",
+      "decisions": [
+        {
+          "id": "single",
+          "question": "Czy pojedyncze następne żądanie mieści się w limicie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "91 <= 100."
+            },
+            {
+              "id": "no",
+              "description": "Przekracza."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "batch",
+          "question": "Czy cała paczka 15 żądań mieści się w limicie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Nie przekracza."
+            },
+            {
+              "id": "no",
+              "description": "105 > 100."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-12",
+      "type": "shared",
+      "state": "Feature flag A jest włączona tylko dla grupy beta. Użytkownik należy do beta. Feature flag B jest wyłączona globalnie.",
+      "decisions": [
+        {
+          "id": "a",
+          "question": "Czy użytkownik ma A?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Należy do beta."
+            },
+            {
+              "id": "no",
+              "description": "Nie ma dostępu."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "b",
+          "question": "Czy użytkownik ma B?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Ma."
+            },
+            {
+              "id": "no",
+              "description": "Flaga globalnie wyłączona."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-13",
+      "type": "shared",
+      "state": "Weryfikacja pliku: rozszerzenie .csv jest dozwolone, rozmiar 3 MB jest poniżej limitu 5 MB, ale skan antywirusowy wykrył malware.",
+      "decisions": [
+        {
+          "id": "type",
+          "question": "Czy typ pliku jest dozwolony?",
+          "options": [
+            {
+              "id": "yes",
+              "description": ".csv dozwolone."
+            },
+            {
+              "id": "no",
+              "description": "Niedozwolone."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "size",
+          "question": "Czy rozmiar mieści się w limicie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "3 MB < 5 MB."
+            },
+            {
+              "id": "no",
+              "description": "Za duży."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "accept",
+          "question": "Czy plik można zaakceptować?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Spełnia wszystkie warunki."
+            },
+            {
+              "id": "no",
+              "description": "Malware blokuje akceptację."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-14",
+      "type": "shared",
+      "state": "Klient kupił plan roczny. Okres rozliczeniowy trwa, a automatyczne odnowienie jest wyłączone.",
+      "decisions": [
+        {
+          "id": "active",
+          "question": "Czy plan jest obecnie aktywny?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Bieżący okres trwa."
+            },
+            {
+              "id": "no",
+              "description": "Nieaktywny."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "renew",
+          "question": "Czy plan odnowi się automatycznie?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Tak."
+            },
+            {
+              "id": "no",
+              "description": "Auto-renew wyłączone."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-15",
+      "type": "shared",
+      "state": "Reguła kwalifikacji: kandydat musi mieć co najmniej 2 lata doświadczenia i znać Python. Kandydat ma 3 lata doświadczenia, ale nie zna Pythona.",
+      "decisions": [
+        {
+          "id": "exp",
+          "question": "Czy spełnia wymóg doświadczenia?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "3 >= 2."
+            },
+            {
+              "id": "no",
+              "description": "Za mało."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "python",
+          "question": "Czy spełnia wymóg Pythona?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Zna."
+            },
+            {
+              "id": "no",
+              "description": "Nie zna."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "eligible",
+          "question": "Czy spełnia oba obowiązkowe warunki?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Oba."
+            },
+            {
+              "id": "no",
+              "description": "Jednego brakuje."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-16",
+      "type": "shared",
+      "state": "Sieć ma dwa łącza. Łącze główne jest niedostępne, zapasowe działa i routing przełączył ruch na zapasowe.",
+      "decisions": [
+        {
+          "id": "primary",
+          "question": "Czy łącze główne działa?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Działa."
+            },
+            {
+              "id": "no",
+              "description": "Niedostępne."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "backup",
+          "question": "Czy łącze zapasowe działa?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Działa."
+            },
+            {
+              "id": "no",
+              "description": "Niedostępne."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "connectivity",
+          "question": "Czy łączność jest całkowicie utracona?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Brak drogi."
+            },
+            {
+              "id": "no",
+              "description": "Ruch idzie łączem zapasowym."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-17",
+      "type": "shared",
+      "state": "Proces importu zawiera 100 rekordów. 98 przeszło, 2 odrzucono z powodu brakujących wymaganych pól. Tryb nie pozwala na częściowy sukces.",
+      "decisions": [
+        {
+          "id": "valid",
+          "question": "Czy większość rekordów jest poprawna?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "98/100 poprawnych."
+            },
+            {
+              "id": "no",
+              "description": "Większość błędna."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "complete",
+          "question": "Czy cały import może być oznaczony jako sukces?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Częściowy sukces dozwolony."
+            },
+            {
+              "id": "no",
+              "description": "Tryb wymaga 100% poprawnych."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-18",
+      "type": "shared",
+      "state": "Wniosek wymaga dowodu adresu i dokumentu tożsamości. Dowód adresu jest aktualny, dokument tożsamości wygasł miesiąc temu.",
+      "decisions": [
+        {
+          "id": "address",
+          "question": "Czy dowód adresu jest poprawny?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Aktualny."
+            },
+            {
+              "id": "no",
+              "description": "Nieaktualny."
+            }
+          ],
+          "expected": "yes"
+        },
+        {
+          "id": "identity",
+          "question": "Czy dokument tożsamości jest ważny?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Ważny."
+            },
+            {
+              "id": "no",
+              "description": "Wygasł."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "approve",
+          "question": "Czy wniosek spełnia oba wymogi?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Oba spełnione."
+            },
+            {
+              "id": "no",
+              "description": "Jeden niespełniony."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-19",
+      "type": "shared",
+      "state": "Monitorowanie pokazuje CPU 40%, pamięć 75%, dysk 96%. Progi alarmowe: CPU>90%, pamięć>90%, dysk>95%.",
+      "decisions": [
+        {
+          "id": "cpu",
+          "question": "Czy CPU przekracza próg?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Przekracza."
+            },
+            {
+              "id": "no",
+              "description": "40% <= 90%."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "memory",
+          "question": "Czy pamięć przekracza próg?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Przekracza."
+            },
+            {
+              "id": "no",
+              "description": "75% <= 90%."
+            }
+          ],
+          "expected": "no"
+        },
+        {
+          "id": "disk",
+          "question": "Czy dysk przekracza próg?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "96% > 95%."
+            },
+            {
+              "id": "no",
+              "description": "Nie przekracza."
+            }
+          ],
+          "expected": "yes"
+        }
+      ]
+    },
+    {
+      "id": "pl-shared-20",
+      "type": "shared",
+      "state": "Tabela mówi: kod A1 oznacza „pilne”, B2 oznacza „standard”, C3 oznacza „niski”. Zgłoszenie ma kod B2, mimo że opis używa słowa „pilne” jako cytatu z poprzedniej sprawy.",
+      "decisions": [
+        {
+          "id": "label",
+          "question": "Jaka etykieta wynika z kodu B2?",
+          "options": [
+            {
+              "id": "urgent",
+              "description": "Pilne."
+            },
+            {
+              "id": "standard",
+              "description": "Standard."
+            },
+            {
+              "id": "low",
+              "description": "Niskie."
+            }
+          ],
+          "expected": "standard"
+        },
+        {
+          "id": "distractor",
+          "question": "Czy cytowane słowo „pilne” powinno nadpisać mapowanie kodu?",
+          "options": [
+            {
+              "id": "yes",
+              "description": "Tak."
+            },
+            {
+              "id": "no",
+              "description": "Nie, kod jest źródłem reguły."
+            }
+          ],
+          "expected": "no"
+        }
+      ]
+    }
+  ]
+}
