@@ -1,87 +1,82 @@
-# PL Bench — benchmark summary
+# PL Bench — Deqio 0.5 current benchmark summary
 
 > **Suite:** `deqio-pl-60`<br>
-> **Run:** 2026-10-03<br>
+> **Date:** 2026-10-06<br>
 > **Host:** Apple Silicon macOS · 16.0 GiB unified memory<br>
-> **Workload:** 60 requests · 93 scored decisions · 20 Noul / 20 Choice / 20 Shared<br>
-> **Language:** Polish-native scenarios<br>
-> **Profiles:** 10<br>
-> **Execution errors:** 0 across 600 model-case records
+> **Workload per profile:** 60 requests · 93 scored decisions · 20 Noul / 20 Choice / 20 Shared<br>
+> **Runs:** small `20261006T083557Z` · large `20261006T091845Z`<br>
+> **Profiles:** 6 small + 5 large<br>
+> **Execution errors:** 0 across 660 model-case records
 
-PL Bench is a dedicated Polish suite rather than a mechanical translation of ENG Bench. It exercises Polish instructions and decision descriptions across release validation, permissions, finance, deadlines, routing, inventory, security, evidence freshness, arithmetic constraints, and multi-decision shared state.
+PL Bench is a dedicated Polish-native suite rather than a mechanical translation of ENG Bench. The ENG and PL suites differ in size and scenario composition, so cross-suite deltas should not be interpreted as a pure language-quality measurement.
 
-## Overall results
+## Small models
 
-| Model | Backend | Accuracy | Decision accuracy | Median | P95 |
+Run `20261006T083557Z` · `deqio-pl-60` · 60 cases. All 6 profiles completed with **0 runtime errors**.
+
+### Overall results
+
+| Model | Backend | Accuracy | Decision accuracy | Median | P95 | Throughput |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: |
+| Decider 2B | MPS | 91.7% | 93.5% | 334.3 ms | 512.2 ms | 4.96/s |
+| Basal 1.5 Mini — 1.5B | MLX 8-bit | 83.3% | 89.2% | 318.9 ms | 572.9 ms | 4.29/s |
+| Decider 0.8B | MPS | 75.0% | 83.9% | 316.6 ms | 403.2 ms | 4.87/s |
+| Kev 0.8B | MLX | 66.7% | 78.5% | 59.5 ms | 92.5 ms | 23.85/s |
+| Von | MPS | 51.7% | 62.4% | 75.7 ms | 138.9 ms | 18.83/s |
+| Laya Typed Decisions 421M | MLX | 31.7% | 44.1% | 36.5 ms | 99.2 ms | 30.99/s |
+
+### Per-type case accuracy
+
+| Model | Backend | Noul | Choice | Shared | Shared decision accuracy |
 | --- | :---: | ---: | ---: | ---: | ---: |
-| Kev 4B | MLX | 96.7% | 97.8% | 312.5 ms | 494.9 ms |
-| Decider 4B | MPS | 96.7% | 97.8% | 438.8 ms | 1,328.5 ms |
-| Clef Flash 9B | MLX | 96.7% | 97.8% | 1,177.4 ms | 1,897.9 ms |
-| SemIf / Qwen3.5 4B | MLX | 95.0% | 96.8% | 580.3 ms | 1,019.6 ms |
-| Basal 4.5B | MLX | 93.3% | 95.7% | 891.4 ms | 2,318.5 ms |
-| Decider 2B | MPS | 91.7% | 93.5% | 363.0 ms | 581.3 ms |
-| Basal 1.5B | MLX | 85.0% | 89.2% | 290.6 ms | 754.3 ms |
-| Kev 0.8B | MLX | 66.7% | 78.5% | 58.9 ms | 91.5 ms |
-| Von | MPS | 51.7% | 62.4% | 76.3 ms | 142.3 ms |
-| Laya English 421M | MLX | 38.3% | 53.8% | 37.8 ms | 103.5 ms |
+| Decider 2B | MPS | 95.0% | 95.0% | 85.0% | 92.5% |
+| Basal 1.5 Mini — 1.5B | MLX 8-bit | 90.0% | 85.0% | 75.0% | 90.6% |
+| Decider 0.8B | MPS | 75.0% | 75.0% | 75.0% | 90.6% |
+| Kev 0.8B | MLX | 80.0% | 70.0% | 50.0% | 81.1% |
+| Von | MPS | 50.0% | 70.0% | 35.0% | 64.2% |
+| Laya Typed Decisions 421M | MLX | 40.0% | 45.0% | 10.0% | 45.3% |
 
-## Per-type case accuracy
+### Highlights
 
-| Model | Backend | Noul | Choice | Shared |
-| --- | :---: | ---: | ---: | ---: |
-| Kev 4B | MLX | 100.0% | 100.0% | 90.0% |
-| Decider 4B | MPS | 100.0% | 95.0% | 95.0% |
-| Clef Flash 9B | MLX | 100.0% | 95.0% | 95.0% |
-| SemIf / Qwen3.5 4B | MLX | 100.0% | 95.0% | 90.0% |
-| Basal 4.5B | MLX | 95.0% | 95.0% | 90.0% |
-| Decider 2B | MPS | 95.0% | 95.0% | 85.0% |
-| Basal 1.5B | MLX | 80.0% | 85.0% | 90.0% |
-| Kev 0.8B | MLX | 80.0% | 70.0% | 50.0% |
-| Von | MPS | 50.0% | 70.0% | 35.0% |
-| Laya English 421M | MLX | 45.0% | 55.0% | 15.0% |
+- **Decider 2B** leads this small PL run at **91.7%** case accuracy and **93.5%** decision accuracy.
+- **Basal 1.5 Mini — 1.5B** reaches **83.3% / 89.2%** while also exposing broader native SystemOne capabilities that this Noul/Choice/Shared suite does not measure directly.
+- **Laya Typed Decisions 421M** is the lowest-latency profile in this group at **36.5 ms median** (30.99/s overall throughput).
 
-## Polish-suite highlights
+## Large models
 
-- **Kev 4B / MLX**, **Decider 4B / MPS**, and **Clef Flash 9B / MLX** tied at **96.7% case accuracy** and **97.8% decision accuracy**. Their median latencies were **312.5 ms**, **438.8 ms**, and **1,177.4 ms** respectively.
-- **SemIf / Qwen3.5 4B / MLX** reached **95.0% case accuracy** and **96.8% decision accuracy**.
-- **Basal 4.5B / MLX** reached **93.3% / 95.7%**, compared with **85.0% / 89.2%** for **Basal 1.5B / MLX** on the same PL suite.
-- **Kev 4B / MLX** was perfect on the 20 Noul and 20 Choice cases and missed only two Shared requests.
-- **Laya English 421M / MLX** remained the lowest-latency profile at **37.8 ms median**, but reached **38.3% case accuracy** on this Polish-native suite.
+Run `20261006T091845Z` · `deqio-pl-60` · 60 cases. All 5 profiles completed with **0 runtime errors**.
 
-## Most difficult PL cases in this run
+### Overall results
 
-| Case | Profiles that missed it | What it tests |
-| --- | ---: | --- |
-| `pl-shared-05` | 9/10 | Budget arithmetic across two related purchase decisions: 18,000 PLN fits, 21,000 PLN does not. |
-| `pl-choice-08` | 8/10 | Inventory arithmetic with a safety-stock constraint: 12 - 8 leaves 4, below the required reserve of 5. |
-| `pl-noul-07` | 5/10 | Fresh-backup policy: a verified backup from 12 hours ago satisfies a 24-hour freshness requirement. |
-| `pl-shared-13` | 4/10 | File validation where type and size pass but malware must still block final acceptance. |
-| `pl-noul-03` | 4/10 | Current authoritative payment state versus stale earlier evidence. |
+| Model | Backend | Accuracy | Decision accuracy | Median | P95 | Throughput |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: |
+| JevK5 4B | GGUF Q8_0 | 98.3% | 98.9% | 570.6 ms | 1,817.6 ms | 1.72/s |
+| Decider 4B | MPS | 96.7% | 97.8% | 438.9 ms | 1,330.6 ms | 2.27/s |
+| Kev 4B | MLX | 96.7% | 97.8% | 358.8 ms | 541.2 ms | 3.92/s |
+| Basal 1.5 Main — 4.5B | MLX 8-bit | 95.0% | 96.8% | 987.9 ms | 1,860.0 ms | 1.37/s |
+| SemIf / Qwen3.5 4B | MLX 8-bit | 95.0% | 96.8% | 599.4 ms | 1,113.4 ms | 2.19/s |
 
-`pl-shared-05` is the clearest common failure: 9 of 10 tested profiles missed at least one of its two budget decisions. `pl-choice-08` was missed by 8 of 10 profiles, making simple arithmetic plus an explicit business constraint another useful regression target.
+### Per-type case accuracy
 
-## ENG vs PL snapshot
+| Model | Backend | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| JevK5 4B | GGUF Q8_0 | 100.0% | 100.0% | 95.0% | 98.1% |
+| Decider 4B | MPS | 100.0% | 95.0% | 95.0% | 98.1% |
+| Kev 4B | MLX | 100.0% | 100.0% | 90.0% | 96.2% |
+| Basal 1.5 Main — 4.5B | MLX 8-bit | 100.0% | 95.0% | 90.0% | 96.2% |
+| SemIf / Qwen3.5 4B | MLX 8-bit | 100.0% | 95.0% | 90.0% | 96.2% |
 
-The table below is useful for spotting changes worth investigating, but **it is not a pure language penalty/benefit measurement**. ENG Bench has 150 cases while PL Bench has 60, and the scenarios are not one-to-one translations.
+### Highlights
 
-| Model | ENG case acc. | PL case acc. | PL - ENG | ENG decision acc. | PL decision acc. |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Kev 4B | 92.7% | 96.7% | +4.0 pp | 95.2% | 97.8% |
-| Decider 4B | 95.3% | 96.7% | +1.3 pp | 97.2% | 97.8% |
-| Clef Flash 9B | 98.0% | 96.7% | -1.3 pp | 98.8% | 97.8% |
-| SemIf / Qwen3.5 4B | 93.3% | 95.0% | +1.7 pp | 95.6% | 96.8% |
-| Basal 4.5B | 90.0% | 93.3% | +3.3 pp | 94.0% | 95.7% |
-| Decider 2B | 90.7% | 91.7% | +1.0 pp | 94.0% | 93.5% |
-| Basal 1.5B | 85.3% | 85.0% | -0.3 pp | 90.0% | 89.2% |
-| Kev 0.8B | 76.7% | 66.7% | -10.0 pp | 84.0% | 78.5% |
-| Von | 64.0% | 51.7% | -12.3 pp | 73.2% | 62.4% |
-| Laya English 421M | 54.7% | 38.3% | -16.3 pp | 66.8% | 53.8% |
-
-The largest negative PL-vs-ENG case-accuracy deltas in this run occur for **Laya English**, **Von**, and **Kev 0.8B**. Larger models such as **Kev 4B**, **Basal 4.5B**, **SemIf 4B**, and **Decider 4B** were at least as accurate on the PL suite as on the larger ENG suite, but the suite-content caveat above is essential when interpreting that difference.
+- **JevK5 4B** leads this large PL run at **98.3%** case accuracy and **98.9%** decision accuracy.
+- **Basal 1.5 Main — 4.5B** reaches **95.0% / 96.8%** while also exposing broader native SystemOne capabilities that this Noul/Choice/Shared suite does not measure directly.
+- **Kev 4B** is the lowest-latency profile in this group at **358.8 ms median** (3.92/s overall throughput).
+- **Kev 4B** is perfect on Noul and Choice in this run (**100.0% / 100.0%**); its lower aggregate comes from Shared cases.
 
 ## Notes
 
-- All 10 profiles completed the PL suite; the supplied results contain **no runtime/benchmark execution errors**.
-- PL Bench is deliberately Polish-native and should evolve independently where Polish wording or domain conventions need dedicated coverage.
-- Latency is machine-specific and model load time is not included in request median/P95.
-- Keep the same suite revision when using this report for regression comparisons.
+- `Accuracy` is whole-case accuracy. Shared requests pass only when every expected decision is correct.
+- `Decision accuracy` scores the individual decisions/assertions and can therefore be higher than whole-case accuracy.
+- Latency and throughput are machine/runtime specific; model load time is not included in request median/P95.
+- These results are local reproducible snapshots for regression and comparison, not universal model rankings.
+- Use `deqio benchmark compare` for canonical run-to-run comparison, deltas, ranks, per-type breakdowns, and profiles present on only one side.

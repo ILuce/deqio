@@ -1131,7 +1131,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.0"
+    assert __version__ == "0.5.1"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -5124,5 +5124,20 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "### Large models (4B–4.5B in this snapshot)" in readme
     assert readme.count("#### Runs") == 2
     assert "0 runtime errors" in readme
-    assert "Laya English 421M" not in readme
+    assert "## Supported models and backends" in readme
+    assert readme.index("## Supported models and backends") < readme.index("## Benchmark snapshot")
+    assert "`decision-2.0-vega`" in readme
+    assert "`basal-1.5-main`" in readme
+    assert "`laya-english`" in readme
+    benchmark_snapshot = readme[readme.index("## Benchmark snapshot"):readme.index("## Installation")]
+    assert "Laya English 421M" not in benchmark_snapshot
     assert "earlier local snapshot from **2026-10-03**" not in readme
+
+    eng_summary = Path("benchmarks/summary_eng.md").read_text(encoding="utf-8")
+    pl_summary = Path("benchmarks/summary_pl.md").read_text(encoding="utf-8")
+    assert "20261006T082750Z" in eng_summary
+    assert "20261006T090441Z" in eng_summary
+    assert "20261006T083557Z" in pl_summary
+    assert "20261006T091845Z" in pl_summary
+    assert "2026-10-03" not in eng_summary
+    assert "2026-10-03" not in pl_summary

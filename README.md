@@ -83,6 +83,49 @@ Basal 1.5 currently exposes the broadest native feature set in Deqio: Choice, No
 
 ---
 
+## Supported models and backends
+
+The table below is generated from the model profiles shipped in the current Deqio 0.5 catalog. A check mark means Deqio has a profile for that model/backend combination; actual availability still depends on the operating system, accelerator, memory, and upstream runtime requirements.
+
+| Model | Model ID | MLX | MPS | CUDA | GGUF |
+| --- | --- | :---: | :---: | :---: | :---: |
+| SemIf / Qwen3.5 4B | `semif-qwen3.5-4b` | ✓ 8-bit | ✓ | ✓ | — |
+| Decision 2.0 Kai 0.6B | `decision-2.0-kai` | — | — | ✓ | — |
+| Decision 2.0 Eos 0.8B | `decision-2.0-eos` | — | — | ✓ | — |
+| Decision 2.0 Sol 2B | `decision-2.0-sol` | — | — | ✓ | — |
+| Decision 2.0 Nox 4B | `decision-2.0-nox` | — | — | ✓ | — |
+| Decision 2.0 Lux 9B | `decision-2.0-lux` | — | — | ✓ | — |
+| Decision 2.0 Vega 27B | `decision-2.0-vega` | — | — | ✓ | — |
+| Kev 0.8B | `kev-0.8b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
+| Kev 4B | `kev-4b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
+| Kev 9B | `kev-9b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
+| Kev 27B | `kev-27b` | — | — | ✓ | — |
+| JevK5 4B | `jevk5-4b` | — | — | ✓ | ✓ Q8_0 |
+| JevK5 9B | `jevk5-9b` | — | — | ✓ | ✓ Q8_0 |
+| Open-Jev 2B | `open-jev-2b` | — | — | ✓ | — |
+| Open-Jev 9B | `open-jev-9b` | — | — | ✓ | — |
+| Open-Jev 27B v1.1 | `open-jev-27b-v1.1` | — | — | ✓ | — |
+| CLM 8B | `clm-8b` | — | — | ✓ | — |
+| Basal 1.5 Mini — 1.5B | `basal-1.5-mini` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
+| Basal 1.5 Main — 4.5B | `basal-1.5-main` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
+| Basal 1.5 Max — 11B | `basal-1.5-max` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
+| Clef Flash 9B | `clef-flash` | ✓ 8-bit | — | — | ✓ Q8_0 |
+| Clef 27B | `clef` | ✓ 8-bit | — | — | ✓ Q8_0 |
+| Decider 0.8B | `decider-0.8b` | — | ✓ | ✓ | — |
+| Decider 2B | `decider-2b` | — | ✓ | ✓ | ✓ Q8_0 |
+| Decider 4B | `decider-4b` | — | ✓ | ✓ | ✓ Q8_0 |
+| Laya English 421M | `laya-english` | ✓ | ✓ | ✓ | ✓ Q8_0 |
+| Laya Multilingual 322M | `laya-multilingual` | ✓ | ✓ | ✓ | — |
+| Laya Typed Decisions 421M | `laya-typed-decisions` | ✓ | ✓ | ✓ | — |
+| Von | `von` | — | ✓ | ✓ | — |
+| Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
+
+- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile.
+- Decision 2.0 profiles are intentionally **CUDA-only** in Deqio 0.5 and require the official CUDA runtime.
+- Basal 1.5 spans all four backend classes (MLX 8-bit, MPS, GGUF Q8_0, CUDA) and currently exposes Deqio's broadest native feature set.
+- Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
+- Run `deqio models list` for the full catalog and `deqio models installed` for profiles available locally.
+
 ## Benchmark snapshot
 
 The snapshots below come from completed Deqio 0.5 runs on **2026-10-06** using the same local Apple Silicon macOS / 16 GiB setup. Small and large models were benchmarked in separate runs so each group could use the same machine without competing for memory.
@@ -92,7 +135,6 @@ The ENG and PL suites differ in size, difficulty, domains, and question composit
 ### Small models (up to 2.5B)
 
 #### Runs
-
 
 - **ENG:** run `20261006T082750Z`, suite `deqio-basic-150` — 150 cases / 250 scored decisions.
 - **PL:** run `20261006T083557Z`, suite `deqio-pl-60` — 60 cases / 93 scored decisions.
@@ -142,7 +184,6 @@ Per-type results also show why a single aggregate number is not enough. Decider 
 ### Large models (4B–4.5B in this snapshot)
 
 #### Runs
-
 
 - **ENG:** run `20261006T090441Z`, suite `deqio-basic-150` — 150 cases / 250 scored decisions.
 - **PL:** run `20261006T091845Z`, suite `deqio-pl-60` — 60 cases / 93 scored decisions.
@@ -255,40 +296,6 @@ uv run pytest
 uv run deqio models setup
 uv run deqio serve
 ```
-
----
-
-## Models and backends
-
-List the current catalog:
-
-```bash
-deqio models list
-```
-
-List locally installed profiles:
-
-```bash
-deqio models installed
-```
-
-Select an installed profile:
-
-```bash
-deqio models use MODEL_ID --backend BACKEND
-```
-
-Install directly without the interactive setup flow:
-
-```bash
-deqio models install MODEL_ID --backend BACKEND --max-input-tokens 8192
-```
-
-Important runtime rules:
-
-- **Basal 1.5** replaces Basal 1.0 and is available as Mini 1.5B, Main 4.5B, and Max 11B across the officially supported MLX/MPS/GGUF/CUDA paths represented in the catalog.
-- GGUF profiles are included only when Deqio has an accepted official/authoritative **Q8_0-or-better** artifact and a native typed-decision/SystemOne readout.
-- Deqio never silently degrades an unsupported native capability.
 
 ---
 
