@@ -20,7 +20,7 @@ class HostCapabilities:
     cuda_compute_capability: float | None = None
 
     def memory_for_backend(self, backend: str) -> float | None:
-        if backend in {"mlx", "mps"}:
+        if backend in {"mlx", "mps", "gguf"}:
             if self.system_memory_gib is None:
                 return None
             # Apple Silicon uses unified memory. Keep a conservative OS/runtime
@@ -38,9 +38,9 @@ def host_backends() -> tuple[str, ...]:
     system = platform.system()
     machine = platform.machine().lower()
     if system == "Darwin" and machine == "arm64":
-        return ("mlx", "mps")
+        return ("mlx", "mps", "gguf")
     if system in {"Linux", "Windows"}:
-        return ("cuda",) if shutil.which("nvidia-smi") else ()
+        return ("cuda", "gguf") if shutil.which("nvidia-smi") else ("gguf",)
     return ()
 
 

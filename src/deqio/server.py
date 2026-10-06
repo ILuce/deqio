@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import os
 import threading
@@ -16,9 +17,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import __version__
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .backends import BackendRuntime
+from .benchmark_compare import compare_runs
 from .benchmark_store import list_benchmark_runs, read_benchmark_results, read_benchmark_summary
 from .catalog import apply_selection, get_model, get_profile, load_catalog, public_catalog
 from .config import (
@@ -57,6 +59,13 @@ from .input_contract import (
 )
 from .ui import DASHBOARD, WATCH_DASHBOARD
 from .watch_store import WATCH_AUTO_CLEAR_OPTIONS, WatchStore
+from .runtime_control import pid_alive, register_server, unregister_server
+from .systemone_runtime import (
+    SystemOneCapabilityError,
+    SystemOneProtocolError,
+    SystemOneSidecarHTTPError,
+    SystemOneUnavailableError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +82,8 @@ SETTINGS.log_path.parent.mkdir(parents=True, exist_ok=True)
 
 runtime: BackendRuntime | None = None
 switching_runtime = False
+runtime_suspension: dict[str, Any] | None = None
+runtime_control_token: str | None = None
 
 inference_lock = threading.Lock()
 stats_lock = threading.Lock()
@@ -138,13 +149,46 @@ class SharedRequest(BaseModel):
     input_policy: InputPolicy | None = None
 
 
+class SystemOneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: State
+    questions: dict[str, dict[str, Any]]
+    facts: Literal["off", "auto"] | None = None
+
+
+class TypedSystemOneRequest(BaseModel):
+    """Convenience request for one native SystemOne question.
+
+    The endpoint injects the decision type (score/multi/act); every other
+    question field is forwarded unchanged to the active native runtime.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: State
+    question: dict[str, Any]
+    name: str = "decision"
+    facts: Literal["off", "auto"] | None = None
+
+
 class ModelActivateRequest(BaseModel):
     model_id: str
-    backend: Literal["mlx", "mps", "cuda"]
+    backend: Literal["mlx", "mps", "gguf", "cuda"]
 
 
 class WatchSettingsRequest(BaseModel):
     auto_clear_minutes: int
+
+
+class RuntimeSuspendRequest(BaseModel):
+    lease_id: str
+    owner_pid: int
+    reason: str = "benchmark"
+
+
+class RuntimeResumeRequest(BaseModel):
+    lease_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -164,12 +208,48 @@ def _option_ids(options: list[Option]) -> list[str]:
 
 
 def _validate_unique_ids(values: list[str], *, label: str) -> None:
+    if any(not str(value).strip() for value in values):
+        raise InputContractHTTPError(
+            "empty_id",
+            field=label,
+            inference_performed=False,
+        )
     if len(values) != len(set(values)):
         raise InputContractHTTPError(
             "duplicate_id",
             field=label,
             inference_performed=False,
         )
+
+
+def _validate_portable_options(options: list[Option], *, label: str = "options") -> None:
+    """Reject ambiguous portable Choice inputs before any model inference."""
+    if not options:
+        raise HTTPException(status_code=400, detail=f"{label} must contain at least one option")
+    option_ids = _option_ids(options)
+    if any(not option_id.strip() for option_id in option_ids):
+        raise HTTPException(status_code=400, detail=f"{label} contains an empty option id")
+    if len(option_ids) != len(set(option_ids)):
+        raise HTTPException(status_code=400, detail=f"{label} contains duplicate option ids")
+
+
+def _runtime_error_status(error: Exception) -> int:
+    """Map runtime failures to a truthful public HTTP status."""
+    if isinstance(error, SystemOneCapabilityError):
+        return 422
+    if isinstance(error, SystemOneUnavailableError):
+        return 503
+    if isinstance(error, SystemOneProtocolError):
+        return 502
+    if isinstance(error, SystemOneSidecarHTTPError):
+        if error.status_code == 503:
+            return 503
+        if error.status_code >= 500:
+            return 502
+        return 422
+    if isinstance(error, ValueError):
+        return 400
+    return 500
 
 
 async def _input_contract_context(
@@ -318,8 +398,136 @@ def _unknown_shared_receipt(
     )
 
 
+def _runtime_suspension_public() -> dict[str, Any] | None:
+    if runtime_suspension is None:
+        return None
+    return {
+        "owner": runtime_suspension.get("owner"),
+        "reason": runtime_suspension.get("reason"),
+        "lease_id": runtime_suspension.get("lease_id"),
+        "owner_pid": runtime_suspension.get("owner_pid"),
+        "started_at": runtime_suspension.get("started_at"),
+        "previous_profile": runtime_suspension.get("previous_profile"),
+        "restore_error": runtime_suspension.get("restore_error"),
+    }
+
+
+def _require_runtime_control(request: Request) -> None:
+    if runtime_control_token is None:
+        raise HTTPException(status_code=404, detail="Local runtime control is not enabled for this server")
+    provided = request.headers.get("x-deqio-control-token")
+    if not provided or not hmac.compare_digest(provided, runtime_control_token):
+        raise HTTPException(status_code=403, detail="Invalid local runtime-control token")
+
+
+def _suspend_runtime_for_benchmark(*, lease_id: str, owner_pid: int, reason: str) -> dict[str, Any]:
+    global runtime
+    global runtime_suspension
+    global switching_runtime
+    if not lease_id:
+        raise HTTPException(status_code=422, detail="lease_id must be non-empty")
+    if owner_pid <= 0:
+        raise HTTPException(status_code=422, detail="owner_pid must be positive")
+    with inference_lock:
+        if runtime_suspension is not None:
+            if runtime_suspension.get("lease_id") == lease_id:
+                return {
+                    "status": "already-suspended",
+                    "previous_profile": runtime_suspension.get("previous_profile"),
+                    "suspension": _runtime_suspension_public(),
+                }
+            raise HTTPException(status_code=409, detail="Inference runtime is already suspended by another owner")
+        switching_runtime = True
+        previous = _active_model()
+        info(
+            f"Suspending inference runtime for benchmark: {previous['model_id']}/{previous['backend']} "
+            f"owner_pid={owner_pid}"
+        )
+        try:
+            target = runtime
+            if target is not None:
+                target.close()
+            runtime = None
+            runtime_suspension = {
+                "owner": "benchmark",
+                "reason": str(reason or "benchmark"),
+                "lease_id": lease_id,
+                "owner_pid": int(owner_pid),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "previous_profile": previous,
+                "restore_error": None,
+            }
+        finally:
+            switching_runtime = False
+    return {
+        "status": "suspended",
+        "previous_profile": previous,
+        "suspension": _runtime_suspension_public(),
+    }
+
+
+def _resume_runtime_after_benchmark(*, lease_id: str, reason: str = "benchmark-complete") -> dict[str, Any]:
+    global runtime
+    global runtime_suspension
+    global switching_runtime
+    with inference_lock:
+        suspension = runtime_suspension
+        if suspension is None:
+            return {"status": "not-suspended", "active": _active_model() if runtime is not None else None}
+        if suspension.get("lease_id") != lease_id:
+            raise HTTPException(status_code=409, detail="Runtime suspension lease does not match the active owner")
+        switching_runtime = True
+        suspension["restore_error"] = None
+        previous = suspension.get("previous_profile") or _active_model()
+        info(
+            f"Restoring inference runtime after benchmark: {previous.get('model_id')}/{previous.get('backend')} "
+            f"reason={reason}"
+        )
+        candidate: BackendRuntime | None = None
+        try:
+            candidate = _load_warmed_runtime(SETTINGS, announce=False)
+            runtime = candidate
+            mark_installed(
+                SETTINGS.config_path,
+                SETTINGS.model_id,
+                SETTINGS.backend,
+                verified=True,
+                source="benchmark-restore",
+            )
+            refresh_identity = getattr(runtime, "refresh_identity", None)
+            if callable(refresh_identity):
+                refresh_identity()
+            _reset_session_metrics()
+            runtime_suspension = None
+        except Exception as error:
+            if candidate is not None:
+                try:
+                    candidate.close()
+                except Exception as close_error:
+                    info(f"Warning: failed to close runtime after benchmark restore error: {close_error}")
+            runtime = None
+            suspension["restore_error"] = str(error)
+            runtime_suspension = suspension
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not restore the inference runtime after benchmark: {error}",
+            ) from error
+        finally:
+            switching_runtime = False
+    return {"status": "restored", "active": _active_model()}
+
+
 def _runtime() -> BackendRuntime:
     if runtime is None:
+        if runtime_suspension is not None:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "runtime_suspended_for_benchmark",
+                    "message": "Inference is temporarily suspended while a benchmark has exclusive runtime access.",
+                    "suspension": _runtime_suspension_public(),
+                },
+            )
         raise HTTPException(status_code=503, detail="Model runtime is not ready")
     return runtime
 
@@ -355,8 +563,14 @@ def _reset_watch_session(*, reason: str = "manual-clear") -> dict[str, Any]:
     return _watch_store().reset(reason=reason)
 
 
-def _watch_session_token() -> str:
-    return _watch_store().session_token()
+def _watch_session_token() -> str | None:
+    try:
+        return _watch_store().session_token()
+    except Exception as error:
+        # Watch is observability only. If its storage is unavailable, core
+        # inference must remain usable and we simply skip recording this event.
+        info(f"Watch session lookup failed: {error}")
+        return None
 
 
 def _watch_json_snapshot(value: Any) -> Any:
@@ -378,6 +592,8 @@ def _record_watch_event(
     settings_snapshot: Settings,
     source: str = "api",
 ) -> str | None:
+    if expected_session_id is None:
+        return None
     provenance = response_payload.get("provenance") if isinstance(response_payload, dict) else None
     runtime_identity = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
     timing = (
@@ -420,12 +636,13 @@ def _record_watch_event(
         "request": _watch_json_snapshot(request_payload),
         "response": _watch_json_snapshot(response_payload),
     }
-    return _watch_store().append(event, expected_session_id=expected_session_id)
-
-
-def _watch_rows_snapshot(*, limit: int = 500, offset: int = 0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    snapshot = _watch_store().list_events(limit=limit, offset=offset)
-    return snapshot["session"], snapshot["events"]
+    try:
+        return _watch_store().append(event, expected_session_id=expected_session_id)
+    except Exception as error:
+        # Watch is observability only. A disk/serialization failure must never
+        # replace a valid inference response or mask the original API error.
+        info(f"Watch event write failed: {error}")
+        return None
 
 
 def _reset_session_metrics() -> None:
@@ -460,6 +677,49 @@ def _warmup_runtime(target: BackendRuntime, *, announce: bool) -> None:
     target.score(warmup_row, "serial")
     if announce:
         warmup_ok(2, 2)
+
+
+def _load_warmed_runtime(settings: Settings, *, announce: bool) -> BackendRuntime:
+    """Load and warm a runtime without leaking it when warmup fails."""
+    target = BackendRuntime.load(settings)
+    try:
+        _warmup_runtime(target, announce=announce)
+        return target
+    except Exception:
+        try:
+            target.close()
+        except Exception as close_error:
+            info(f"Warning: runtime cleanup after failed warmup also failed: {close_error}")
+        raise
+
+
+def _score_noul_inference(
+    row: dict[str, Any],
+    mode: str,
+    contract: InputContractContext | None,
+    request_id: str,
+) -> tuple[Settings, dict[str, Any], dict[str, Any]]:
+    with inference_lock:
+        settings_snapshot = SETTINGS
+        runtime_snapshot = _runtime()
+        runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+        _ensure_contract_capability(runtime_snapshot, contract, request_id=request_id)
+        raw = runtime_snapshot.score_noul(row, mode)
+    return settings_snapshot, runtime_identity, raw
+
+
+def _score_shared_inference(
+    rows: list[dict[str, Any]],
+    contract: InputContractContext | None,
+    request_id: str,
+) -> tuple[Settings, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    with inference_lock:
+        settings_snapshot = SETTINGS
+        runtime_snapshot = _runtime()
+        runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+        _ensure_contract_capability(runtime_snapshot, contract, request_id=request_id)
+        raw_results, timing = runtime_snapshot.score_shared(rows)
+    return settings_snapshot, runtime_identity, raw_results, timing
 
 
 def state_hash(state: State) -> str:
@@ -730,16 +990,21 @@ def record_event(
 
         recent_requests.appendleft(event)
 
-    with log_lock:
-        with used_settings.log_path.open("a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    event,
-                    ensure_ascii=False,
-                    allow_nan=False,
+    try:
+        with log_lock:
+            with used_settings.log_path.open("a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        event,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                    )
+                    + "\n"
                 )
-                + "\n"
-            )
+    except (OSError, TypeError, ValueError) as error:
+        # The request log is operational telemetry, not part of the decision
+        # contract. Keep serving if the log destination is temporarily broken.
+        info(f"Request metadata log write failed: {error}")
 
     log_request_success(
         endpoint,
@@ -780,13 +1045,19 @@ def run_decision(
 
     except InputContractHTTPError:
         raise
-    except Exception as exc:
+    except HTTPException as exc:
         with stats_lock:
             stats["errors"] += 1
-        log_request_error(endpoint, request_id=request_id, error=exc, status=400)
+        log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
+        raise
+    except Exception as exc:
+        status_code = _runtime_error_status(exc)
+        with stats_lock:
+            stats["errors"] += 1
+        log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
 
         raise HTTPException(
-            status_code=400,
+            status_code=status_code,
             detail=str(exc),
         ) from exc
 
@@ -832,21 +1103,52 @@ async def _watch_auto_clear_loop() -> None:
     while True:
         await asyncio.sleep(15.0)
         try:
-            store.auto_clear_if_due()
+            # Watch cleanup performs filesystem I/O and may unlink rotated
+            # files. Keep that work off the FastAPI event loop as well.
+            await asyncio.to_thread(store.auto_clear_if_due)
         except Exception as error:
             # Watch observability must never take the inference server down.
             info(f"Watch auto-clear check failed: {error}")
+
+
+async def _runtime_suspension_watchdog() -> None:
+    """Restore server inference if an exclusive benchmark owner disappears."""
+
+    while True:
+        await asyncio.sleep(2.0)
+        suspension = runtime_suspension
+        if not suspension or suspension.get("owner") != "benchmark":
+            continue
+        try:
+            owner_pid = int(suspension.get("owner_pid", 0))
+        except (TypeError, ValueError):
+            owner_pid = 0
+        if owner_pid > 0 and pid_alive(owner_pid):
+            continue
+        lease_id = str(suspension.get("lease_id") or "")
+        if not lease_id:
+            continue
+        info(f"Benchmark owner pid={owner_pid} is no longer running; restoring suspended inference runtime")
+        try:
+            await asyncio.to_thread(
+                _resume_runtime_after_benchmark,
+                lease_id=lease_id,
+                reason="benchmark-owner-exited",
+            )
+        except Exception as error:
+            info(f"Automatic benchmark runtime restore failed: {error}")
+            await asyncio.sleep(5.0)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global runtime
     global started_at
+    global runtime_control_token
 
-    # Watch history is session-temporary by contract. Clear it as soon as a
-    # server process starts, even if model loading later fails. Preferences
-    # (such as auto-clear interval) intentionally survive the reset.
-    _reset_watch_session(reason="server-start")
+    control_registration: dict[str, Any] | None = None
+    watch_cleanup_task: asyncio.Task[Any] | None = None
+    suspension_watchdog_task: asyncio.Task[Any] | None = None
 
     startup_header(
         engine=SETTINGS.engine,
@@ -856,41 +1158,67 @@ async def lifespan(app: FastAPI):
         config=str(SETTINGS.config_path),
     )
 
-    runtime = BackendRuntime.load(SETTINGS)
-
-    runtime_kind = "sidecar"
-    info(f"Runtime loaded: {runtime_kind}. Running warmup...")
-
-    with inference_lock:
-        _warmup_runtime(runtime, announce=True)
-
-    mark_installed(
-        SETTINGS.config_path,
-        SETTINGS.model_id,
-        SETTINGS.backend,
-        verified=True,
-        source="startup",
-    )
-    refresh_identity = getattr(runtime, "refresh_identity", None)
-    if callable(refresh_identity):
-        refresh_identity()
-    started_at = time.time()
-
-    server_ready()
-    watch_cleanup_task = asyncio.create_task(_watch_auto_clear_loop())
-
     try:
+        # Claim this workspace before touching Watch state or loading model
+        # memory. A rejected second server must not clear the active server's
+        # Watch session as a side effect.
+        if os.environ.get("DEQIO_SERVER_CONTROL") == "1":
+            host = os.environ.get("DEQIO_SERVER_HOST", "127.0.0.1")
+            port = int(os.environ.get("DEQIO_SERVER_PORT", "8787"))
+            control_registration = register_server(SETTINGS.config_path, host=host, port=port)
+            runtime_control_token = str(control_registration["token"])
+
+        # Watch history is session-temporary by contract. Reset only after this
+        # process has successfully claimed the workspace. Preferences survive.
+        try:
+            _reset_watch_session(reason="server-start")
+        except Exception as error:
+            # Watch is not part of runtime ownership. A broken/unwritable Watch
+            # directory must not prevent the model server from starting.
+            info(f"Watch session reset failed: {error}")
+
+        runtime = _load_warmed_runtime(SETTINGS, announce=True)
+        info("Runtime loaded: sidecar. Warmup complete.")
+
+        mark_installed(
+            SETTINGS.config_path,
+            SETTINGS.model_id,
+            SETTINGS.backend,
+            verified=True,
+            source="startup",
+        )
+        refresh_identity = getattr(runtime, "refresh_identity", None)
+        if callable(refresh_identity):
+            refresh_identity()
+        started_at = time.time()
+
+        watch_cleanup_task = asyncio.create_task(_watch_auto_clear_loop())
+        suspension_watchdog_task = asyncio.create_task(_runtime_suspension_watchdog())
+        server_ready()
         yield
     finally:
-        watch_cleanup_task.cancel()
-        try:
-            await watch_cleanup_task
-        except asyncio.CancelledError:
-            pass
+        tasks = [
+            task
+            for task in (watch_cleanup_task, suspension_watchdog_task)
+            if task is not None
+        ]
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        if control_registration is not None:
+            unregister_server(SETTINGS.config_path, pid=int(control_registration["pid"]))
+        runtime_control_token = None
+
         with inference_lock:
-            if runtime is not None:
-                runtime.close()
+            target = runtime
             runtime = None
+            if target is not None:
+                target.close()
 
 
 app = FastAPI(
@@ -975,7 +1303,11 @@ def root():
 
 @app.get("/health")
 def health():
-    status = "switching" if switching_runtime else ("ok" if runtime is not None else "starting")
+    status = (
+        "suspended"
+        if runtime_suspension is not None
+        else ("switching" if switching_runtime else ("ok" if runtime is not None else "starting"))
+    )
     runtime_identity = (
         _runtime_identity_snapshot(runtime, SETTINGS) if runtime is not None else None
     )
@@ -992,7 +1324,183 @@ def health():
         "runtime_instance_id": (runtime_identity or {}).get("runtime_instance_id"),
         "provenance_schema_version": 1,
         "artifact_revisions_resolved": (runtime_identity or {}).get("artifact_revisions_resolved", False),
+        "runtime_suspension": _runtime_suspension_public(),
     }
+
+
+@app.post("/v1/internal/runtime/suspend", include_in_schema=False)
+def suspend_runtime_for_benchmark(payload: RuntimeSuspendRequest, request: Request):
+    _require_runtime_control(request)
+    return _suspend_runtime_for_benchmark(
+        lease_id=payload.lease_id,
+        owner_pid=payload.owner_pid,
+        reason=payload.reason,
+    )
+
+
+@app.post("/v1/internal/runtime/resume", include_in_schema=False)
+def resume_runtime_after_benchmark(payload: RuntimeResumeRequest, request: Request):
+    _require_runtime_control(request)
+    return _resume_runtime_after_benchmark(lease_id=payload.lease_id)
+
+
+def _execute_system_one(payload: SystemOneRequest, *, endpoint: str) -> dict[str, Any]:
+    """Execute one native SystemOne request while preserving upstream response fields."""
+    request_id = "systemone-" + uuid4().hex[:12]
+    session_id = _watch_session_token()
+    request_payload = payload.model_dump(mode="json")
+    settings_snapshot = SETTINGS
+    if not payload.questions:
+        raise HTTPException(status_code=422, detail="questions must be a non-empty object")
+
+    try:
+        with inference_lock:
+            settings_snapshot = SETTINGS
+            runtime_snapshot = _runtime()
+            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
+            native_system_one = getattr(runtime_snapshot, "system_one", None)
+            if not callable(native_system_one):
+                raise RuntimeError("Active runtime does not expose native System One")
+            request_options = {
+                key: value
+                for key, value in {
+                    "facts": payload.facts,
+                }.items()
+                if value is not None
+            }
+            if request_options:
+                native, timing = native_system_one(payload.state, payload.questions, request_options)
+            else:
+                native, timing = native_system_one(payload.state, payload.questions)
+    except HTTPException as exc:
+        with stats_lock:
+            stats["errors"] += 1
+        log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": exc.detail},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode="systemone",
+            decisions=len(payload.questions),
+            settings_snapshot=settings_snapshot,
+        )
+        raise
+    except Exception as exc:
+        status_code = _runtime_error_status(exc)
+        with stats_lock:
+            stats["errors"] += 1
+        log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": str(exc)},
+            status_code=status_code,
+            request_id=request_id,
+            mode="systemone",
+            decisions=len(payload.questions),
+            settings_snapshot=settings_snapshot,
+        )
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    result = dict(native)
+    result["deqio"] = {
+        "provenance_schema_version": 1,
+        "runtime": runtime_identity,
+        "timing": {
+            "total_ms": round(float(timing.get("total_seconds", 0.0)) * 1000.0, 3),
+            "decisions": len(payload.questions),
+        },
+    }
+    observability_result = {
+        "timing": result["deqio"]["timing"],
+        "provenance": {"runtime": runtime_identity},
+    }
+    record_event(
+        request_id=request_id,
+        mode="systemone",
+        state=payload.state,
+        question="System One: " + ", ".join(payload.questions),
+        result=observability_result,
+        endpoint=endpoint,
+        decisions=len(payload.questions),
+        settings_snapshot=settings_snapshot,
+    )
+    _record_watch_event(
+        expected_session_id=session_id,
+        endpoint=endpoint,
+        request_payload=request_payload,
+        response_payload=result,
+        status_code=200,
+        request_id=request_id,
+        mode="systemone",
+        decisions=len(payload.questions),
+        settings_snapshot=settings_snapshot,
+    )
+    return result
+
+
+def _typed_system_one(payload: TypedSystemOneRequest, *, question_type: str, endpoint: str) -> dict[str, Any]:
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name must not be empty")
+    question = dict(payload.question)
+    if not question:
+        raise HTTPException(status_code=422, detail="question must be a non-empty object")
+    supplied_type = question.get("type")
+    if supplied_type is not None and supplied_type != question_type:
+        raise HTTPException(
+            status_code=422,
+            detail=f'{endpoint} injects type "{question_type}"; remove the conflicting question.type field',
+        )
+    question["type"] = question_type
+    return _execute_system_one(
+        SystemOneRequest(
+            state=payload.state,
+            questions={name: question},
+            facts=payload.facts,
+        ),
+        endpoint=endpoint,
+    )
+
+
+@app.post("/v1/systemone")
+async def system_one(payload: SystemOneRequest):
+    """Raw native SystemOne contract for the active profile."""
+    return await asyncio.to_thread(_execute_system_one, payload, endpoint="/v1/systemone")
+
+
+@app.post("/v1/soam")
+async def soam(payload: SystemOneRequest):
+    """Friendly alias for State Once, Ask Many using the native SystemOne contract."""
+    return await asyncio.to_thread(_execute_system_one, payload, endpoint="/v1/soam")
+
+
+@app.post("/v1/score")
+async def score_native(payload: TypedSystemOneRequest):
+    """Convenience wrapper for one native SystemOne score question."""
+    return await asyncio.to_thread(
+        _typed_system_one, payload, question_type="score", endpoint="/v1/score"
+    )
+
+
+@app.post("/v1/multi")
+async def multi_native(payload: TypedSystemOneRequest):
+    """Convenience wrapper for one native SystemOne multi-label question."""
+    return await asyncio.to_thread(
+        _typed_system_one, payload, question_type="multi", endpoint="/v1/multi"
+    )
+
+
+@app.post("/v1/act")
+async def act_native(payload: TypedSystemOneRequest):
+    """Convenience wrapper for one native SystemOne cost-aware action question."""
+    return await asyncio.to_thread(
+        _typed_system_one, payload, question_type="act", endpoint="/v1/act"
+    )
 
 
 @app.post("/v1/choice")
@@ -1009,7 +1517,10 @@ async def decision(payload: DecisionRequest, http_request: Request):
             decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
             option_sets=[_option_ids(payload.options)],
         )
-        result = run_decision(payload, endpoint=endpoint, contract=contract)
+        _validate_portable_options(payload.options)
+        result = await asyncio.to_thread(
+            run_decision, payload, endpoint=endpoint, contract=contract
+        )
     except InputContractHTTPError as exc:
         _record_watch_event(
             expected_session_id=session_id,
@@ -1071,14 +1582,9 @@ async def noul(payload: NoulRequest, http_request: Request):
             decision_ids=[payload.id] if payload.id is not None else ["<generated>"],
             option_sets=[["yes", "no"]],
         )
-        with inference_lock:
-            settings_snapshot = SETTINGS
-            runtime_snapshot = _runtime()
-            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
-            _ensure_contract_capability(
-                runtime_snapshot, contract, request_id=request_id
-            )
-            raw = runtime_snapshot.score_noul(row, payload.mode)
+        settings_snapshot, runtime_identity, raw = await asyncio.to_thread(
+            _score_noul_inference, row, payload.mode, contract, request_id
+        )
     except InputContractHTTPError as exc:
         _record_watch_event(
             expected_session_id=session_id,
@@ -1092,22 +1598,39 @@ async def noul(payload: NoulRequest, http_request: Request):
             settings_snapshot=settings_snapshot,
         )
         raise
-    except Exception as exc:
+    except HTTPException as exc:
         with stats_lock:
             stats["errors"] += 1
-        log_request_error(endpoint, request_id=request_id, error=exc, status=400)
+        log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
         _record_watch_event(
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
-            response_payload={"detail": str(exc)},
-            status_code=400,
+            response_payload={"detail": exc.detail},
+            status_code=exc.status_code,
             request_id=request_id,
             mode=payload.mode,
             decisions=1,
             settings_snapshot=settings_snapshot,
         )
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise
+    except Exception as exc:
+        status_code = _runtime_error_status(exc)
+        with stats_lock:
+            stats["errors"] += 1
+        log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": str(exc)},
+            status_code=status_code,
+            request_id=request_id,
+            mode=payload.mode,
+            decisions=1,
+            settings_snapshot=settings_snapshot,
+        )
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
     input_receipt = (
         _unknown_receipt_for_result(
@@ -1214,6 +1737,12 @@ async def shared(payload: SharedRequest, http_request: Request):
         )
         raise HTTPException(status_code=400, detail=error)
 
+    non_null_ids = [str(value) for value in explicit_ids if value is not None]
+    if len(non_null_ids) != len(set(non_null_ids)):
+        raise HTTPException(status_code=400, detail="decisions contains duplicate decision ids")
+    for index, item in enumerate(payload.decisions):
+        _validate_portable_options(item.options, label=f"decisions[{index}].options")
+
     rows = [
         {
             "id": item.id or uuid4().hex,
@@ -1226,14 +1755,9 @@ async def shared(payload: SharedRequest, http_request: Request):
 
     settings_snapshot = SETTINGS
     try:
-        with inference_lock:
-            settings_snapshot = SETTINGS
-            runtime_snapshot = _runtime()
-            runtime_identity = _runtime_identity_snapshot(runtime_snapshot, settings_snapshot)
-            _ensure_contract_capability(
-                runtime_snapshot, contract, request_id=request_id
-            )
-            raw_results, timing = runtime_snapshot.score_shared(rows)
+        settings_snapshot, runtime_identity, raw_results, timing = await asyncio.to_thread(
+            _score_shared_inference, rows, contract, request_id
+        )
     except InputContractHTTPError as exc:
         _record_watch_event(
             expected_session_id=session_id,
@@ -1247,23 +1771,40 @@ async def shared(payload: SharedRequest, http_request: Request):
             settings_snapshot=settings_snapshot,
         )
         raise
-    except Exception as exc:
+    except HTTPException as exc:
         with stats_lock:
             stats["errors"] += 1
-        log_request_error(endpoint, request_id=request_id, error=exc, status=400)
+        log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
+        _record_watch_event(
+            expected_session_id=session_id,
+            endpoint=endpoint,
+            request_payload=request_payload,
+            response_payload={"detail": exc.detail},
+            status_code=exc.status_code,
+            request_id=request_id,
+            mode="shared",
+            decisions=len(rows),
+            settings_snapshot=settings_snapshot,
+        )
+        raise
+    except Exception as exc:
+        status_code = _runtime_error_status(exc)
+        with stats_lock:
+            stats["errors"] += 1
+        log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
         _record_watch_event(
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
             response_payload={"detail": str(exc)},
-            status_code=400,
+            status_code=status_code,
             request_id=request_id,
             mode="shared",
             decisions=len(rows),
             settings_snapshot=settings_snapshot,
         )
         raise HTTPException(
-            status_code=400,
+            status_code=status_code,
             detail=str(exc),
         ) from exc
 
@@ -1353,6 +1894,10 @@ def clear_cache():
     try:
         with inference_lock:
             details = _runtime().clear_cache()
+    except HTTPException:
+        with stats_lock:
+            stats["errors"] += 1
+        raise
     except Exception as exc:
         with stats_lock:
             stats["errors"] += 1
@@ -1420,6 +1965,16 @@ def activate_model(payload: ModelActivateRequest):
     global runtime
     global switching_runtime
 
+    if runtime_suspension is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "runtime_suspended_for_benchmark",
+                "message": "Model switching is temporarily unavailable while a benchmark has exclusive runtime access.",
+                "suspension": _runtime_suspension_public(),
+            },
+        )
+
     pinned = [name for name in MODEL_SELECTION_ENV_VARS if os.environ.get(name) not in (None, "")]
     if pinned:
         raise HTTPException(
@@ -1450,12 +2005,24 @@ def activate_model(payload: ModelActivateRequest):
                 "Model profile is not installed. Run: deqio models setup"
             ),
         )
-    if payload.model_id == SETTINGS.model_id and payload.backend == SETTINGS.backend:
-        return {
-            "status": "already-active",
-            "active": _active_model(),
-            "load_ms": 0.0,
-        }
+    same_profile = payload.model_id == SETTINGS.model_id and payload.backend == SETTINGS.backend
+    if same_profile:
+        with inference_lock:
+            if runtime_suspension is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "runtime_suspended_for_benchmark",
+                        "message": "Model switching is temporarily unavailable while a benchmark has exclusive runtime access.",
+                        "suspension": _runtime_suspension_public(),
+                    },
+                )
+            if runtime is not None:
+                return {
+                    "status": "already-active",
+                    "active": _active_model(),
+                    "load_ms": 0.0,
+                }
 
     config_path, config_data = read_config_data(SETTINGS.config_path)
     entry = get_model(catalog, payload.model_id)
@@ -1471,6 +2038,20 @@ def activate_model(payload: ModelActivateRequest):
     started = time.perf_counter()
 
     with inference_lock:
+        # Re-check after acquiring the same lock used by benchmark suspension.
+        # The preflight check above is only an early fast-path; without this
+        # second check a benchmark could suspend the runtime while activation
+        # was waiting for the inference lock, then activation could load a
+        # second model inside the benchmark's exclusive-memory window.
+        if runtime_suspension is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "runtime_suspended_for_benchmark",
+                    "message": "Model switching is temporarily unavailable while a benchmark has exclusive runtime access.",
+                    "suspension": _runtime_suspension_public(),
+                },
+            )
         switching_runtime = True
         model_switch_start(current=current_name, target=target_name)
         old_runtime = runtime
@@ -1487,19 +2068,17 @@ def activate_model(payload: ModelActivateRequest):
 
         candidate_runtime: BackendRuntime | None = None
         try:
-            candidate_runtime = BackendRuntime.load(candidate_settings)
-            _warmup_runtime(candidate_runtime, announce=False)
+            candidate_runtime = _load_warmed_runtime(candidate_settings, announce=False)
             write_config_data(config_path, candidate_data)
         except Exception as exc:
             if candidate_runtime is not None:
                 try:
                     candidate_runtime.close()
-                except Exception:
-                    pass
+                except Exception as close_error:
+                    info(f"Warning: failed to close rejected candidate runtime: {close_error}")
             model_switch_rollback(target=target_name, error=exc)
             try:
-                restored = BackendRuntime.load(old_settings)
-                _warmup_runtime(restored, announce=False)
+                restored = _load_warmed_runtime(old_settings, announce=False)
                 runtime = restored
                 SETTINGS = old_settings
                 model_switch_restored(model_id=old_settings.model_id, backend=old_settings.backend)
@@ -1557,6 +2136,7 @@ def get_recent():
 def get_watch(limit: int = 500, offset: int = 0):
     snapshot = _watch_store().list_events(limit=limit, offset=offset)
     snapshot["session"]["switching"] = switching_runtime
+    snapshot["session"]["runtime_suspension"] = _runtime_suspension_public()
     return snapshot
 
 
@@ -1601,6 +2181,16 @@ def get_benchmarks():
         "latest": runs[0]["id"] if runs else None,
         "runs": runs,
     }
+
+
+@app.get("/v1/benchmarks/compare")
+def get_benchmark_comparison(left: str, right: str):
+    try:
+        return compare_runs(SETTINGS.config_path, left, right)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.get("/v1/benchmarks/{run_id}/summary")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 import uvicorn
@@ -8,6 +9,8 @@ import uvicorn
 from . import __version__
 from . import benchmark as benchmark_runner
 from . import model_manager
+from .config import read_config_data
+from .runtime_control import discover_server
 
 
 def _serve(argv: list[str]) -> int:
@@ -19,25 +22,54 @@ def _serve(argv: list[str]) -> int:
     parser.add_argument("--port", default=8787, type=int, help="Bind port (default: 8787)")
     args = parser.parse_args(argv)
 
-    uvicorn.run(
-        "deqio.server:app",
-        host=args.host,
-        port=args.port,
-        workers=1,
-        access_log=False,
-        log_level="warning",
-    )
+    try:
+        config_path, _ = read_config_data()
+        existing = discover_server(config_path)
+    except RuntimeError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    if existing is not None and int(existing.get("pid", 0)) != os.getpid():
+        print(
+            f"error: another Deqio server is already running for this workspace "
+            f"(pid={existing.get('pid')}, {existing.get('base_url')}).",
+            file=sys.stderr,
+        )
+        return 2
+
+    previous = {
+        name: os.environ.get(name)
+        for name in ("DEQIO_SERVER_CONTROL", "DEQIO_SERVER_HOST", "DEQIO_SERVER_PORT")
+    }
+    os.environ["DEQIO_SERVER_CONTROL"] = "1"
+    os.environ["DEQIO_SERVER_HOST"] = str(args.host)
+    os.environ["DEQIO_SERVER_PORT"] = str(args.port)
+    try:
+        uvicorn.run(
+            "deqio.server:app",
+            host=args.host,
+            port=args.port,
+            workers=1,
+            access_log=False,
+            log_level="warning",
+        )
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
     return 0
 
 
 def _print_help() -> None:
     print(
-        """Deqio — Decisions in. Probabilities out.
+        """Deqio — Decision in, probabilities out.
 
 Usage:
   deqio serve [--host HOST] [--port PORT]
   deqio models <command> [options]
   deqio benchmark [--all | --model MODEL_ID:BACKEND]
+  deqio benchmark compare [--left RUN_ID --right RUN_ID] [--json]
   deqio status
   deqio version
   deqio --version
@@ -45,7 +77,7 @@ Usage:
 Commands:
   serve      Start the API and browser UI
   models     Install, inspect, select, and update decision models
-  benchmark  Run an editable local benchmark suite
+  benchmark  Run benchmark suites or compare completed runs
   status     Show the currently selected model/runtime
   version    Show the installed Deqio version
 
@@ -57,6 +89,7 @@ Examples:
   deqio models use
   deqio models delete
   deqio benchmark --all
+  deqio benchmark compare
   deqio status
   deqio --version
 """

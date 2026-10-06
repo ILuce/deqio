@@ -136,13 +136,13 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
     @app.post("/v1/systemone")
     def systemone(payload: dict[str, Any]):
         started = time.perf_counter()
+        state = _state_text(payload.get("state"))
+        questions = payload.get("questions")
+        if not isinstance(questions, dict) or not questions:
+            raise HTTPException(status_code=422, detail="questions must be a nonempty object")
+        schema: dict[str, Any] = {}
+        kinds: dict[str, str] = {}
         try:
-            state = _state_text(payload.get("state"))
-            questions = payload.get("questions")
-            if not isinstance(questions, dict) or not questions:
-                raise ValueError("questions must be a nonempty object")
-            schema: dict[str, Any] = {}
-            kinds: dict[str, str] = {}
             for qid, question in questions.items():
                 if not isinstance(question, dict):
                     raise ValueError(f"{qid}: question must be an object")
@@ -159,7 +159,10 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
                     schema[str(qid)] = _score_schema(question)
                 else:
                     raise ValueError(f"{qid}: unsupported question type {kind!r}")
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
+        try:
             result = ensure_scorer().score(state, schema)
             answers = _answers_from_result(schema, kinds, result)
             return {
@@ -169,7 +172,7 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
                 "usage": {"input_tokens": 0},
             }
         except Exception as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise HTTPException(status_code=500, detail=str(error)) from error
 
     return app
 

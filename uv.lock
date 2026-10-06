@@ -1207,11 +1207,12 @@ wheels = [
 
 [[package]]
 name = "deqio"
-version = "0.3.0"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
+    { name = "pydantic" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1223,11 +1224,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi" },
-    { name = "httpx", marker = "extra == 'dev'" },
-    { name = "huggingface-hub" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "uvicorn", extras = ["standard"] },
+    { name = "fastapi", specifier = ">=0.110,<1" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<1" },
+    { name = "huggingface-hub", specifier = ">=1,<2" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.27,<1" },
 ]
 provides-extras = ["dev"]
 

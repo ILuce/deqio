@@ -27,6 +27,17 @@
             "group_size": 64,
             "applied": "load-time",
             "source_precision": "bf16"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": false,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "cuda": {
@@ -40,7 +51,18 @@
             "uvicorn[standard]>=0.27"
           ],
           "min_memory_gib": 11,
-          "recommended_memory_gib": 16
+          "recommended_memory_gib": 16,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": false,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "Qwen/Qwen3.5-4B",
@@ -53,7 +75,374 @@
             "uvicorn[standard]>=0.27"
           ],
           "min_memory_gib": 11,
-          "recommended_memory_gib": 16
+          "recommended_memory_gib": 16,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": false,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-kai",
+      "engine": "decision2",
+      "label": "Decision 2.0 Kai 0.6B",
+      "description": "Official Decision 2.0 Kai typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Kai-0.6B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+          "wire_model": "vllm-sr/Decision-2.0-Kai-0.6B",
+          "model_revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 3,
+          "recommended_memory_gib": 4,
+          "max_input_tokens": 8192,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
+            "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
+          },
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-eos",
+      "engine": "decision2",
+      "label": "Decision 2.0 Eos 0.8B",
+      "description": "Official Decision 2.0 Eos typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Eos-0.8B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Eos-0.8B",
+          "wire_model": "vllm-sr/Decision-2.0-Eos-0.8B",
+          "model_revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 6,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vllm-sr/Decision-2.0-Eos-0.8B",
+            "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0"
+          },
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2",
+            "triton==3.7.1",
+            "causal-conv1d==1.7.0",
+            "flash-linear-attention==0.5.2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-sol",
+      "engine": "decision2",
+      "label": "Decision 2.0 Sol 2B",
+      "description": "Official Decision 2.0 Sol typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Sol-2B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Sol-2B",
+          "wire_model": "vllm-sr/Decision-2.0-Sol-2B",
+          "model_revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 6,
+          "recommended_memory_gib": 8,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vllm-sr/Decision-2.0-Sol-2B",
+            "revision": "64235bef55dad29387dd16da7c90e038bf2f0972"
+          },
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2",
+            "triton==3.7.1",
+            "causal-conv1d==1.7.0",
+            "flash-linear-attention==0.5.2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-nox",
+      "engine": "decision2",
+      "label": "Decision 2.0 Nox 4B",
+      "description": "Official Decision 2.0 Nox typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Nox-4B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Nox-4B",
+          "wire_model": "vllm-sr/Decision-2.0-Nox-4B",
+          "model_revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 11,
+          "recommended_memory_gib": 16,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+            "revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe"
+          },
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2",
+            "triton==3.7.1",
+            "causal-conv1d==1.7.0",
+            "flash-linear-attention==0.5.2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-lux",
+      "engine": "decision2",
+      "label": "Decision 2.0 Lux 9B",
+      "description": "Official Decision 2.0 Lux typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Lux-9B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Lux-9B",
+          "wire_model": "vllm-sr/Decision-2.0-Lux-9B",
+          "model_revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 20,
+          "recommended_memory_gib": 24,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "vllm-sr/Decision-2.0-Lux-9B",
+            "revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5"
+          },
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2",
+            "triton==3.7.1",
+            "causal-conv1d==1.7.0",
+            "flash-linear-attention==0.5.2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "decision-2.0-vega",
+      "engine": "decision2",
+      "label": "Decision 2.0 Vega 27B",
+      "description": "Official Decision 2.0 Vega typed-decision model; native System One runtime, CUDA only.",
+      "source": "https://huggingface.co/vllm-sr/Decision-2.0-Vega-27B",
+      "backends": {
+        "cuda": {
+          "model": "vllm-sr/Decision-2.0-Vega-27B",
+          "wire_model": "vllm-sr/Decision-2.0-Vega-27B",
+          "model_revision": "7aec49ae11a18741706da549ab626b9052795fe7",
+          "family": "decision2",
+          "runtime": "decision2-native",
+          "platform": "cuda",
+          "source": "official",
+          "runtime_key": "decision2-cuda",
+          "installer": "decision2",
+          "python": "3.12.13",
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 62,
+          "recommended_memory_gib": 80,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 4096,
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false,
+            "systemone": true
+          },
+          "precision": {
+            "device": "cuda:0",
+            "policy": "upstream-managed",
+            "gpu_backbone": "bf16-autocast",
+            "decision_head": "fp32"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "vllm-sr/Decision-2.0-Vega-27B",
+              "revision": "7aec49ae11a18741706da549ab626b9052795fe7",
+              "role": "decision2-package"
+            },
+            {
+              "type": "snapshot",
+              "repo_id": "Qwen/Qwen3.8-27B",
+              "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+              "role": "pinned-base"
+            }
+          ],
+          "packages": [
+            "transformers==5.17.0",
+            "safetensors==0.8.0",
+            "tokenizers==0.23.2",
+            "triton==3.7.1",
+            "causal-conv1d==1.7.0",
+            "flash-linear-attention==0.5.2",
+            "huggingface-hub==1.31.0",
+            "peft==0.21.0"
+          ]
         }
       }
     },
@@ -79,6 +468,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "cuda": {
@@ -96,6 +496,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "mps": {
@@ -113,6 +524,67 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Kev-0.8B-GGUF",
+          "wire_model": "ggml-org/Kev-0.8B-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/kev-0.8b-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 1.3,
+          "recommended_memory_gib": 3,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 8192,
+          "family": "kev",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Kev-0.8B-GGUF",
+            "revision": "main",
+            "local_dir": "models/kev-0.8b-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
           }
         }
       }
@@ -139,6 +611,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "cuda": {
@@ -156,6 +639,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "mps": {
@@ -173,6 +667,67 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Kev-4B-GGUF",
+          "wire_model": "ggml-org/Kev-4B-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/kev-4b-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 5.2,
+          "recommended_memory_gib": 8,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 8192,
+          "family": "kev",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Kev-4B-GGUF",
+            "revision": "main",
+            "local_dir": "models/kev-4b-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
           }
         }
       }
@@ -199,6 +754,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "cuda": {
@@ -216,6 +782,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         },
         "mps": {
@@ -233,6 +810,67 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Kev-9B-GGUF",
+          "wire_model": "ggml-org/Kev-9B-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/kev-9b-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 11.0,
+          "recommended_memory_gib": 16,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 8192,
+          "family": "kev",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Kev-9B-GGUF",
+            "revision": "main",
+            "local_dir": "models/kev-9b-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
           }
         }
       }
@@ -262,6 +900,17 @@
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-27b",
             "revision": "v1.0"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
           }
         }
       }
@@ -286,7 +935,71 @@
             "Linux"
           ],
           "min_memory_gib": 9,
-          "recommended_memory_gib": 12
+          "recommended_memory_gib": 12,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "alibiserikbay/JevK5-GGUF",
+          "wire_model": "alibiserikbay/JevK5-GGUF",
+          "model_revision": "main",
+          "runtime_key": "jevk5-gguf",
+          "python": "3.12",
+          "installer": "jevk5_gguf",
+          "launcher": "jevk5_gguf",
+          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@v0.3.0",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "jevk5_gguf_dir": "models/jevk5-GGUF",
+          "jevk5_gguf_filename": "jevk5-4b-v0.3-Q8_0.gguf",
+          "jevk5_temperature": 1.22,
+          "jevk5_knockout_temperature": 0.93,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 5.5,
+          "recommended_memory_gib": 8.0,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 8192,
+          "family": "jevk5",
+          "runtime": "jevk5-gguf-native",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "revision": "main",
+            "local_dir": "models/jevk5-GGUF",
+            "role": "jevk5-gguf-q8_0",
+            "filename": "jevk5-4b-v0.3-Q8_0.gguf"
+          }
         }
       }
     },
@@ -310,7 +1023,71 @@
             "Linux"
           ],
           "min_memory_gib": 19,
-          "recommended_memory_gib": 24
+          "recommended_memory_gib": 24,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "alibiserikbay/JevK5-GGUF",
+          "wire_model": "alibiserikbay/JevK5-GGUF",
+          "model_revision": "main",
+          "runtime_key": "jevk5-gguf",
+          "python": "3.12",
+          "installer": "jevk5_gguf",
+          "launcher": "jevk5_gguf",
+          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@v0.3.0",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "jevk5_gguf_dir": "models/jevk5-GGUF",
+          "jevk5_gguf_filename": "jevk5-9b-v0.3.3-Q8_0.gguf",
+          "jevk5_temperature": 1.316,
+          "jevk5_knockout_temperature": 1.05,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 11.0,
+          "recommended_memory_gib": 16.0,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 8192,
+          "family": "jevk5",
+          "runtime": "jevk5-gguf-native",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "revision": "main",
+            "local_dir": "models/jevk5-GGUF",
+            "role": "jevk5-gguf-q8_0",
+            "filename": "jevk5-9b-v0.3.3-Q8_0.gguf"
+          }
         }
       }
     },
@@ -348,7 +1125,18 @@
             "Linux"
           ],
           "min_memory_gib": 8,
-          "recommended_memory_gib": 12
+          "recommended_memory_gib": 12,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -386,7 +1174,18 @@
             "Linux"
           ],
           "min_memory_gib": 22,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -423,7 +1222,18 @@
             "Linux"
           ],
           "min_memory_gib": 66,
-          "recommended_memory_gib": 80
+          "recommended_memory_gib": 80,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -463,110 +1273,671 @@
             "Linux"
           ],
           "min_memory_gib": 20,
-          "recommended_memory_gib": 24
+          "recommended_memory_gib": 24,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
     {
-      "id": "basal-1.5b",
+      "id": "basal-1.5-mini",
       "engine": "basal",
-      "label": "Basal 1.5B",
-      "description": "Basal 1.0 1.5B calibrated typed-decision model; Apple Silicon uses the upstream-documented community MLX 8-bit checkpoint, CUDA keeps the upstream v1.0.1 path.",
+      "label": "Basal 1.5 Mini — 1.5B",
+      "description": "Official Basal 1.5 Mini with full SystemOne semantics and capability-aware runtimes.",
       "source": "https://github.com/rkinas/basal",
       "backends": {
         "mlx": {
-          "model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
-          "wire_model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
-          "model_revision": "097465843096292389d039e22265de8b972d2b7b",
-          "runtime_key": "basal-mlx",
+          "model": "Remek/basal-1.5-mini-MLX-8bit",
+          "wire_model": "Remek/basal-1.5-mini-MLX-8bit",
+          "model_revision": "main",
+          "runtime_key": "basal15-mini-mlx",
           "python": "3.12",
           "installer": "basal",
           "basal_backend": "mlx",
-          "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mlx",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 3,
+          "min_memory_gib": 1.8,
           "recommended_memory_gib": 4,
-          "basal_mode": "mlx",
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mlx",
+          "platform": "mlx",
+          "source": "official",
+          "precision": "mlx-8bit",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
           "quantization": {
             "kind": "mlx-affine",
             "bits": 8,
             "group_size": 64,
             "applied": "checkpoint",
-            "source_model": "Remek/basal-1.0-1.5B"
+            "source_model": "Remek/basal-1.5-mini"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-mini-MLX-8bit",
+            "revision": "main",
+            "role": "basal-model"
           }
         },
+        "mps": {
+          "model": "Remek/basal-1.5-mini",
+          "wire_model": "Remek/basal-1.5-mini",
+          "model_revision": "main",
+          "runtime_key": "basal15-mini-mps",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mps",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mps",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 3.2,
+          "recommended_memory_gib": 6,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mps",
+          "platform": "mps",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-mini",
+            "revision": "main",
+            "role": "basal-model"
+          }
+        },
+        "gguf": {
+          "model": "Remek/basal-1.5-mini",
+          "wire_model": "Remek/basal-1.5-mini",
+          "model_revision": "main",
+          "runtime_key": "basal15-mini-gguf",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "gguf",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "gguf",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux",
+            "Windows"
+          ],
+          "min_memory_gib": 1.7,
+          "recommended_memory_gib": 4,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-gguf",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.5-mini"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Remek/basal-1.5-mini",
+              "revision": "main",
+              "role": "basal-metadata",
+              "ignore_patterns": [
+                "*.safetensors",
+                "*.bin",
+                "*.pt"
+              ]
+            },
+            {
+              "type": "file",
+              "repo_id": "Remek/basal-1.5-mini-GGUF",
+              "revision": "main",
+              "local_dir": "models/basal-1.5-mini-GGUF",
+              "role": "basal-gguf-q8_0",
+              "filename_pattern": "*Q8_0.gguf"
+            }
+          ],
+          "basal_gguf_role": "basal-gguf-q8_0",
+          "basal_gguf_dir": "models/basal-1.5-mini-GGUF",
+          "basal_gguf_pattern": "*Q8_0.gguf"
+        },
         "cuda": {
-          "model": "Remek/basal-1.0-1.5B",
-          "wire_model": "Remek/basal-1.0-1.5B",
-          "model_revision": "81a74acc6e7f7604008697b2daa83b3652d85b68",
-          "runtime_key": "basal-cuda",
+          "model": "Remek/basal-1.5-mini",
+          "wire_model": "Remek/basal-1.5-mini",
+          "model_revision": "main",
+          "runtime_key": "basal15-mini-cuda",
           "python": "3.12",
           "installer": "basal",
           "basal_backend": "cuda",
-          "basal_package": "basal[fp8] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
           "basal_mode": "fast-nocompile",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
           "systems": [
             "Linux"
           ],
-          "min_memory_gib": 5,
-          "recommended_memory_gib": 8
+          "min_memory_gib": 4,
+          "recommended_memory_gib": 8,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-cuda",
+          "platform": "cuda",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-mini",
+            "revision": "main",
+            "role": "basal-model"
+          }
         }
       }
     },
     {
-      "id": "basal-4.5b",
+      "id": "basal-1.5-main",
       "engine": "basal",
-      "label": "Basal 4.5B",
-      "description": "Basal 1.0 4.5B typed-decision model; Apple Silicon uses the validated MLX 8-bit checkpoint and CUDA uses the upstream FP8 vLLM checkpoint on Hopper/Blackwell-class GPUs.",
+      "label": "Basal 1.5 — 4.5B",
+      "description": "Official Basal 1.5 main model with full SystemOne semantics and capability-aware runtimes.",
       "source": "https://github.com/rkinas/basal",
       "backends": {
         "mlx": {
-          "model": "pawelkiszczak/basal-1.0-4.5B-MLX-8bit",
-          "wire_model": "pawelkiszczak/basal-1.0-4.5B-MLX-8bit",
-          "model_revision": "7c8291bce44c9096da1ca52ba2136a9722975c3e",
-          "runtime_key": "basal-mlx-45",
+          "model": "Remek/basal-1.5-4.5B-MLX-8bit",
+          "wire_model": "Remek/basal-1.5-4.5B-MLX-8bit",
+          "model_revision": "main",
+          "runtime_key": "basal15-main-mlx",
           "python": "3.12",
           "installer": "basal",
           "basal_backend": "mlx",
-          "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@feat/gguf-llamacpp",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mlx",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 6,
+          "min_memory_gib": 5.2,
           "recommended_memory_gib": 8,
-          "basal_mode": "mlx",
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mlx",
+          "platform": "mlx",
+          "source": "official",
+          "precision": "mlx-8bit",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
           "quantization": {
             "kind": "mlx-affine",
             "bits": 8,
             "group_size": 64,
             "applied": "checkpoint",
-            "source_model": "Remek/basal-1.0-4.5B"
+            "source_model": "Remek/basal-1.5-4.5B"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-4.5B-MLX-8bit",
+            "revision": "main",
+            "role": "basal-model"
           }
         },
+        "mps": {
+          "model": "Remek/basal-1.5-4.5B",
+          "wire_model": "Remek/basal-1.5-4.5B",
+          "model_revision": "main",
+          "runtime_key": "basal15-main-mps",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mps",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mps",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 9.5,
+          "recommended_memory_gib": 14,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mps",
+          "platform": "mps",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-4.5B",
+            "revision": "main",
+            "role": "basal-model"
+          }
+        },
+        "gguf": {
+          "model": "Remek/basal-1.5-4.5B",
+          "wire_model": "Remek/basal-1.5-4.5B",
+          "model_revision": "main",
+          "runtime_key": "basal15-main-gguf",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "gguf",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "gguf",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux",
+            "Windows"
+          ],
+          "min_memory_gib": 5.1,
+          "recommended_memory_gib": 8,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-gguf",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.5-4.5B"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Remek/basal-1.5-4.5B",
+              "revision": "main",
+              "role": "basal-metadata",
+              "ignore_patterns": [
+                "*.safetensors",
+                "*.bin",
+                "*.pt"
+              ]
+            },
+            {
+              "type": "file",
+              "repo_id": "Remek/basal-1.5-4.5B-GGUF",
+              "revision": "main",
+              "local_dir": "models/basal-1.5-4.5B-GGUF",
+              "role": "basal-gguf-q8_0",
+              "filename_pattern": "*Q8_0.gguf"
+            }
+          ],
+          "basal_gguf_role": "basal-gguf-q8_0",
+          "basal_gguf_dir": "models/basal-1.5-4.5B-GGUF",
+          "basal_gguf_pattern": "*Q8_0.gguf"
+        },
         "cuda": {
-          "model": "Remek/basal-1.0-4.5B-FP8",
-          "wire_model": "Remek/basal-1.0-4.5B-FP8",
-          "model_revision": "6a4718943f85d80612242be688eb57e3037ec88e",
-          "runtime_key": "basal-cuda-vllm",
+          "model": "Remek/basal-1.5-4.5B",
+          "wire_model": "Remek/basal-1.5-4.5B",
+          "model_revision": "main",
+          "runtime_key": "basal15-main-cuda",
           "python": "3.12",
           "installer": "basal",
           "basal_backend": "cuda",
-          "basal_package": "basal[vllm] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
-          "basal_mode": "vllm",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "fast-nocompile",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
           "systems": [
             "Linux"
           ],
-          "min_memory_gib": 12,
+          "min_memory_gib": 10,
           "recommended_memory_gib": 16,
-          "min_cuda_compute_capability": 9.0,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-cuda",
+          "platform": "cuda",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-4.5B",
+            "revision": "main",
+            "role": "basal-model"
+          }
+        }
+      }
+    },
+    {
+      "id": "basal-1.5-max",
+      "engine": "basal",
+      "label": "Basal 1.5 Max — 11B",
+      "description": "Official Basal 1.5 Max for maximum quality with full SystemOne semantics and capability-aware runtimes.",
+      "source": "https://github.com/rkinas/basal",
+      "backends": {
+        "mlx": {
+          "model": "Remek/basal-1.5-max-MLX-8bit",
+          "wire_model": "Remek/basal-1.5-max-MLX-8bit",
+          "model_revision": "main",
+          "runtime_key": "basal15-max-mlx",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mlx",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mlx",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 12.0,
+          "recommended_memory_gib": 20,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mlx",
+          "platform": "mlx",
+          "source": "official",
+          "precision": "mlx-8bit",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
           "quantization": {
-            "kind": "fp8",
+            "kind": "mlx-affine",
             "bits": 8,
+            "group_size": 64,
             "applied": "checkpoint",
-            "source_model": "Remek/basal-1.0-4.5B",
-            "output_head_precision": "bf16"
+            "source_model": "Remek/basal-1.5-max"
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-max-MLX-8bit",
+            "revision": "main",
+            "role": "basal-model"
+          }
+        },
+        "mps": {
+          "model": "Remek/basal-1.5-max",
+          "wire_model": "Remek/basal-1.5-max",
+          "model_revision": "main",
+          "runtime_key": "basal15-max-mps",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "mps",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "mps",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin"
+          ],
+          "min_memory_gib": 24,
+          "recommended_memory_gib": 32,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-mps",
+          "platform": "mps",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-max",
+            "revision": "main",
+            "role": "basal-model"
+          }
+        },
+        "gguf": {
+          "model": "Remek/basal-1.5-max",
+          "wire_model": "Remek/basal-1.5-max",
+          "model_revision": "main",
+          "runtime_key": "basal15-max-gguf",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "gguf",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "gguf",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux",
+            "Windows"
+          ],
+          "min_memory_gib": 12.0,
+          "recommended_memory_gib": 20,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-gguf",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": false,
+            "systemone": true
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint",
+            "source_model": "Remek/basal-1.5-max"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Remek/basal-1.5-max",
+              "revision": "main",
+              "role": "basal-metadata",
+              "ignore_patterns": [
+                "*.safetensors",
+                "*.bin",
+                "*.pt"
+              ]
+            },
+            {
+              "type": "file",
+              "repo_id": "Remek/basal-1.5-max-GGUF",
+              "revision": "main",
+              "local_dir": "models/basal-1.5-max-GGUF",
+              "role": "basal-gguf-q8_0",
+              "filename_pattern": "*Q8_0.gguf"
+            }
+          ],
+          "basal_gguf_role": "basal-gguf-q8_0",
+          "basal_gguf_dir": "models/basal-1.5-max-GGUF",
+          "basal_gguf_pattern": "*Q8_0.gguf"
+        },
+        "cuda": {
+          "model": "Remek/basal-1.5-max",
+          "wire_model": "Remek/basal-1.5-max",
+          "model_revision": "main",
+          "runtime_key": "basal15-max-cuda",
+          "python": "3.12",
+          "installer": "basal",
+          "basal_backend": "cuda",
+          "basal_runtime_version": "1.5.0",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_mode": "fast-nocompile",
+          "basal_soam": true,
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Linux"
+          ],
+          "min_memory_gib": 24,
+          "recommended_memory_gib": 32,
+          "family": "basal1.5",
+          "runtime": "basal-1.5-cuda",
+          "platform": "cuda",
+          "source": "official",
+          "precision": "bf16",
+          "capabilities": {
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi": true,
+            "act": true,
+            "facts": true,
+            "soam": true,
+            "multi_question": true,
+            "option_keys": true,
+            "structured_state": true,
+            "evidence": true,
+            "systemone": true
+          },
+          "download": {
+            "type": "snapshot",
+            "repo_id": "Remek/basal-1.5-max",
+            "revision": "main",
+            "role": "basal-model"
           }
         }
       }
@@ -604,6 +1975,67 @@
             "applied": "checkpoint",
             "source_model": "Cloudflare/clef-flash",
             "joint_head_precision": "bf16"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Clef-Flash-GGUF",
+          "wire_model": "ggml-org/Clef-Flash-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/clef-flash-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 11.5,
+          "recommended_memory_gib": 18,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 8192,
+          "family": "clef",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Clef-Flash-GGUF",
+            "revision": "main",
+            "local_dir": "models/clef-flash-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
           }
         }
       }
@@ -641,6 +2073,67 @@
             "applied": "checkpoint",
             "source_model": "Cloudflare/clef",
             "joint_head_precision": "bf16"
+          },
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Clef-GGUF",
+          "wire_model": "ggml-org/Clef-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/clef-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 31.0,
+          "recommended_memory_gib": 40,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 8192,
+          "family": "clef",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Clef-GGUF",
+            "revision": "main",
+            "local_dir": "models/clef-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
           }
         }
       }
@@ -661,7 +2154,18 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 3,
-          "recommended_memory_gib": 8
+          "recommended_memory_gib": 8,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "Mapika/decider-0.8b",
@@ -672,7 +2176,18 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 3,
-          "recommended_memory_gib": 8
+          "recommended_memory_gib": 8,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -692,7 +2207,18 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 6,
-          "recommended_memory_gib": 12
+          "recommended_memory_gib": 12,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "Mapika/decider-2b",
@@ -703,7 +2229,80 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 6,
-          "recommended_memory_gib": 12
+          "recommended_memory_gib": 12,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "Mapika/decider-2b-GGUF",
+          "wire_model": "Mapika/decider-2b-GGUF",
+          "model_revision": "main",
+          "runtime_key": "decider-gguf",
+          "python": "3.12",
+          "installer": "decider_gguf",
+          "launcher": "decider_gguf",
+          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@v1.8.1",
+          "decider_gguf_dir": "models/decider-2b-GGUF",
+          "decider_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 3.0,
+          "recommended_memory_gib": 5.0,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 8192,
+          "family": "decider",
+          "runtime": "decider-gguf-native",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Mapika/decider-2b-GGUF",
+              "revision": "main",
+              "local_dir": "models/decider-2b-GGUF",
+              "role": "decider-gguf-metadata",
+              "ignore_patterns": [
+                "*.gguf"
+              ]
+            },
+            {
+              "type": "file",
+              "repo_id": "Mapika/decider-2b-GGUF",
+              "revision": "main",
+              "local_dir": "models/decider-2b-GGUF",
+              "role": "decider-gguf-q8_0",
+              "filename_pattern": "*Q8_0.gguf"
+            }
+          ]
         }
       }
     },
@@ -723,7 +2322,18 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 11,
-          "recommended_memory_gib": 16
+          "recommended_memory_gib": 16,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "Mapika/decider-4b",
@@ -734,7 +2344,80 @@
             "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
           ],
           "min_memory_gib": 11,
-          "recommended_memory_gib": 16
+          "recommended_memory_gib": 16,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "Mapika/decider-4b-GGUF",
+          "wire_model": "Mapika/decider-4b-GGUF",
+          "model_revision": "main",
+          "runtime_key": "decider-gguf",
+          "python": "3.12",
+          "installer": "decider_gguf",
+          "launcher": "decider_gguf",
+          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@v1.8.1",
+          "decider_gguf_dir": "models/decider-4b-GGUF",
+          "decider_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 5.5,
+          "recommended_memory_gib": 8.0,
+          "max_input_tokens": 32768,
+          "default_max_input_tokens": 8192,
+          "family": "decider",
+          "runtime": "decider-gguf-native",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "downloads": [
+            {
+              "type": "snapshot",
+              "repo_id": "Mapika/decider-4b-GGUF",
+              "revision": "main",
+              "local_dir": "models/decider-4b-GGUF",
+              "role": "decider-gguf-metadata",
+              "ignore_patterns": [
+                "*.gguf"
+              ]
+            },
+            {
+              "type": "file",
+              "repo_id": "Mapika/decider-4b-GGUF",
+              "revision": "main",
+              "local_dir": "models/decider-4b-GGUF",
+              "role": "decider-gguf-q8_0",
+              "filename_pattern": "*Q8_0.gguf"
+            }
+          ]
         }
       }
     },
@@ -757,7 +2440,18 @@
             "uvicorn[standard]>=0.27"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "cuda": {
           "model": "convaiinnovations/laya",
@@ -772,7 +2466,18 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "convaiinnovations/laya",
@@ -787,7 +2492,68 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
+        },
+        "gguf": {
+          "model": "ggml-org/Laya-GGUF",
+          "wire_model": "ggml-org/Laya-GGUF",
+          "model_revision": "main",
+          "runtime_key": "llama-cpp-systemone",
+          "python": "3.12",
+          "installer": "llama_cpp",
+          "launcher": "llama_cpp",
+          "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
+          "llama_cpp_gguf_dir": "models/laya-english-GGUF",
+          "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+          "pin_hf_revisions_at_install": true,
+          "systems": [
+            "Darwin",
+            "Linux"
+          ],
+          "min_memory_gib": 1.2,
+          "recommended_memory_gib": 3,
+          "max_input_tokens": 16384,
+          "default_max_input_tokens": 8192,
+          "family": "laya",
+          "runtime": "llama.cpp-systemone",
+          "platform": "gguf",
+          "source": "official",
+          "precision": "q8_0",
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          },
+          "quantization": {
+            "kind": "gguf",
+            "quantization": "Q8_0",
+            "applied": "checkpoint"
+          },
+          "download": {
+            "type": "file",
+            "repo_id": "ggml-org/Laya-GGUF",
+            "revision": "main",
+            "local_dir": "models/laya-english-GGUF",
+            "role": "systemone-gguf-q8_0",
+            "filename_pattern": "*Q8_0.gguf"
+          }
         }
       }
     },
@@ -810,7 +2576,18 @@
             "uvicorn[standard]>=0.27"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "cuda": {
           "model": "convaiinnovations/laya-multilingual",
@@ -825,7 +2602,18 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "convaiinnovations/laya-multilingual",
@@ -840,7 +2628,18 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -863,7 +2662,18 @@
             "uvicorn[standard]>=0.27"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "cuda": {
           "model": "convaiinnovations/laya-typed-decisions",
@@ -878,7 +2688,18 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "convaiinnovations/laya-typed-decisions",
@@ -893,7 +2714,18 @@
             "uvicorn[standard]>=0.28"
           ],
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -918,7 +2750,18 @@
             "filename": "option_marker.pt"
           },
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "mps": {
           "model": "von",
@@ -934,7 +2777,18 @@
             "filename": "option_marker.pt"
           },
           "min_memory_gib": 2,
-          "recommended_memory_gib": 4
+          "recommended_memory_gib": 4,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     },
@@ -957,7 +2811,18 @@
           "nimble_backend": "mlx",
           "python": "3.12",
           "min_memory_gib": 20,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         },
         "cuda": {
           "model": "models/nimble-9b",
@@ -971,7 +2836,18 @@
           "nimble_backend": "cuda",
           "python": "3.12",
           "min_memory_gib": 20,
-          "recommended_memory_gib": 32
+          "recommended_memory_gib": 32,
+          "capabilities": {
+            "systemone": true,
+            "choice": true,
+            "noul": true,
+            "score": true,
+            "multi_question": true,
+            "multi": false,
+            "act": false,
+            "facts": false,
+            "evidence": false
+          }
         }
       }
     }

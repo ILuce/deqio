@@ -152,22 +152,25 @@ def build_app(
     @app.post("/v1/systemone")
     def systemone(payload: dict[str, Any]):
         started = time.perf_counter()
+        questions = payload.get("questions")
+        if not isinstance(questions, dict) or not questions:
+            raise HTTPException(status_code=422, detail="questions must be a nonempty object")
+        state = payload.get("state")
+        qids = [str(qid) for qid in questions]
+        kinds: dict[str, str] = {}
+        rows: list[dict[str, Any]] = []
         try:
-            ensure_loaded()
-            questions = payload.get("questions")
-            if not isinstance(questions, dict) or not questions:
-                raise ValueError("questions must be a nonempty object")
-            state = payload.get("state")
-            qids = [str(qid) for qid in questions]
-            kinds: dict[str, str] = {}
-            rows: list[dict[str, Any]] = []
             for qid in qids:
                 question = questions[qid]
                 if not isinstance(question, dict):
                     raise ValueError(f"{qid}: question must be an object")
                 kinds[qid] = str(question.get("type", ""))
                 rows.append(_choice_row(state, qid, question))
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
+        try:
+            ensure_loaded()
             execution_mode = str(payload.get("execution_mode") or "serial")
             if len(rows) == 1 and execution_mode == "direct":
                 raw_results = [direct_score(model, tokenizer, rows[0], metadata, max_tokens)]
@@ -188,7 +191,7 @@ def build_app(
                 "usage": {"input_tokens": input_tokens},
             }
         except Exception as error:
-            raise HTTPException(status_code=400, detail=str(error)) from error
+            raise HTTPException(status_code=500, detail=str(error)) from error
 
     return app
 

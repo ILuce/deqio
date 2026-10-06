@@ -69,6 +69,7 @@ Supported wrapper backend labels are:
 ```text
 mlx
 mps
+gguf
 cuda
 ```
 
@@ -165,6 +166,11 @@ POST /v1/noul
 POST /v1/choice
 POST /v1/decision
 POST /v1/shared
+POST /v1/score
+POST /v1/multi
+POST /v1/act
+POST /v1/soam
+POST /v1/systemone
 POST /v1/cache/clear
 POST /v1/models/activate
 ```
@@ -197,7 +203,7 @@ Every entry needs:
 - model identifier/path for each backend
 - isolated runtime install packages when applicable
 
-When a runnable profile uses quantized weights, record the quantization contract in the profile (`quantization` metadata and any engine-specific loader option) so provenance and tests can distinguish it from full precision. Prefer verified 8-bit MLX variants, then verified 6-bit variants, but never replace an engine-specific adapter/head with a backbone-only quant. GGUF availability alone is not a Deqio backend: if a model requires llama.cpp/llama-server, keep it out of the MLX/MPS/CUDA catalog until that backend is intentionally implemented.
+When a runnable profile uses quantized weights, record the quantization contract in the profile (`quantization` metadata and any engine-specific loader option) so provenance and tests can distinguish it from full precision. Prefer verified 8-bit MLX variants, then verified 6-bit variants, but never replace an engine-specific adapter/head with a backbone-only quant. GGUF availability alone does not justify a Deqio profile. A GGUF backend may be catalogued only when the exact current model identity has an official/authoritative Q8_0 (8-bit or better) artifact and a native decision/SystemOne readout. Community conversions and similarly named but different model versions must not be substituted silently.
 
 Do not silently fall back from an unsupported backend to CPU or another backend.
 
@@ -219,9 +225,11 @@ Live model switching must keep one resident model at a time. Unload the old runt
 
 Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime stacks.
 
-Basal `basal-1.5b` and `basal-4.5b` use the upstream System One API. Keep MLX, native CUDA, and vLLM runtimes isolated and backend-specific. The 1.5B CUDA profile follows the pinned upstream v1.0.1 native install path. Basal 4.5B CUDA uses the official FP8 checkpoint through `basal[vllm]` and must not be offered unless CUDA compute capability 9.0+ is detected; vLLM owns its PyTorch dependency resolution in that environment. MLX uses the upstream-documented Apple Silicon fork plus the pinned community 8-bit MLX checkpoints and must run in `mlx` mode. Do not claim MPS support for Basal or silently substitute it for MLX.
+Basal 1.5 fully replaces the removed Basal 1.0 catalog profiles. The only Basal family is `basal-1.5-mini`, `basal-1.5-main`, and `basal-1.5-max`. Use the official Basal v1.5.0 `basal-serve` runtime and official model artifacts. The accepted backends are MLX 8-bit, native MPS, GGUF Q8_0, and native CUDA. Advanced semantics remain native SystemOne semantics internally: Choice, Noul, Score, Multi, Act, `facts: "auto"`, SOAM, option keys, and Evidence where the selected backend actually supports it. Patch 4 may expose thin convenience HTTP wrappers for native `score`, `multi`, `act`, and `soam`, but they must inject/forward to the same `SystemOneRuntime.system_one` path and must not implement alternative scoring. Do not create standalone Facts/Evidence/OptionKey endpoints: those remain request/question modifiers. Do not softmax Multi probabilities, do not re-decide Act results, and never silently ignore unsupported Evidence. Evidence is native-PyTorch-only for the current Basal 1.5 profiles (MPS/CUDA), not MLX/GGUF.
 
-Clef Flash and Clef are currently MLX-only Deqio profiles. Use the pinned `mlx-community` 8-bit snapshots, retain the BF16 joint schema head, and launch the `clef_mlx.py` System One server from the already-prefetched snapshot with truncation disabled. Do not replace the joint head with a normal text-generation path. Community CUDA FP8 conversions were audited but are intentionally not catalogued until their decision-probability/runtime parity is validated to the same standard. Do not alias MPS to MLX.
+Clef Flash and Clef use pinned `mlx-community` 8-bit snapshots on MLX, retaining the BF16 joint schema head and the snapshot-bundled `clef_mlx.py` System One server with truncation disabled. They also expose audited official `ggml-org` Q8_0 GGUF profiles through llama.cpp's native SystemOne endpoint. Do not replace the decision head with a normal text-generation path, and do not alias MPS to MLX.
+
+Profiles with a native SystemOne API must declare `capabilities.systemone` plus their actual per-feature support. `/ui`, `POST /v1/systemone`, `POST /v1/soam`, and the native typed convenience wrappers use the same capability metadata; do not expose a feature in the GUI that the active runtime cannot execute, and do not silently hide a supported native feature from the GUI. Preserve native probabilities and response fields rather than synthesizing replacements.
 
 ## Change workflow
 
@@ -282,6 +290,11 @@ Changes to serving must verify:
 /v1/noul
 /v1/choice
 /v1/shared
+/v1/score
+/v1/multi
+/v1/act
+/v1/soam
+/v1/systemone
 ```
 
 Changes to UI must verify:
@@ -290,20 +303,21 @@ Changes to UI must verify:
 2. Noul requests can be submitted.
 3. Choice options can be added and removed.
 4. Shared decisions can be submitted.
-5. generated JSON matches the API request.
-6. responses render without page reload.
-7. active engine/model/backend are visible.
-8. installed model profiles are listed.
-9. switching an installed profile keeps the same public API URL.
-10. `/ui/watch` loads and links back to `/ui`.
-11. watch rows refresh for API decision requests and direct benchmark cases, and row details expose the full temporary request/response payload.
-12. model switches keep history in the same server session while every row retains its own engine/model/backend/runtime identity.
-13. Watch auto-clear can be configured from both `/ui` and `/ui/watch`.
-14. rotated Watch files never exceed 10,000 JSONL event lines.
+5. Native Score/Multi/Act/SOAM examples follow the active profile capabilities and reload when the active profile changes.
+6. generated JSON matches the API request.
+7. responses render without page reload.
+8. active engine/model/backend are visible.
+9. installed model profiles are listed.
+10. switching an installed profile keeps the same public API URL.
+11. `/ui/watch` loads and links back to `/ui`.
+12. watch rows refresh for API decision requests and direct benchmark cases, and row details expose the full temporary request/response payload.
+13. model switches keep history in the same server session while every row retains its own engine/model/backend/runtime identity.
+14. Watch auto-clear can be configured from both `/ui` and `/ui/watch`.
+15. rotated Watch files never exceed 10,000 JSONL event lines.
 
 ## Watch UI and session inspection
 
-`/ui/watch` is a separate operational view for decision traffic. Track parsed request/response pairs for `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared`, including failed calls that reach those endpoint handlers. Direct `deqio benchmark` case execution must write equivalent events to the same Watch store for the same workspace. Do not record watch/stats/health polling endpoints or internal readiness/warmup probes as user decision traffic.
+`/ui/watch` is a separate operational view for decision traffic. Track parsed request/response pairs for `/v1/noul`, `/v1/choice`, `/v1/decision`, `/v1/shared`, `/v1/score`, `/v1/multi`, `/v1/act`, `/v1/soam`, and `/v1/systemone`, including failed calls that reach those endpoint handlers. Direct `deqio benchmark` case execution must write equivalent events to the same Watch store for the same workspace. Do not record watch/stats/health polling endpoints or internal readiness/warmup probes as user decision traffic.
 
 Full Watch payloads are temporary disk-backed session data under `.deqio/watch/`, not unbounded RAM state and not part of the normal persistent JSONL request log. Store one JSON event per line and rotate to a new `events-*.jsonl` file after 10,000 event lines. Listing must be paginated/lightweight and must not read an entire potentially large event file into memory just to render one page; detailed request/response bodies should be fetched by event ID.
 
@@ -317,6 +331,14 @@ The main `/ui` must link to `/ui/watch`, and the watch page must link back to `/
 
 Benchmark suites are editable schema-version-1 JSON files under the workspace `benchmarks/` directory. `deqio benchmark` without `--suite` must discover all valid `*.json` files there and present a suite selector before model selection. Packaged defaults currently include `basic.json` (`ENG Bench`) and `pl.json` (`PL Bench`), but the runtime must not hard-code those two filenames for discovery. `--suite PATH` remains the explicit/non-interactive override. Invalid JSON/suites should be skipped with a clear warning rather than making every other valid suite unusable.
 
+### Benchmark runtime ownership
+
+A benchmark must have exclusive inference ownership for its workspace without killing the Deqio HTTP server. If `deqio serve` is running, the benchmark asks the server through the workspace-local authenticated control channel to close its active runtime; `/ui`, `/ui/watch`, health, history and administrative APIs remain alive. Inference requests must return a clear temporary `503` and model activation must return `409` while the benchmark owns inference. Load one benchmark profile at a time and always close it before loading the next. At benchmark completion restore the server's previous profile. If the benchmark owner process disappears, the server watchdog should restore automatically. Never implement this by broad `pkill`/process-name matching. A workspace benchmark lock prevents two benchmark CLIs from running model workloads concurrently.
+
+### Benchmark comparison
+
+`deqio benchmark compare` compares concrete completed run directories, not suite names. New benchmark summaries must persist canonical profile identity including at least model ID, backend, precision/quantization where relevant, significant runtime identity/version, and pinned artifact revisions. Only exact canonical-profile intersections are common. Never merge the same model across different backends or quantizations. Show only-A/only-B explicitly. Comparison output must include accuracy, decision accuracy, median/P95 latency, throughput, rank/rank shift, and per-decision-type breakdown only where both runs have the metric. Different suites may be compared factually but must not be interpreted automatically as a pure language/quality delta. JSON output is part of the agent/automation contract. Legacy summaries without canonical identity must not be silently treated as common profiles.
+
 ## Logging
 
 Console logging is part of the developer-facing interface.
@@ -327,7 +349,7 @@ Rules:
 - prefix external runtime output as `[sidecar:<engine>]`;
 - suppress internal sidecar HTTP access-log noise;
 - keep the main Uvicorn access log disabled;
-- log wrapper-owned `/v1/noul`, `/v1/choice`, `/v1/decision`, and `/v1/shared` requests clearly;
+- log wrapper-owned `/v1/noul`, `/v1/choice`, `/v1/decision`, `/v1/shared`, `/v1/score`, `/v1/multi`, `/v1/act`, `/v1/soam`, and `/v1/systemone` requests clearly;
 - print the UI, API docs, and health URLs at startup;
 - describe random sidecar ports as internal inference-only;
 - keep useful model download, loading, accelerator, and runtime diagnostics visible.

@@ -87,6 +87,35 @@ th, td { text-align: left; padding: 9px; border-bottom: 1px solid color-mix(in s
 th { opacity: .7; }
 .hidden { display: none !important; }
 .badge { padding: 5px 9px; border: 1px solid color-mix(in srgb, CanvasText 15%, transparent); border-radius: 999px; font-size: 12px; }
+.capabilities { display:flex; flex-wrap:wrap; gap:6px; margin:-8px 0 16px; }
+.capability { padding:4px 7px; border-radius:999px; font-size:11px; border:1px solid color-mix(in srgb, CanvasText 15%, transparent); }
+.capability.off { opacity:.35; text-decoration:line-through; }
+.api-guide {
+    display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:10px; margin:0 0 16px;
+}
+.api-guide-card {
+    border:1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius:10px; padding:12px;
+    background:color-mix(in srgb, Canvas 98%, CanvasText 2%);
+}
+.api-guide-card strong { display:block; margin-bottom:5px; font-size:13px; }
+.api-guide-card span { display:block; opacity:.68; font-size:12px; line-height:1.45; }
+.compare-list { display:grid; gap:12px; margin-top:10px; }
+.compare-card {
+    border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:12px; padding:14px;
+    background:color-mix(in srgb, Canvas 98%, CanvasText 2%);
+}
+.compare-card-head { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }
+.compare-card-title { min-width:0; }
+.compare-card-title strong { display:block; font-size:15px; overflow-wrap:anywhere; }
+.compare-card-title small { display:block; opacity:.62; margin-top:3px; }
+.compare-card-tags { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.compare-metrics { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.compare-metric { border:1px solid color-mix(in srgb, CanvasText 10%, transparent); border-radius:9px; padding:10px; min-width:0; }
+.compare-metric > strong { display:block; font-size:12px; margin-bottom:8px; }
+.compare-values { display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px; }
+.compare-values span { min-width:0; }
+.compare-values small { display:block; opacity:.55; font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+.compare-delta { margin-top:7px; padding-top:7px; border-top:1px solid color-mix(in srgb, CanvasText 8%, transparent); font:600 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap:anywhere; }
 .benchmark-controls { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .benchmark-run-grid { display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 10px; align-items: end; }
 .benchmark-meta { font-size: 13px; opacity: .7; margin: 8px 0 14px; }
@@ -103,6 +132,13 @@ th { opacity: .7; }
     .prob-row { grid-template-columns: 100px 1fr 70px; }
     .benchmark-controls { grid-template-columns: 1fr 1fr; }
     .benchmark-run-grid { grid-template-columns: 1fr; }
+    .api-guide { grid-template-columns: 1fr; }
+    .compare-metrics { grid-template-columns: 1fr; }
+    .compare-card-head { flex-direction:column; }
+    .compare-card-tags { justify-content:flex-start; }
+}
+@media (min-width: 801px) and (max-width: 1100px) {
+    .compare-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
 </head>
@@ -139,12 +175,22 @@ th { opacity: .7; }
 </section>
 
 <section class="panel">
-  <h2>Playground</h2>
-  <div class="tabs">
-    <button class="tab active" data-endpoint="noul" type="button">Noul</button>
-    <button class="tab" data-endpoint="choice" type="button">Choice</button>
-    <button class="tab" data-endpoint="shared" type="button">Shared</button>
+  <h2>Decision playground</h2>
+  <div class="api-guide">
+    <div class="api-guide-card"><strong>Portable Deqio API</strong><span><code>/v1/noul</code>, <code>/v1/choice</code> and <code>/v1/shared</code> keep the stable cross-model Deqio contract.</span></div>
+    <div class="api-guide-card"><strong>Native typed API</strong><span><code>/v1/score</code>, <code>/v1/multi</code> and <code>/v1/act</code> are thin convenience wrappers over the active model's native SystemOne implementation.</span></div>
+    <div class="api-guide-card"><strong>SOAM = State Once, Ask Many</strong><span><code>/v1/soam</code> sends one state with several typed questions in one native request. <code>/v1/systemone</code> remains the raw canonical contract.</span></div>
   </div>
+  <div class="tabs">
+    <button class="tab endpoint-tab active" data-endpoint="noul" type="button">Noul</button>
+    <button class="tab endpoint-tab" data-endpoint="choice" type="button">Choice</button>
+    <button class="tab endpoint-tab" data-endpoint="shared" type="button">Shared</button>
+    <button class="tab endpoint-tab" id="scoreTab" data-endpoint="score" type="button">Score</button>
+    <button class="tab endpoint-tab" id="multiTab" data-endpoint="multi" type="button">Multi</button>
+    <button class="tab endpoint-tab" id="actTab" data-endpoint="act" type="button">Act</button>
+    <button class="tab endpoint-tab" id="systemOneTab" data-endpoint="soam" type="button">SOAM · /v1/soam</button>
+  </div>
+  <div id="systemOneCapabilities" class="capabilities"></div>
 
   <div class="grid">
     <div>
@@ -190,6 +236,35 @@ The project has an existing unit test suite.</textarea>
           <label>Decisions</label>
           <div id="sharedDecisions"></div>
           <button id="addSharedDecision" type="button">+ Add decision</button>
+        </div>
+      </div>
+
+      <div id="nativeSingleFields" class="hidden">
+        <div class="field">
+          <label for="nativeQuestionInput">Native question JSON</label>
+          <textarea id="nativeQuestionInput" style="min-height:260px"></textarea>
+          <div class="runtime-note">The endpoint injects its own <code>type</code>. Put native fields such as <code>criteria</code>, <code>threshold</code>, <code>max</code>, <code>costs</code> or <code>evidence</code> here. Unsupported capabilities fail explicitly.</div>
+        </div>
+        <div class="field">
+          <label for="nativeFactsMode">Facts modifier</label>
+          <select id="nativeFactsMode"><option value="off">off</option><option value="auto">auto</option></select>
+          <div class="runtime-note"><code>facts</code> is a request modifier, not a separate decision endpoint. It is enabled only when the active native runtime supports it.</div>
+        </div>
+      </div>
+
+      <div id="systemOneFields" class="hidden">
+        <div class="field">
+          <label for="factsMode">Facts modifier</label>
+          <select id="factsMode">
+            <option value="off">off</option>
+            <option value="auto">auto</option>
+          </select>
+          <div class="runtime-note"><code>facts: "auto"</code> asks a supporting native runtime (currently Basal 1.5 profiles) to derive supported deterministic facts before the decision. It is not a standalone endpoint.</div>
+        </div>
+        <div class="field">
+          <label for="systemOneQuestions">SOAM questions (JSON object)</label>
+          <textarea id="systemOneQuestions" style="min-height:360px"></textarea>
+          <div class="runtime-note"><strong>SOAM</strong> means one shared state + many typed questions in one request. <code>option_keys</code> and <code>evidence</code> are per-question modifiers, not separate endpoints. The raw equivalent remains <code>POST /v1/systemone</code>.</div>
         </div>
       </div>
 
@@ -261,6 +336,7 @@ The project has an existing unit test suite.</textarea>
     <div class="tabs">
       <button class="benchmark-tab tab active" data-benchmark-view="summary" type="button">Summary</button>
       <button class="benchmark-tab tab" data-benchmark-view="results" type="button">Results</button>
+      <button class="benchmark-tab tab" data-benchmark-view="compare" type="button">Compare</button>
     </div>
 
     <div id="benchmarkSummaryView">
@@ -270,7 +346,7 @@ The project has an existing unit test suite.</textarea>
           <option value="overall">Overall</option><option value="noul">Noul</option><option value="choice">Choice</option><option value="shared">Shared</option><option value="*">All rows</option>
         </select></div>
         <div><label for="benchmarkSummarySort">Sort by</label><select id="benchmarkSummarySort">
-          <option value="case_accuracy">Accuracy</option><option value="decision_accuracy">Decision accuracy</option><option value="mean_ms">Mean latency</option><option value="median_ms">Median latency</option><option value="p95_ms">P95 latency</option><option value="load_ms">Model load time</option><option value="cases">Cases</option>
+          <option value="case_accuracy">Accuracy</option><option value="decision_accuracy">Decision accuracy</option><option value="mean_ms">Mean latency</option><option value="median_ms">Median latency</option><option value="p95_ms">P95 latency</option><option value="throughput_decisions_per_s">Throughput</option><option value="runtime_errors">Runtime errors</option><option value="load_ms">Model load time</option><option value="cases">Cases</option>
         </select></div>
         <div><label for="benchmarkSummaryDirection">Order</label><select id="benchmarkSummaryDirection">
           <option value="desc">Highest first</option><option value="asc">Lowest / fastest first</option>
@@ -279,7 +355,7 @@ The project has an existing unit test suite.</textarea>
       <div id="benchmarkSummaryStatus" class="status"></div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Model</th><th>Engine</th><th>Type</th><th>Cases</th><th>Passed</th><th>Accuracy</th><th>Decision acc.</th><th>Mean</th><th>Median</th><th>P95</th><th>Load</th></tr></thead>
+          <thead><tr><th>Model</th><th>Engine</th><th>Type</th><th>Cases</th><th>Passed</th><th>Runtime errors</th><th>Accuracy</th><th>Decision acc.</th><th>Mean</th><th>Median</th><th>P95</th><th>Throughput</th><th>Load</th></tr></thead>
           <tbody id="benchmarkSummaryRows"></tbody>
         </table>
       </div>
@@ -308,6 +384,21 @@ The project has an existing unit test suite.</textarea>
       </div>
       <details style="margin-top:14px"><summary>Raw results.jsonl (parsed)</summary><pre id="benchmarkRawResults" class="compact-pre" style="margin-top:10px"></pre></details>
     </div>
+
+    <div id="benchmarkCompareView" class="hidden">
+      <div class="benchmark-controls">
+        <div><label for="benchmarkCompareLeft">Benchmark A</label><select id="benchmarkCompareLeft"></select></div>
+        <div><label for="benchmarkCompareRight">Benchmark B</label><select id="benchmarkCompareRight"></select></div>
+        <div><label for="benchmarkCompareBackend">Backend</label><select id="benchmarkCompareBackend"><option value="*">All backends</option></select></div>
+        <div><label for="benchmarkCompareSort">Sort by</label><select id="benchmarkCompareSort">
+          <option value="accuracy">Accuracy delta</option><option value="decision_accuracy">Decision accuracy delta</option><option value="median">Median latency delta</option><option value="p95">P95 latency delta</option><option value="throughput">Throughput delta</option><option value="rank">Rank shift</option>
+        </select></div>
+      </div>
+      <div id="benchmarkCompareStatus" class="status"></div>
+      <div id="benchmarkCompareCards" class="compare-list"></div>
+      <div id="benchmarkCompareOnly" class="benchmark-meta"></div>
+      <details style="margin-top:14px"><summary>Raw comparison JSON</summary><pre id="benchmarkRawComparison" class="compact-pre" style="margin-top:10px"></pre></details>
+    </div>
   </div>
 </section>
 
@@ -319,7 +410,9 @@ let installedModels = [];
 let benchmarkRuns = [];
 let benchmarkSummary = null;
 let benchmarkResults = [];
+let benchmarkComparison = null;
 let benchmarkRunId = '';
+let systemOneExampleModelKey = '';
 const endpointInitialized = new Set();
 
 const EXAMPLES = {
@@ -370,6 +463,115 @@ A rollback commit is available.`,
     ],
   },
 };
+
+const NATIVE_EXAMPLES = {
+  score: {
+    state: 'A production incident affects checkout for some customers. Orders can still be placed after a retry, but payment latency is elevated.',
+    question: { instructions: 'Rate the operational severity.', criteria: ['low', 'medium', 'high', 'critical'] },
+  },
+  multi: {
+    state: 'The customer reports a cracked screen, a damaged shipping box, and asks for a refund instead of repair.',
+    question: {
+      instructions: 'Which labels apply to this case?',
+      criteria: { damage: 'Physical product damage.', delivery: 'Delivery or courier problem.', refund: 'Customer requests a refund.', repair: 'Customer requests repair.' },
+      threshold: 0.5, max: 3,
+    },
+  },
+  act: {
+    state: 'A refund claim is likely valid, but approving an invalid claim is much more expensive than asking a human to review it.',
+    question: {
+      instructions: 'Choose the next action using the supplied costs.',
+      criteria: { true: 'The refund is justified.', false: 'The refund is not justified.' },
+      costs: { approve: { true: 0, false: 1000 }, reject: { true: 200, false: 0 }, human: { true: 20, false: 20 } },
+    },
+  },
+};
+
+function activeProfile() {
+  return installedModels.find(model => modelKey(model) === activeModelKey) || null;
+}
+
+function activeCapabilities() {
+  return activeProfile()?.capabilities || {};
+}
+
+function buildSystemOneExample(caps = {}) {
+  const questions = {};
+  if (caps.choice) {
+    questions.route = {
+      type: 'choice',
+      instructions: 'Which workflow should handle this request?',
+      criteria: { refund: 'Refund the purchase.', repair: 'Repair or replace the item.', review: 'Send for human review.' },
+    };
+    if (caps.option_keys) questions.route.option_keys = 'show';
+  }
+  if (caps.noul) {
+    questions.damaged = { type: 'noul', instructions: 'Is the item damaged?' };
+    if (caps.evidence) questions.damaged.evidence = true;
+  }
+  if (caps.score) {
+    questions.severity = { type: 'score', instructions: 'Rate the issue severity.', criteria: ['low', 'medium', 'high'] };
+  }
+  if (caps.multi) {
+    questions.tags = {
+      type: 'multi', instructions: 'Which labels apply?',
+      criteria: { damage: 'Physical damage.', delivery: 'Delivery problem.', refund: 'Refund requested.' },
+      threshold: 0.5, max: 3,
+    };
+  }
+  if (caps.act) {
+    questions.next_action = {
+      type: 'act', instructions: 'Choose the next action.',
+      criteria: { true: 'The refund is justified.', false: 'The refund is not justified.' },
+      costs: { approve: { true: 0, false: 1000 }, reject: { true: 200, false: 0 }, human: { true: 20, false: 20 } },
+    };
+  }
+  if (!Object.keys(questions).length) {
+    questions.decision = { type: 'choice', instructions: 'Choose the best option.', criteria: { yes: 'Yes.', no: 'No.' } };
+  }
+  return questions;
+}
+
+function refreshSystemOneCapabilities() {
+  const caps = activeCapabilities();
+  const soam = Boolean(caps.soam || caps.multi_question);
+  const definitions = [
+    [caps.systemone, 'raw /v1/systemone'],
+    [soam, 'SOAM /v1/soam'],
+    [caps.score, 'Score /v1/score'],
+    [caps.multi, 'Multi /v1/multi'],
+    [caps.act, 'Act /v1/act'],
+    [caps.evidence, 'Evidence modifier'],
+    [caps.facts, 'Facts modifier'],
+    [caps.option_keys, 'Option keys modifier'],
+  ];
+  const holder = byId('systemOneCapabilities');
+  holder.innerHTML = definitions.map(([enabled, label]) => `<span class="capability ${enabled ? '' : 'off'}">${label}</span>`).join('');
+
+  const tabSupport = { score: Boolean(caps.systemone && caps.score), multi: Boolean(caps.systemone && caps.multi), act: Boolean(caps.systemone && caps.act), soam: Boolean(caps.systemone && soam) };
+  for (const [name, supported] of Object.entries(tabSupport)) {
+    const tab = byId(name === 'soam' ? 'systemOneTab' : `${name}Tab`);
+    tab.disabled = !supported;
+    tab.title = supported ? `Supported by ${activeProfile()?.label || 'the active profile'}` : `The active profile does not support ${name}`;
+  }
+  byId('factsMode').disabled = !caps.facts;
+  byId('nativeFactsMode').disabled = !caps.facts;
+  if (!caps.facts) { byId('factsMode').value = 'off'; byId('nativeFactsMode').value = 'off'; }
+
+  if (['score', 'multi', 'act', 'soam'].includes(endpoint) && !tabSupport[endpoint]) {
+    setEndpoint('noul');
+  }
+
+  if (activeModelKey !== systemOneExampleModelKey) {
+    for (const nativeEndpoint of ['score', 'multi', 'act', 'soam']) endpointInitialized.delete(nativeEndpoint);
+    systemOneExampleModelKey = activeModelKey;
+    if (['score', 'multi', 'act', 'soam'].includes(endpoint)) {
+      endpointInitialized.add(endpoint);
+      loadEndpointExample(endpoint);
+      updatePreview();
+    }
+  }
+}
 
 const byId = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '')
@@ -452,6 +654,25 @@ function buildPayload() {
       options: readOptions(byId('choiceOptions')),
     };
   }
+  if (['score', 'multi', 'act'].includes(endpoint)) {
+    const question = JSON.parse(byId('nativeQuestionInput').value.trim() || '{}');
+    if (!question || Array.isArray(question) || typeof question !== 'object' || !Object.keys(question).length) {
+      throw new Error('Native question must be a non-empty JSON object.');
+    }
+    const payload = { state, question };
+    if (byId('nativeFactsMode').value === 'auto') payload.facts = 'auto';
+    return payload;
+  }
+  if (endpoint === 'soam') {
+    const raw = byId('systemOneQuestions').value.trim();
+    const questions = JSON.parse(raw || '{}');
+    if (!questions || Array.isArray(questions) || typeof questions !== 'object' || !Object.keys(questions).length) {
+      throw new Error('SOAM questions must be a non-empty JSON object.');
+    }
+    const payload = { state, questions };
+    if (byId('factsMode').value === 'auto') payload.facts = 'auto';
+    return payload;
+  }
   return {
     state,
     decisions: [...byId('sharedDecisions').querySelectorAll('.shared-card')].map(card => ({
@@ -473,6 +694,26 @@ function updatePreview() {
 }
 
 function loadEndpointExample(next) {
+  if (['score', 'multi', 'act'].includes(next)) {
+    const example = NATIVE_EXAMPLES[next];
+    byId('stateFormat').value = 'text';
+    byId('stateInput').value = example.state;
+    const question = JSON.parse(JSON.stringify(example.question));
+    const caps = activeCapabilities();
+    if (caps.evidence && next !== 'multi') question.evidence = true;
+    byId('nativeQuestionInput').value = JSON.stringify(question, null, 2);
+    byId('nativeFactsMode').value = caps.facts ? 'auto' : 'off';
+    return;
+  }
+  if (next === 'soam') {
+    byId('stateFormat').value = 'text';
+    byId('stateInput').value = 'The customer reports that a laptop arrived with a cracked screen and asks for a refund. The courier left the parcel at the door.';
+    const caps = activeCapabilities();
+    byId('systemOneQuestions').value = JSON.stringify(buildSystemOneExample(caps), null, 2);
+    byId('factsMode').value = caps.facts ? 'auto' : 'off';
+    systemOneExampleModelKey = activeModelKey;
+    return;
+  }
   const example = EXAMPLES[next];
   byId('stateFormat').value = example.stateFormat;
   byId('stateInput').value = example.state;
@@ -492,10 +733,13 @@ function loadEndpointExample(next) {
 
 function setEndpoint(next) {
   endpoint = next;
-  document.querySelectorAll('.tab').forEach(button => button.classList.toggle('active', button.dataset.endpoint === next));
-  byId('singleFields').classList.toggle('hidden', next === 'shared');
+  const nativeSingle = ['score', 'multi', 'act'].includes(next);
+  document.querySelectorAll('.endpoint-tab').forEach(button => button.classList.toggle('active', button.dataset.endpoint === next));
+  byId('singleFields').classList.toggle('hidden', next === 'shared' || next === 'soam' || nativeSingle);
   byId('choiceFields').classList.toggle('hidden', next !== 'choice');
   byId('sharedFields').classList.toggle('hidden', next !== 'shared');
+  byId('nativeSingleFields').classList.toggle('hidden', !nativeSingle);
+  byId('systemOneFields').classList.toggle('hidden', next !== 'soam');
   if (!endpointInitialized.has(next)) {
     endpointInitialized.add(next);
     loadEndpointExample(next);
@@ -523,7 +767,17 @@ function renderOneResult(result) {
 
 function renderResponse(data) {
   byId('responseJson').textContent = JSON.stringify(data, null, 2);
-  if (Array.isArray(data.results)) {
+  if (data.answers && typeof data.answers === 'object') {
+    const answers = Object.entries(data.answers);
+    byId('resultSummary').textContent = `${answers.length} native answer${answers.length === 1 ? '' : 's'} · ${data.deqio?.timing?.total_ms ?? data.usage?.latency_ms ?? '-'} ms`;
+    byId('resultView').innerHTML = answers.map(([id, answer]) => {
+      const probabilities = Object.entries(answer.probabilities || {});
+      const bars = probabilities.map(([key, probability]) => `
+        <div class="prob-row"><strong>${escapeHtml(key)}</strong><div class="bar"><span style="width:${Math.max(0, Math.min(100, Number(probability) * 100))}%"></span></div><span>${(Number(probability) * 100).toFixed(2)}%</span></div>`).join('');
+      const primary = answer.choice ?? answer.action ?? answer.score ?? answer.noul ?? answer.selected ?? '';
+      return `<div class="result-item"><div><strong>${escapeHtml(id)} · ${escapeHtml(answer.type || 'answer')}</strong>${primary !== '' ? ` · ${escapeHtml(Array.isArray(primary) ? primary.join(', ') : primary)}` : ''}</div>${bars}<details><summary>Native answer</summary><pre>${escapeHtml(JSON.stringify(answer, null, 2))}</pre></details></div>`;
+    }).join('');
+  } else if (Array.isArray(data.results)) {
     byId('resultSummary').textContent = `${data.results.length} shared decisions · ${data.shared_timing?.total_ms ?? '-'} ms total`;
     byId('resultView').innerHTML = data.results.map(renderOneResult).join('');
   } else {
@@ -556,6 +810,7 @@ async function refreshModels() {
       select.appendChild(option);
       select.disabled = true;
       byId('activateModel').disabled = true;
+      refreshSystemOneCapabilities();
       return;
     }
     select.disabled = false;
@@ -567,6 +822,7 @@ async function refreshModels() {
       select.appendChild(option);
     });
     byId('activateModel').disabled = select.value === activeModelKey;
+    refreshSystemOneCapabilities();
   } catch (error) {
     status.textContent = `Could not inspect installed models: ${error.message}`;
     status.className = 'status error';
@@ -606,7 +862,7 @@ async function sendRequest() {
   const status = byId('requestStatus');
   try {
     const payload = buildPayload();
-    if (endpoint !== 'shared' && !payload.question) throw new Error('Question cannot be empty.');
+    if (!['shared', 'soam'].includes(endpoint) && !payload.question) throw new Error('Question cannot be empty.');
     if (endpoint === 'choice' && payload.options.length < 2) throw new Error('Choice needs at least two options.');
     if (endpoint === 'shared' && payload.decisions.length < 1) throw new Error('Shared needs at least one decision.');
     status.textContent = 'Sending...';
@@ -734,11 +990,13 @@ function renderBenchmarkSummary() {
       <td>${escapeHtml(row.type === 'overall' ? 'all' : row.type)}</td>
       <td>${escapeHtml(row.cases ?? '-')}</td>
       <td>${escapeHtml(row.passed_cases ?? '-')}</td>
+      <td>${escapeHtml(row.runtime_errors ?? '-')}</td>
       <td>${escapeHtml(formatBenchmarkPercent(row.case_accuracy))}</td>
       <td>${escapeHtml(formatBenchmarkPercent(row.decision_accuracy))}</td>
       <td>${escapeHtml(formatBenchmarkMs(row.mean_ms))}</td>
       <td>${escapeHtml(formatBenchmarkMs(row.median_ms))}</td>
       <td>${escapeHtml(formatBenchmarkMs(row.p95_ms))}</td>
+      <td>${escapeHtml(row.throughput_decisions_per_s == null ? '-' : `${Number(row.throughput_decisions_per_s).toFixed(2)}/s`)}</td>
       <td>${escapeHtml(formatBenchmarkMs(row.load_ms))}</td>
     </tr>`).join('');
 }
@@ -838,6 +1096,172 @@ async function loadBenchmarkRun(runId) {
   }
 }
 
+function comparisonMetric(row, name) {
+  const metrics = row.metrics || {};
+  if (name === 'accuracy') return metrics.case_accuracy?.absolute ?? null;
+  if (name === 'decision_accuracy') return metrics.decision_accuracy?.absolute ?? null;
+  if (name === 'median') return metrics.median_ms?.absolute ?? null;
+  if (name === 'p95') return metrics.p95_ms?.absolute ?? null;
+  if (name === 'throughput') return metrics.throughput_decisions_per_s?.absolute ?? null;
+  if (name === 'rank') return row.rank?.shift ?? null;
+  return null;
+}
+
+function formatComparisonDelta(value, kind) {
+  if (value == null) return '-';
+  if (kind === 'accuracy' || kind === 'decision_accuracy') return `${value >= 0 ? '+' : ''}${(Number(value) * 100).toFixed(1)} pp`;
+  if (kind === 'rank') return `${value >= 0 ? '+' : ''}${Number(value).toFixed(0)}`;
+  return `${value >= 0 ? '+' : ''}${Number(value).toFixed(2)}`;
+}
+
+function formatComparisonMetricDelta(metric, kind) {
+  if (!metric || metric.absolute == null) return '-';
+  let absolute;
+  if (kind === 'accuracy' || kind === 'decision_accuracy') absolute = formatComparisonDelta(metric.absolute, kind);
+  else if (kind === 'median' || kind === 'p95') absolute = `${Number(metric.absolute) >= 0 ? '+' : ''}${Number(metric.absolute).toFixed(1)} ms`;
+  else if (kind === 'throughput') absolute = `${Number(metric.absolute) >= 0 ? '+' : ''}${Number(metric.absolute).toFixed(2)}/s`;
+  else absolute = formatComparisonDelta(metric.absolute, kind);
+  return metric.percent == null ? absolute : `${absolute} (${Number(metric.percent) >= 0 ? '+' : ''}${(Number(metric.percent) * 100).toFixed(1)}%)`;
+}
+
+function populateBenchmarkComparisonSelectors() {
+  const runs = benchmarkRuns.filter(run => run.has_summary);
+  const left = byId('benchmarkCompareLeft');
+  const right = byId('benchmarkCompareRight');
+  const previousLeft = left.value;
+  const previousRight = right.value;
+  for (const select of [left, right]) {
+    select.replaceChildren();
+    runs.forEach(run => {
+      const option = document.createElement('option');
+      option.value = run.id;
+      option.textContent = `${new Date(run.created_at).toLocaleString()} · ${run.suite_name || run.id}`;
+      select.appendChild(option);
+    });
+  }
+  if (runs.length) {
+    left.value = runs.some(run => run.id === previousLeft) ? previousLeft : runs[0].id;
+    const fallbackRight = runs.find(run => run.id !== left.value)?.id || left.value;
+    right.value = runs.some(run => run.id === previousRight && run.id !== left.value) ? previousRight : fallbackRight;
+  }
+}
+
+function populateComparisonBackendFilter() {
+  const select = byId('benchmarkCompareBackend');
+  const previous = select.value || '*';
+  const backends = [...new Set((benchmarkComparison?.common_profiles || []).map(row => String(row.backend || '-')))].sort();
+  select.replaceChildren();
+  const all = document.createElement('option'); all.value='*'; all.textContent='All backends'; select.appendChild(all);
+  backends.forEach(backend => { const option=document.createElement('option'); option.value=backend; option.textContent=backend; select.appendChild(option); });
+  select.value = backends.includes(previous) ? previous : '*';
+}
+
+function renderBenchmarkComparison() {
+  const holder = byId('benchmarkCompareCards');
+  if (!benchmarkComparison) {
+    holder.innerHTML = '';
+    byId('benchmarkCompareStatus').textContent = 'Select two completed benchmark runs.';
+    return;
+  }
+  const backend = byId('benchmarkCompareBackend').value;
+  const sort = byId('benchmarkCompareSort').value;
+  let rows = (benchmarkComparison.common_profiles || []).filter(row => backend === '*' || row.backend === backend);
+  rows = [...rows].sort((a, b) => {
+    const av = comparisonMetric(a, sort);
+    const bv = comparisonMetric(b, sort);
+    if (av == null && bv == null) return String(a.model_id).localeCompare(String(b.model_id));
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const direction = (sort === 'median' || sort === 'p95') ? 1 : -1;
+    const diff = (Number(av) - Number(bv)) * direction;
+    return diff || String(a.model_id).localeCompare(String(b.model_id));
+  });
+
+  const metric = (row, name) => row.metrics?.[name] || {};
+  const valuePair = (title, left, right, delta) => `
+    <div class="compare-metric">
+      <strong>${escapeHtml(title)}</strong>
+      <div class="compare-values">
+        <span><small>A</small>${escapeHtml(left)}</span>
+        <span><small>B</small>${escapeHtml(right)}</span>
+      </div>
+      <div class="compare-delta">Δ ${escapeHtml(delta)}</div>
+    </div>`;
+
+  holder.innerHTML = rows.map(row => {
+    const acc = metric(row, 'case_accuracy');
+    const dec = metric(row, 'decision_accuracy');
+    const median = metric(row, 'median_ms');
+    const p95 = metric(row, 'p95_ms');
+    const throughput = metric(row, 'throughput_decisions_per_s');
+    const rank = row.rank || {};
+    const precision = row.identity?.precision || row.identity?.quantization?.quantization || row.identity?.quantization?.kind || '';
+    const rankLeft = rank.left == null ? '-' : `#${rank.left}`;
+    const rankRight = rank.right == null ? '-' : `#${rank.right}`;
+    const breakdownEntries = Object.entries(row.breakdown || {});
+    const breakdown = breakdownEntries.length ? `<details style="margin-top:10px"><summary>Decision-type breakdown</summary><div class="table-scroll" style="margin-top:8px"><table><thead><tr><th>Type</th><th>Δ accuracy</th><th>Δ decision</th><th>Δ median</th><th>Δ P95</th></tr></thead><tbody>${breakdownEntries.map(([kind, metrics]) => `<tr><td>${escapeHtml(kind)}</td><td>${escapeHtml(formatComparisonMetricDelta(metrics.case_accuracy, 'accuracy'))}</td><td>${escapeHtml(formatComparisonMetricDelta(metrics.decision_accuracy, 'decision_accuracy'))}</td><td>${escapeHtml(formatComparisonMetricDelta(metrics.median_ms, 'median'))}</td><td>${escapeHtml(formatComparisonMetricDelta(metrics.p95_ms, 'p95'))}</td></tr>`).join('')}</tbody></table></div></details>` : '';
+    return `<section class="compare-card">
+      <div class="compare-card-head">
+        <div class="compare-card-title">
+          <strong>${escapeHtml(row.model_id ?? row.label ?? 'profile')}</strong>
+          <small>${escapeHtml(row.engine ?? '')}${row.canonical_id ? ` · canonical identity verified` : ''}</small>
+        </div>
+        <div class="compare-card-tags"><span class="badge">${escapeHtml(row.backend ?? '-')}</span>${precision ? `<span class="badge">${escapeHtml(precision)}</span>` : ''}</div>
+      </div>
+      <div class="compare-metrics">
+        ${valuePair('Accuracy', formatBenchmarkPercent(acc.left), formatBenchmarkPercent(acc.right), formatComparisonMetricDelta(acc, 'accuracy'))}
+        ${valuePair('Decision accuracy', formatBenchmarkPercent(dec.left), formatBenchmarkPercent(dec.right), formatComparisonMetricDelta(dec, 'decision_accuracy'))}
+        ${valuePair('Median latency', formatBenchmarkMs(median.left), formatBenchmarkMs(median.right), formatComparisonMetricDelta(median, 'median'))}
+        ${valuePair('P95 latency', formatBenchmarkMs(p95.left), formatBenchmarkMs(p95.right), formatComparisonMetricDelta(p95, 'p95'))}
+        ${valuePair('Throughput', throughput.left == null ? '-' : `${Number(throughput.left).toFixed(2)}/s`, throughput.right == null ? '-' : `${Number(throughput.right).toFixed(2)}/s`, formatComparisonMetricDelta(throughput, 'throughput'))}
+        ${valuePair('Rank', rankLeft, rankRight, formatComparisonDelta(rank.shift, 'rank'))}
+      </div>
+      ${breakdown}
+    </section>`;
+  }).join('');
+
+  const warnings = benchmarkComparison.warnings || [];
+  byId('benchmarkCompareStatus').className = 'status';
+  byId('benchmarkCompareStatus').textContent = `${rows.length} common profile${rows.length === 1 ? '' : 's'}. Δ = B − A.${warnings.length ? ` ${warnings.join(' ')}` : ''}`;
+  const onlyA = (benchmarkComparison.only_in_left || []).map(row => row.model_id || row.label).join(', ') || 'none';
+  const onlyB = (benchmarkComparison.only_in_right || []).map(row => row.model_id || row.label).join(', ') || 'none';
+  const legacyA = (benchmarkComparison.legacy_unverified_left || []).length;
+  const legacyB = (benchmarkComparison.legacy_unverified_right || []).length;
+  byId('benchmarkCompareOnly').textContent = `Only in A: ${onlyA} · Only in B: ${onlyB}${legacyA || legacyB ? ` · Legacy profiles without canonical identity: A=${legacyA}, B=${legacyB}` : ''}`;
+}
+
+
+async function loadBenchmarkComparison() {
+  const left = byId('benchmarkCompareLeft').value;
+  const right = byId('benchmarkCompareRight').value;
+  if (!left || !right) {
+    benchmarkComparison = null;
+    renderBenchmarkComparison();
+    return;
+  }
+  if (left === right) {
+    benchmarkComparison = null;
+    byId('benchmarkCompareCards').innerHTML = '';
+    byId('benchmarkCompareStatus').textContent = 'Choose two different benchmark runs.';
+    return;
+  }
+  byId('benchmarkCompareStatus').textContent = 'Loading comparison...';
+  try {
+    const response = await fetch(`/v1/benchmarks/compare?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || JSON.stringify(body));
+    benchmarkComparison = body;
+    byId('benchmarkRawComparison').textContent = JSON.stringify(body, null, 2);
+    populateComparisonBackendFilter();
+    renderBenchmarkComparison();
+  } catch (error) {
+    benchmarkComparison = null;
+    byId('benchmarkCompareCards').innerHTML = '';
+    byId('benchmarkCompareStatus').textContent = error.message;
+    byId('benchmarkCompareStatus').className = 'status error';
+  }
+}
+
 async function refreshBenchmarks() {
   const empty = byId('benchmarkEmpty');
   const content = byId('benchmarkContent');
@@ -869,6 +1293,8 @@ async function refreshBenchmarks() {
     });
     select.value = benchmarkRuns.some(run => run.id === previous) ? previous : (data.latest || benchmarkRuns[0].id);
     await loadBenchmarkRun(select.value);
+    populateBenchmarkComparisonSelectors();
+    if (benchmarkRuns.filter(run => run.has_summary).length >= 2) await loadBenchmarkComparison();
   } catch (error) {
     content.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -881,6 +1307,7 @@ function setBenchmarkView(view) {
   document.querySelectorAll('.benchmark-tab').forEach(button => button.classList.toggle('active', button.dataset.benchmarkView === view));
   byId('benchmarkSummaryView').classList.toggle('hidden', view !== 'summary');
   byId('benchmarkResultsView').classList.toggle('hidden', view !== 'results');
+  byId('benchmarkCompareView').classList.toggle('hidden', view !== 'compare');
 }
 
 async function loadWatchSettings() {
@@ -906,7 +1333,10 @@ async function refreshHealth() {
   try {
     const health = await fetch('/health').then(r => r.json());
     byId('healthBadge').textContent = `health: ${health.status}`;
-    byId('runtimeSub').textContent = `${health.engine} · ${health.model_id} · ${health.backend} · ${health.model}`;
+    const suspension = health.runtime_suspension;
+    byId('runtimeSub').textContent = suspension
+      ? `${health.engine} · ${health.model_id} · ${health.backend} · inference suspended for ${suspension.reason || 'benchmark'} (owner pid ${suspension.owner_pid || '?'})`
+      : `${health.engine} · ${health.model_id} · ${health.backend} · ${health.model}`;
   } catch (_) {
     byId('healthBadge').textContent = 'health: unavailable';
   }
@@ -937,7 +1367,7 @@ async function refreshStats() {
   } catch (_) {}
 }
 
-document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => setEndpoint(button.dataset.endpoint)));
+document.querySelectorAll('.endpoint-tab').forEach(button => button.addEventListener('click', () => setEndpoint(button.dataset.endpoint)));
 byId('addChoiceOption').addEventListener('click', () => addOption(byId('choiceOptions')));
 byId('addSharedDecision').addEventListener('click', () => addSharedDecision());
 byId('sendRequest').addEventListener('click', sendRequest);
@@ -950,6 +1380,9 @@ byId('benchmarkRunSelect').addEventListener('change', event => loadBenchmarkRun(
 document.querySelectorAll('.benchmark-tab').forEach(button => button.addEventListener('click', () => setBenchmarkView(button.dataset.benchmarkView)));
 ['benchmarkSummaryModel', 'benchmarkSummaryType', 'benchmarkSummarySort', 'benchmarkSummaryDirection'].forEach(id => byId(id).addEventListener('change', renderBenchmarkSummary));
 ['benchmarkResultModel', 'benchmarkResultType', 'benchmarkResultStatus', 'benchmarkResultSort'].forEach(id => byId(id).addEventListener('change', renderBenchmarkResults));
+['benchmarkCompareLeft', 'benchmarkCompareRight'].forEach(id => byId(id).addEventListener('change', loadBenchmarkComparison));
+byId('benchmarkCompareBackend').addEventListener('change', renderBenchmarkComparison);
+byId('benchmarkCompareSort').addEventListener('change', renderBenchmarkComparison);
 document.addEventListener('input', updatePreview);
 document.addEventListener('change', updatePreview);
 
@@ -998,7 +1431,7 @@ button.danger { border-color:#a33; }
 .card { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:10px; padding:13px; }
 .card small { display:block; opacity:.6; margin-bottom:5px; }
 .card strong { font-size:19px; }
-.runtime { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+.runtime { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
 .runtime div { min-width:0; }
 .runtime small { display:block; opacity:.6; margin-bottom:3px; }
 .runtime code { overflow-wrap:anywhere; }
@@ -1049,6 +1482,7 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
     <div><small>Session</small><code id="sessionId">-</code></div>
     <div><small>Started</small><code id="sessionStarted">-</code></div>
     <div><small>History files</small><code id="historyFiles">0</code></div>
+    <div><small>Inference</small><code id="inferenceState">-</code></div>
   </div>
   <div class="session-note">Full Watch payloads are stored in temporary <code>.deqio/watch/</code> JSONL files, rotating at 10,000 records per file. They are deleted on server restart, manual Clear, or the configured automatic cleanup interval. Model switches stay in the same server session and each row keeps its own model identity.</div>
 </section>
@@ -1070,6 +1504,11 @@ pre { margin:0; padding:12px; border-radius:9px; background:color-mix(in srgb, C
       <option value="/v1/choice">/v1/choice</option>
       <option value="/v1/decision">/v1/decision</option>
       <option value="/v1/shared">/v1/shared</option>
+      <option value="/v1/score">/v1/score</option>
+      <option value="/v1/multi">/v1/multi</option>
+      <option value="/v1/act">/v1/act</option>
+      <option value="/v1/soam">/v1/soam</option>
+      <option value="/v1/systemone">/v1/systemone</option>
     </select>
     <label for="statusFilter">Status</label>
     <select id="statusFilter">
@@ -1190,6 +1629,10 @@ async function refresh() {
     byId('p95').textContent = fmtMs(session.latency_ms?.p95);
     byId('watchAutoClear').value = String(session.auto_clear_minutes ?? 0);
     byId('healthBadge').textContent = `health: ${health.status}`;
+    const suspension = health.runtime_suspension || session.runtime_suspension;
+    byId('inferenceState').textContent = suspension
+      ? `suspended · ${suspension.reason || 'benchmark'} · pid ${suspension.owner_pid || '?'}`
+      : 'active';
     refreshModelFilter();
     renderRows();
   } catch (error) {

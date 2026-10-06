@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from .catalog import SUPPORTED_ENGINES
 from .workspace import ensure_workspace
@@ -105,10 +106,28 @@ def read_config_data(path: str | Path | None = None) -> tuple[Path, dict[str, An
 
 
 def write_config_data(path: Path, data: dict[str, Any]) -> None:
-    """Atomically persist configuration so live model switches cannot leave partial JSON."""
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    temp.replace(path)
+    """Atomically persist configuration without a predictable temporary path."""
+    path = Path(path)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex}.tmp")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            descriptor = None
+            stream.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+            stream.flush()
+            try:
+                os.fsync(stream.fileno())
+            except OSError:
+                pass
+        temp.replace(path)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temp.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def settings_from_data(
@@ -160,8 +179,8 @@ def settings_from_data(
         raise RuntimeError("model_id must be a nonempty string")
 
     backend = str(data["backend"]).lower()
-    if backend not in {"mlx", "mps", "cuda"}:
-        raise RuntimeError("backend must be one of: mlx, mps, cuda")
+    if backend not in {"mlx", "mps", "gguf", "cuda"}:
+        raise RuntimeError("backend must be one of: mlx, mps, gguf, cuda")
 
     try:
         max_tokens = int(data["max_tokens"])

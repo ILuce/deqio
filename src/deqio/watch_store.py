@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import time
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from uuid import uuid4
+
+from .process_lock import process_lock
 
 WATCH_SCHEMA_VERSION = 1
 WATCH_FILE_MAX_LINES = 10_000
+WATCH_FILE_MAX_BYTES = 16 * 1024 * 1024
+WATCH_MAX_STORAGE_BYTES = 256 * 1024 * 1024
 WATCH_RECENT_LATENCY_SAMPLES = 2_048
 WATCH_DEFAULT_LIST_LIMIT = 500
 WATCH_MAX_LIST_LIMIT = 5_000
@@ -34,35 +36,13 @@ class WatchStore:
         self.preferences_path = self.root / "preferences.json"
         self.lock_dir = self.root / ".lock"
 
-    @contextmanager
-    def _locked(self, *, timeout: float = 10.0) -> Iterator[None]:
+    def _locked(self, *, timeout: float = 10.0):
         self.root.mkdir(parents=True, exist_ok=True)
         try:
             self.root.chmod(0o700)
         except OSError:
             pass
-        deadline = time.monotonic() + timeout
-        while True:
-            try:
-                self.lock_dir.mkdir()
-                break
-            except FileExistsError:
-                # A crashed process may leave a lock directory behind. Only
-                # reap locks old enough that no normal append should still own it.
-                try:
-                    age = time.time() - self.lock_dir.stat().st_mtime
-                except FileNotFoundError:
-                    continue
-                if age > 60.0:
-                    shutil.rmtree(self.lock_dir, ignore_errors=True)
-                    continue
-                if time.monotonic() >= deadline:
-                    raise RuntimeError("Timed out waiting for Deqio Watch storage lock")
-                time.sleep(0.01)
-        try:
-            yield
-        finally:
-            shutil.rmtree(self.lock_dir, ignore_errors=True)
+        return process_lock(self.lock_dir, timeout=timeout)
 
     @staticmethod
     def _iso_now() -> str:
@@ -140,6 +120,7 @@ class WatchStore:
             "requests": 0,
             "decisions": 0,
             "errors": 0,
+            "events_dropped": 0,
             "latency_samples_ms": [],
             "files": [],
             "auto_clear_minutes": int(preferences["auto_clear_minutes"]),
@@ -276,7 +257,11 @@ class WatchStore:
                 "kind": "temporary-jsonl",
                 "directory": str(self.root),
                 "files": len(files),
+                "retained_events": sum(max(0, int(row.get("lines", 0))) for row in files),
+                "dropped_events": max(0, int(session.get("events_dropped", 0))),
                 "max_lines_per_file": WATCH_FILE_MAX_LINES,
+                "max_bytes_per_file": WATCH_FILE_MAX_BYTES,
+                "max_storage_bytes": WATCH_MAX_STORAGE_BYTES,
             },
             "auto_clear_minutes": int(session.get("auto_clear_minutes", 0)),
             "next_auto_clear_at": session.get("next_auto_clear_at"),
@@ -288,6 +273,39 @@ class WatchStore:
             self._write_json_atomic(self.session_path, session)
             return self._public_session(session)
 
+    def _file_size_locked(self, file_row: dict[str, Any]) -> int:
+        try:
+            stored = int(file_row.get("bytes", -1))
+        except (TypeError, ValueError):
+            stored = -1
+        if stored >= 0:
+            return stored
+        try:
+            stored = (self.root / str(file_row.get("name", ""))).stat().st_size
+        except (FileNotFoundError, OSError):
+            stored = 0
+        file_row["bytes"] = int(stored)
+        return int(stored)
+
+    def _prune_storage_locked(self, session: dict[str, Any], files: list[dict[str, Any]]) -> None:
+        total_bytes = sum(self._file_size_locked(row) for row in files)
+        dropped = max(0, int(session.get("events_dropped", 0)))
+        # Keep the active/newest file even if one unusually large event alone
+        # exceeds the retention budget; pruning must never delete the event that
+        # append() is about to return to its caller. The next rotations remain
+        # bounded by removing older files first.
+        while len(files) > 1 and total_bytes > WATCH_MAX_STORAGE_BYTES:
+            oldest = files.pop(0)
+            size = self._file_size_locked(oldest)
+            try:
+                (self.root / str(oldest.get("name", ""))).unlink()
+            except FileNotFoundError:
+                pass
+            total_bytes = max(0, total_bytes - size)
+            dropped += max(0, int(oldest.get("lines", 0)))
+        session["events_dropped"] = dropped
+        session["files"] = files
+
     def append(self, event: dict[str, Any], *, expected_session_id: str | None = None) -> str | None:
         serialized_event = json.loads(
             json.dumps(event, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
@@ -298,24 +316,47 @@ class WatchStore:
                 return None
 
             files = [row for row in session.get("files", []) if isinstance(row, dict)]
-            if files and int(files[-1].get("lines", 0)) < WATCH_FILE_MAX_LINES:
-                file_row = files[-1]
+            current = files[-1] if files else None
+            current_lines = int(current.get("lines", 0)) if current else 0
+            current_bytes = self._file_size_locked(current) if current else 0
+
+            # event_id has fixed-width file/line components, so serializing once
+            # with the current candidate gives an exact rotation decision.
+            candidate_index = int(current.get("index", 0)) if current else 1
+            candidate_line = current_lines + 1 if current else 1
+            serialized_event["event_id"] = (
+                f"{candidate_index:06d}-{candidate_line:05d}-{uuid4().hex[:12]}"
+            )
+            encoded = (
+                json.dumps(
+                    serialized_event,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            ).encode("utf-8")
+
+            can_append_current = bool(
+                current
+                and current_lines < WATCH_FILE_MAX_LINES
+                and current_bytes + len(encoded) <= WATCH_FILE_MAX_BYTES
+            )
+            if can_append_current:
+                file_row = current
+                line_number = current_lines + 1
             else:
-                index = int(files[-1].get("index", 0)) + 1 if files else 1
+                index = int(current.get("index", 0)) + 1 if current else 1
                 file_row = {
                     "index": index,
                     "name": f"events-{index:06d}.jsonl",
                     "lines": 0,
+                    "bytes": 0,
                 }
                 files.append(file_row)
-
-            line_number = int(file_row.get("lines", 0)) + 1
-            event_id = f"{int(file_row['index']):06d}-{line_number:05d}-{uuid4().hex[:12]}"
-            serialized_event["event_id"] = event_id
-            target = self.root / str(file_row["name"])
-            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-            with os.fdopen(descriptor, "a", encoding="utf-8") as stream:
-                stream.write(
+                line_number = 1
+                serialized_event["event_id"] = f"{index:06d}-{line_number:05d}-{uuid4().hex[:12]}"
+                encoded = (
                     json.dumps(
                         serialized_event,
                         ensure_ascii=False,
@@ -323,11 +364,16 @@ class WatchStore:
                         separators=(",", ":"),
                     )
                     + "\n"
-                )
+                ).encode("utf-8")
+
+            target = self.root / str(file_row["name"])
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            with os.fdopen(descriptor, "ab") as stream:
+                stream.write(encoded)
                 stream.flush()
 
             file_row["lines"] = line_number
-            session["files"] = files
+            file_row["bytes"] = self._file_size_locked(file_row) + len(encoded)
             session["requests"] = int(session.get("requests", 0)) + 1
             session["decisions"] = int(session.get("decisions", 0)) + int(
                 serialized_event.get("decisions", 0)
@@ -347,8 +393,9 @@ class WatchStore:
             minutes = int(self._preferences_locked()["auto_clear_minutes"])
             session["auto_clear_minutes"] = minutes
             session["next_auto_clear_at"] = self._next_auto_clear_at(session, minutes)
+            self._prune_storage_locked(session, files)
             self._write_json_atomic(self.session_path, session)
-            return event_id
+            return str(serialized_event["event_id"])
 
     @staticmethod
     def _row(event: dict[str, Any]) -> dict[str, Any]:
@@ -410,45 +457,49 @@ class WatchStore:
     def list_events(self, *, limit: int = WATCH_DEFAULT_LIST_LIMIT, offset: int = 0) -> dict[str, Any]:
         limit = max(1, min(int(limit), WATCH_MAX_LIST_LIMIT))
         offset = max(0, int(offset))
+        # Keep the process lock while event files are open/read.  On POSIX an
+        # unlink racing a reader is harmless, but on Windows it can fail and
+        # leave a partially reset Watch session.  A list call decodes at most
+        # WATCH_MAX_LIST_LIMIT records, so this lock hold remains bounded.
         with self._locked():
             session = self._maybe_auto_clear_locked(self._ensure_session_locked())
             self._write_json_atomic(self.session_path, session)
             files = [row.copy() for row in session.get("files", []) if isinstance(row, dict)]
             public_session = self._public_session(session)
 
-        total = int(public_session["requests"])
-        remaining_offset = offset
-        events: list[dict[str, Any]] = []
-        for file_row in reversed(files):
-            count = int(file_row.get("lines", 0))
-            if remaining_offset >= count:
-                remaining_offset -= count
-                continue
-            needed = limit - len(events)
-            newest_exclusive = max(0, count - remaining_offset)
-            oldest_inclusive = max(0, newest_exclusive - needed)
-            rows = self._read_range(
-                self.root / str(file_row.get("name", "")),
-                start=oldest_inclusive,
-                stop=newest_exclusive,
-            )
-            rows.reverse()
-            events.extend(rows)
-            remaining_offset = 0
-            if len(events) >= limit:
-                break
+            total = sum(max(0, int(row.get("lines", 0))) for row in files)
+            remaining_offset = offset
+            events: list[dict[str, Any]] = []
+            for file_row in reversed(files):
+                count = int(file_row.get("lines", 0))
+                if remaining_offset >= count:
+                    remaining_offset -= count
+                    continue
+                needed = limit - len(events)
+                newest_exclusive = max(0, count - remaining_offset)
+                oldest_inclusive = max(0, newest_exclusive - needed)
+                rows = self._read_range(
+                    self.root / str(file_row.get("name", "")),
+                    start=oldest_inclusive,
+                    stop=newest_exclusive,
+                )
+                rows.reverse()
+                events.extend(rows)
+                remaining_offset = 0
+                if len(events) >= limit:
+                    break
 
-        return {
-            "session": public_session,
-            "events": [self._row(event) for event in events],
-            "pagination": {
-                "offset": offset,
-                "limit": limit,
-                "total": total,
-                "returned": len(events),
-                "has_more": offset + len(events) < total,
-            },
-        }
+            return {
+                "session": public_session,
+                "events": [self._row(event) for event in events],
+                "pagination": {
+                    "offset": offset,
+                    "limit": limit,
+                    "total": total,
+                    "returned": len(events),
+                    "has_more": offset + len(events) < total,
+                },
+            }
 
     def get_event(self, event_id: str) -> dict[str, Any] | None:
         try:
@@ -457,18 +508,19 @@ class WatchStore:
         except (ValueError, IndexError):
             return None
         path = self.root / f"events-{index:06d}.jsonl"
-        try:
-            stream = path.open("r", encoding="utf-8")
-        except FileNotFoundError:
-            return None
-        with stream:
-            for line in stream:
-                if not line.strip():
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(event, dict) and str(event.get("event_id")) == event_id:
-                    return event
+        with self._locked():
+            try:
+                stream = path.open("r", encoding="utf-8")
+            except FileNotFoundError:
+                return None
+            with stream:
+                for line in stream:
+                    if not line.strip():
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(event, dict) and str(event.get("event_id")) == event_id:
+                        return event
         return None

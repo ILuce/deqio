@@ -1,163 +1,19 @@
 from __future__ import annotations
 
-import gc
-from collections.abc import Callable
-from typing import Any
-
 from .config import Settings
 
 
 class BackendRuntime:
-    """Stable server-facing scoring interface for a loaded decision runtime."""
+    """Server-facing runtime factory.
 
-    def __init__(
-        self,
-        *,
-        settings: Settings,
-        model: Any,
-        tokenizer: Any,
-        metadata: dict[str, Any],
-        direct_score: Callable[..., dict],
-        serial_factory: Callable[..., Any],
-        shared_score: Callable[..., tuple[list[dict], dict]],
-    ) -> None:
-        self.settings = settings
-        self.name = settings.backend
-        self.engine = "semif"
-        self.model = model
-        self.tokenizer = tokenizer
-        self.metadata = metadata
-        self._direct_score = direct_score
-        self._serial_factory = serial_factory
-        self._shared_score = shared_score
-        self.serial_scorer = self._new_serial_scorer()
+    All supported engines run in isolated SystemOne sidecars.  Keeping this
+    tiny facade preserves the existing import surface for the server, benchmark
+    runner, and model manager without retaining the obsolete in-process model
+    implementation.
+    """
 
     @classmethod
     def load(cls, settings: Settings) -> "BackendRuntime":
-        # Every model engine, including SemIf, is executed through an isolated
-        # runtime. This keeps the PyPI package free of engine-specific VCS
-        # dependencies and gives all engines the same lifecycle semantics.
         from .systemone_runtime import SystemOneRuntime
 
         return SystemOneRuntime.load(settings)  # type: ignore[return-value]
-
-    def _new_serial_scorer(self):
-        return self._serial_factory(
-            self.model,
-            self.tokenizer,
-            self.metadata,
-            self.settings.max_tokens,
-        )
-
-    def score(self, row: dict, mode: str) -> dict:
-        if mode == "serial":
-            return self.serial_scorer.score(row)
-        if mode == "direct":
-            return self._direct_score(
-                self.model,
-                self.tokenizer,
-                row,
-                self.metadata,
-                self.settings.max_tokens,
-            )
-        raise ValueError(f"Unsupported scoring mode: {mode}")
-
-    def score_noul(self, row: dict, mode: str) -> dict:
-        choice_row = {
-            **row,
-            "options": [
-                {"id": "yes", "description": "Yes. The evidence supports the criterion or question."},
-                {"id": "no", "description": "No. The evidence does not support the criterion or question."},
-            ],
-        }
-        return self.score(choice_row, mode)
-
-    def score_shared(self, rows: list[dict]) -> tuple[list[dict], dict]:
-        return self._shared_score(
-            self.model,
-            self.tokenizer,
-            rows,
-            self.metadata,
-            self.settings.max_tokens,
-        )
-
-    def clear_cache(self) -> dict[str, Any]:
-        """Drop reusable prefix state and release backend allocator caches when available."""
-        self.serial_scorer = self._new_serial_scorer()
-        gc.collect()
-
-        details: dict[str, Any] = {
-            "engine": self.engine,
-            "backend": self.name,
-            "prefix_cache": "cleared",
-            "model_loaded": True,
-        }
-
-        if self.name == "mlx":
-            import mlx.core as mx
-
-            before = int(mx.get_cache_memory())
-            mx.clear_cache()
-            after = int(mx.get_cache_memory())
-            details.update(
-                allocator_cache="cleared",
-                allocator_cache_bytes_before=before,
-                allocator_cache_bytes_after=after,
-            )
-        elif self.name == "cuda":
-            import torch
-
-            before = int(torch.cuda.memory_reserved())
-            torch.cuda.empty_cache()
-            after = int(torch.cuda.memory_reserved())
-            details.update(
-                allocator_cache="cleared",
-                allocator_cache_bytes_before=before,
-                allocator_cache_bytes_after=after,
-            )
-        elif self.name == "mps":
-            import torch
-
-            before = int(torch.mps.current_allocated_memory()) if hasattr(torch.mps, "current_allocated_memory") else None
-            torch.mps.empty_cache()
-            after = int(torch.mps.current_allocated_memory()) if hasattr(torch.mps, "current_allocated_memory") else None
-            details.update(
-                allocator_cache="cleared",
-                allocator_cache_bytes_before=before,
-                allocator_cache_bytes_after=after,
-            )
-
-        return details
-
-    def close(self) -> None:
-        """Release native model references before another runtime is loaded.
-
-        Live model switching calls ``close()`` before loading the replacement.
-        Dropping the model, tokenizer, metadata, and serial scorer here avoids
-        temporarily keeping two native models resident in accelerator/unified
-        memory during the switch. Allocator cleanup is best-effort so shutdown
-        cannot fail solely because a backend cache API is unavailable.
-        """
-        self.serial_scorer = None
-        self.model = None
-        self.tokenizer = None
-        self.metadata = {}
-        gc.collect()
-
-        try:
-            if self.name == "mlx":
-                import mlx.core as mx
-
-                mx.clear_cache()
-            elif self.name == "cuda":
-                import torch
-
-                torch.cuda.empty_cache()
-            elif self.name == "mps":
-                import torch
-
-                torch.mps.empty_cache()
-        except Exception:
-            # References are already dropped above. Cache cleanup is only an
-            # allocator hint and must not make model switching/shutdown fail.
-            pass

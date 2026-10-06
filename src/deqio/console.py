@@ -24,7 +24,13 @@ _NOISY_SIDECAR_MARKERS = (
 
 def _emit(prefix: str, message: str) -> None:
     with _PRINT_LOCK:
-        print(f"{prefix} {message}", flush=True)
+        try:
+            print(f"{prefix} {message}", flush=True)
+        except (BrokenPipeError, OSError):
+            # Console output is operational observability. A detached/closed
+            # stdout must never turn a valid inference or cleanup path into an
+            # application failure.
+            return
 
 
 def info(message: str) -> None:
@@ -73,6 +79,16 @@ def sidecar_ready(*, engine: str, address: str) -> None:
     info(f"Internal model ready: engine={engine} address={address}")
 
 
+def sidecar_stop(*, engine: str, pid: int | None) -> None:
+    pid_text = "-" if pid is None else str(pid)
+    info(f"Stopping internal inference sidecar: engine={engine} pid={pid_text}")
+
+
+def sidecar_stopped(*, engine: str, pid: int | None) -> None:
+    pid_text = "-" if pid is None else str(pid)
+    info(f"Internal inference sidecar stopped: engine={engine} pid={pid_text}")
+
+
 def server_ready(*, host: str = "127.0.0.1", port: int = 8787) -> None:
     base = f"http://{host}:{port}"
     info("Ready")
@@ -80,7 +96,7 @@ def server_ready(*, host: str = "127.0.0.1", port: int = 8787) -> None:
     info(f"  Watch    {base}/ui/watch")
     info(f"  API      {base}/docs")
     info(f"  health   {base}/health")
-    info("  endpoints POST /v1/noul  /v1/choice  /v1/shared")
+    info("  endpoints POST /v1/noul  /v1/choice  /v1/shared  /v1/score  /v1/multi  /v1/act  /v1/soam  /v1/systemone")
 
 
 def warmup_ok(step: int, total: int) -> None:

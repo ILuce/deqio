@@ -32,17 +32,6 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-def canonical_sha256(value: Any) -> str:
-    raw = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return sha256_bytes(raw)
-
-
 def validate_json_without_duplicate_keys(raw_body: bytes) -> None:
     """Reject duplicate object keys anywhere in a negotiated JSON request."""
 

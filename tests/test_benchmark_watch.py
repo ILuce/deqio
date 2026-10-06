@@ -69,3 +69,61 @@ def test_benchmark_direct_runtime_request_is_written_to_watch(tmp_path: Path) ->
     assert detail["response"]["input_tokens"] == 17
     assert detail["response"]["input_tokens_source"] == "engine_reported"
     assert detail["response"]["score_provenance"]["kind"] == "engine_probability"
+
+
+def test_benchmark_watch_write_failure_does_not_change_case_result() -> None:
+    class BrokenWatch:
+        def session_token(self):
+            return "session"
+
+        def append(self, *_args, **_kwargs):
+            raise OSError("disk full")
+
+    result = _run_case(
+        _FakeChoiceRuntime(),
+        {"engine": "demo", "model_id": "demo-model", "backend": "mlx"},
+        {
+            "id": "choice-watch-failure",
+            "type": "choice",
+            "state": "state",
+            "question": "Pick one",
+            "options": [
+                {"id": "a", "description": "A"},
+                {"id": "b", "description": "B"},
+            ],
+            "expected": "a",
+        },
+        watch=BrokenWatch(),
+    )
+
+    assert result.passed is True
+    assert result.error is None
+
+
+def test_benchmark_watch_session_failure_does_not_change_case_result() -> None:
+    class BrokenWatch:
+        def session_token(self):
+            raise OSError("watch unavailable")
+
+        def append(self, *_args, **_kwargs):
+            raise AssertionError("append must be skipped when no session token is available")
+
+    result = _run_case(
+        _FakeChoiceRuntime(),
+        {"engine": "demo", "model_id": "demo-model", "backend": "mlx"},
+        {
+            "id": "choice-watch-session-failure",
+            "type": "choice",
+            "state": "state",
+            "question": "Pick one",
+            "options": [
+                {"id": "a", "description": "A"},
+                {"id": "b", "description": "B"},
+            ],
+            "expected": "a",
+        },
+        watch=BrokenWatch(),
+    )
+
+    assert result.passed is True
+    assert result.error is None

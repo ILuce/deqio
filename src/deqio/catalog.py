@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
 DEFAULT_CATALOG_NAME = "models.json"
-SUPPORTED_BACKENDS = ("mlx", "mps", "cuda")
+SUPPORTED_BACKENDS = ("mlx", "mps", "gguf", "cuda")
 SUPPORTED_ENGINES = (
     "semif",
+    "decision2",
     "kev",
     "jevk5",
     "open-jev",
@@ -66,6 +67,27 @@ def get_profile(catalog: dict[str, Any], model_id: str, backend: str) -> dict[st
     profile = profiles[backend]
     if not isinstance(profile, dict):
         raise RuntimeError(f"Invalid profile for {model_id}/{backend}")
+    # These values become direct children of the configured runtime root in
+    # install/load/delete paths. Keep every one a single portable component so
+    # a custom catalog cannot escape that root on POSIX or Windows.
+    for field in ("runtime_key", "source_key", "model_config"):
+        value = profile.get(field)
+        if value is None:
+            continue
+        component = str(value).strip()
+        windows = PureWindowsPath(component)
+        if (
+            not component
+            or component in {".", ".."}
+            or "/" in component
+            or "\\" in component
+            or Path(component).name != component
+            or windows.name != component
+            or bool(windows.drive)
+        ):
+            raise RuntimeError(
+                f"Invalid {field} for {model_id}/{backend}: {value!r}"
+            )
     return profile
 
 
@@ -85,6 +107,11 @@ def public_catalog(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                     str(backend): {
                         "min_memory_gib": profile.get("min_memory_gib"),
                         "recommended_memory_gib": profile.get("recommended_memory_gib"),
+                        **{
+                            key: profile[key]
+                            for key in ("family", "runtime", "platform", "source", "capabilities")
+                            if profile.get(key) is not None
+                        },
                     }
                     for backend, profile in profiles.items()
                     if isinstance(profile, dict)

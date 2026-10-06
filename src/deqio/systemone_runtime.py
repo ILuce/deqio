@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import socket
 import platform
+import signal
 import subprocess
+import sys
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -23,6 +26,8 @@ from .console import (
     sidecar_process_ready,
     sidecar_ready,
     sidecar_start,
+    sidecar_stop,
+    sidecar_stopped,
     start_sidecar_log_pump,
 )
 
@@ -64,6 +69,23 @@ def _json_body(payload: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
+class SystemOneUnavailableError(RuntimeError):
+    """The isolated inference runtime could not be reached in time."""
+
+
+class SystemOneProtocolError(RuntimeError):
+    """The isolated runtime returned an invalid or incomplete response."""
+
+
+class SystemOneSidecarHTTPError(RuntimeError):
+    """HTTP failure returned by an otherwise reachable System One sidecar."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = int(status_code)
+        self.detail = detail
+        super().__init__(f"System One sidecar returned HTTP {self.status_code}: {detail}")
+
+
 def _post_json(
     url: str,
     payload: dict[str, Any],
@@ -78,20 +100,22 @@ def _post_json(
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"System One sidecar returned HTTP {error.code}: {detail}") from error
+        raise SystemOneSidecarHTTPError(error.code, detail) from error
     except (TimeoutError, socket.timeout) as error:
-        raise RuntimeError(
+        raise SystemOneUnavailableError(
             f"Timed out waiting for model response from {url} after {timeout:.1f}s"
         ) from error
     except URLError as error:
         reason = getattr(error, "reason", None)
         if isinstance(reason, (TimeoutError, socket.timeout)):
-            raise RuntimeError(
+            raise SystemOneUnavailableError(
                 f"Timed out waiting for model response from {url} after {timeout:.1f}s"
             ) from error
-        raise RuntimeError(f"System One sidecar is unavailable: {error}") from error
+        raise SystemOneUnavailableError(f"System One sidecar is unavailable: {error}") from error
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise SystemOneProtocolError("System One sidecar returned invalid JSON") from error
     if not isinstance(result, dict):
-        raise RuntimeError("System One sidecar returned a non-object response")
+        raise SystemOneProtocolError("System One sidecar returned a non-object response")
     return result
 
 
@@ -100,12 +124,42 @@ def _sha(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _protocol_float(value: Any, *, field: str, minimum: float | None = None, maximum: float | None = None) -> float:
+    """Parse a numeric sidecar field and classify malformed output as protocol failure."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as error:
+        raise SystemOneProtocolError(f"External engine returned a non-numeric {field}") from error
+    if not math.isfinite(parsed):
+        raise SystemOneProtocolError(f"External engine returned a non-finite {field}")
+    if minimum is not None and parsed < minimum:
+        raise SystemOneProtocolError(f"External engine returned {field} below {minimum}")
+    if maximum is not None and parsed > maximum:
+        raise SystemOneProtocolError(f"External engine returned {field} above {maximum}")
+    return parsed
+
+
 def _normalise_probabilities(
     answer: dict[str, Any], option_ids: list[str]
 ) -> tuple[list[float], dict[str, Any]]:
     values = answer.get("probabilities")
     if isinstance(values, dict):
-        probs = [float(values.get(option_id, 0.0)) for option_id in option_ids]
+        missing = [option_id for option_id in option_ids if option_id not in values]
+        if missing:
+            raise SystemOneProtocolError(
+                "External engine probabilities are missing option(s): " + ", ".join(missing)
+            )
+        try:
+            probs = [
+                _protocol_float(
+                    values[option_id],
+                    field=f"choice probability for {option_id!r}",
+                    minimum=0.0,
+                )
+                for option_id in option_ids
+            ]
+        except SystemOneProtocolError as error:
+            raise SystemOneProtocolError("External engine returned invalid choice probabilities") from error
         total = sum(probs)
         if total > 0:
             normalized = abs(total - 1.0) > 1e-6
@@ -130,7 +184,49 @@ def _normalise_probabilities(
             "raw_logits_available": False,
             "calibration": "not-applicable",
         }
-    raise RuntimeError("External engine did not return choice probabilities")
+    raise SystemOneProtocolError("External engine did not return choice probabilities")
+
+
+def _native_choice_probabilities(
+    answer: dict[str, Any], option_ids: list[str]
+) -> tuple[list[float], dict[str, Any]]:
+    """Return Decision-owned probabilities unchanged and fail if they are absent.
+
+    Decision 2.0 explicitly forbids Deqio-side normalization and synthetic
+    one-hot fallbacks.  The stable Deqio Choice endpoint may reshape the map
+    into its historical ordered list, but it must not change the values.
+    """
+    values = answer.get("probabilities")
+    if not isinstance(values, dict):
+        raise SystemOneProtocolError("Decision 2.0 did not return native choice probabilities")
+    missing = [option_id for option_id in option_ids if option_id not in values]
+    if missing:
+        raise SystemOneProtocolError(
+            "Decision 2.0 probabilities are missing option(s): " + ", ".join(missing)
+        )
+    try:
+        probs = [
+            _protocol_float(
+                values[option_id],
+                field=f"Decision 2.0 choice probability for {option_id!r}",
+                minimum=0.0,
+                maximum=1.0,
+            )
+            for option_id in option_ids
+        ]
+    except SystemOneProtocolError as error:
+        raise SystemOneProtocolError(
+            "Decision 2.0 returned invalid native choice probabilities"
+        ) from error
+    return probs, {
+        "kind": "engine_probability",
+        "source": "decision2.probabilities",
+        "synthetic": False,
+        "normalized": False,
+        "transforms": [],
+        "raw_logits_available": False,
+        "calibration": "decision2-native",
+    }
 
 
 def _input_token_usage(response: dict[str, Any]) -> tuple[int | None, str]:
@@ -147,18 +243,32 @@ def _input_token_usage(response: dict[str, Any]) -> tuple[int | None, str]:
     return parsed, "engine_reported"
 
 def _choice_raw(
-    *, row: dict[str, Any], answer: dict[str, Any], response: dict[str, Any], payload: dict[str, Any], latency_ms: float
+    *,
+    row: dict[str, Any],
+    answer: dict[str, Any],
+    response: dict[str, Any],
+    payload: dict[str, Any],
+    latency_ms: float,
+    preserve_native: bool = False,
 ) -> dict[str, Any]:
     option_ids = [str(option["id"]) for option in row["options"]]
-    probabilities, score_provenance = _normalise_probabilities(answer, option_ids)
+    probabilities, score_provenance = (
+        _native_choice_probabilities(answer, option_ids)
+        if preserve_native
+        else _normalise_probabilities(answer, option_ids)
+    )
     input_tokens, input_tokens_source = _input_token_usage(response)
     probability_status = (
-        "synthetic one-hot probabilities derived from the engine choice; not a model confidence score"
-        if score_provenance["synthetic"]
+        "native Decision 2.0 probabilities preserved unchanged by Deqio"
+        if preserve_native
         else (
-            "probabilities reported by the selected System One engine and renormalized by Deqio; raw option logits unavailable"
-            if score_provenance["normalized"]
-            else "probabilities reported by the selected System One engine; raw option logits unavailable"
+            "synthetic one-hot probabilities derived from the engine choice; not a model confidence score"
+            if score_provenance["synthetic"]
+            else (
+                "probabilities reported by the selected System One engine and renormalized by Deqio; raw option logits unavailable"
+                if score_provenance["normalized"]
+                else "probabilities reported by the selected System One engine; raw option logits unavailable"
+            )
         )
     )
     return {
@@ -176,10 +286,21 @@ def _choice_raw(
 
 
 def _noul_raw(
-    *, row: dict[str, Any], answer: dict[str, Any], response: dict[str, Any], payload: dict[str, Any], latency_ms: float
+    *,
+    row: dict[str, Any],
+    answer: dict[str, Any],
+    response: dict[str, Any],
+    payload: dict[str, Any],
+    latency_ms: float,
+    preserve_native: bool = False,
 ) -> dict[str, Any]:
-    raw_p_yes = float(answer.get("noul"))
-    p_yes = max(0.0, min(1.0, raw_p_yes))
+    try:
+        raw_p_yes = _protocol_float(answer.get("noul"), field="Noul probability")
+    except SystemOneProtocolError as error:
+        raise SystemOneProtocolError("External engine returned an invalid Noul probability") from error
+    if preserve_native and not 0.0 <= raw_p_yes <= 1.0:
+        raise SystemOneProtocolError("Decision 2.0 returned an invalid native Noul probability")
+    p_yes = raw_p_yes if preserve_native else max(0.0, min(1.0, raw_p_yes))
     clamped = p_yes != raw_p_yes
     input_tokens, input_tokens_source = _input_token_usage(response)
     return {
@@ -192,9 +313,13 @@ def _noul_raw(
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
         "probability_status": (
-            "native Noul probability reported by the selected System One engine and clamped to [0, 1]"
-            if clamped
-            else "native Noul probability reported by the selected System One engine"
+            "native Decision 2.0 P(true) preserved unchanged by Deqio"
+            if preserve_native
+            else (
+                "native Noul probability reported by the selected System One engine and clamped to [0, 1]"
+                if clamped
+                else "native Noul probability reported by the selected System One engine"
+            )
         ),
         "score_provenance": {
             "kind": "engine_probability",
@@ -203,12 +328,17 @@ def _noul_raw(
             "normalized": False,
             "transforms": ["clamped_to_unit_interval"] if clamped else [],
             "raw_logits_available": False,
-            "calibration": "unspecified",
+            "calibration": "decision2-native" if preserve_native else "unspecified",
         },
     }
 
 
-def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: str) -> dict[str, Any]:
+def _runtime_identity(
+    settings: Settings,
+    profile: dict[str, Any],
+    instance_id: str,
+    runtime_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     record = installation_record(settings.config_path, settings.model_id, settings.backend) or {}
     artifacts = record.get("artifacts") if isinstance(record.get("artifacts"), list) else []
     resolved = bool(artifacts) and all(
@@ -230,13 +360,65 @@ def _runtime_identity(settings: Settings, profile: dict[str, Any], instance_id: 
         "requested_revision": profile.get("model_revision"),
         "artifacts": deepcopy(artifacts),
         "artifact_revisions_resolved": bool(resolved),
+        "installation_installed_at": record.get("installed_at"),
         "installation_verified_at": record.get("verified_at"),
+        "artifact_verification_status": "verified" if record.get("verified_at") and resolved else "unresolved",
         "max_input_tokens": int(record.get("max_input_tokens", settings.max_tokens)),
     }
+    for key in ("family", "runtime", "platform", "source", "capabilities", "precision"):
+        if profile.get(key) is not None:
+            identity[key] = deepcopy(profile[key])
+    if runtime_metadata:
+        identity["runtime_metadata"] = deepcopy(runtime_metadata)
+        for key in ("runtime_version", "cuda_device", "cuda_runtime", "torch_version"):
+            if runtime_metadata.get(key) is not None:
+                identity[key] = runtime_metadata[key]
     quantization = profile.get("quantization")
     if isinstance(quantization, dict):
         identity["quantization"] = deepcopy(quantization)
     return identity
+
+
+class SystemOneCapabilityError(RuntimeError):
+    """A requested native SystemOne feature is not supported by the active profile."""
+
+    def __init__(self, capability: str, message: str) -> None:
+        super().__init__(message)
+        self.capability = capability
+
+
+def _profile_with_installed_pin(settings: Settings, profile: dict[str, Any]) -> dict[str, Any]:
+    """Use the immutable Hub revision recorded when a pin-on-install profile was verified."""
+    if not profile.get("pin_hf_revisions_at_install"):
+        return profile
+    selected_revision = str(settings.model_revision or "")
+    if len(selected_revision) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in selected_revision):
+        pinned = deepcopy(profile)
+        pinned["model_revision"] = selected_revision
+        return pinned
+
+    record = installation_record(settings.config_path, settings.model_id, settings.backend) or {}
+    artifacts = record.get("artifacts") if isinstance(record.get("artifacts"), list) else []
+    model_repo = str(profile.get("model", ""))
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        if artifact.get("source") != "huggingface" or str(artifact.get("repo_id", "")) != model_repo:
+            continue
+        # Pin-on-install is a generic catalog feature.  Do not couple runtime
+        # recovery to Basal-specific artifact roles: official GGUF profiles for
+        # Decider, Kev, JevK5, Laya and Clef use their own role names while the
+        # repository revision is still the immutable identity we need here.
+        resolved = artifact.get("resolved_revision")
+        if resolved:
+            pinned = deepcopy(profile)
+            pinned["model_revision"] = str(resolved)
+            return pinned
+
+    raise RuntimeError(
+        f"Installed profile {settings.model_id}/{settings.backend} is missing its immutable model revision; "
+        "run deqio models update for this profile"
+    )
 
 
 class SystemOneRuntime:
@@ -250,6 +432,7 @@ class SystemOneRuntime:
         process: subprocess.Popen[Any],
         port: int,
         log_thread: Any = None,
+        runtime_metadata: dict[str, Any] | None = None,
     ) -> None:
         self.settings = settings
         self.entry = entry
@@ -261,7 +444,10 @@ class SystemOneRuntime:
         self.base_url = f"http://127.0.0.1:{port}"
         self._log_thread = log_thread
         self.runtime_instance_id = uuid4().hex
-        self._identity = _runtime_identity(settings, profile, self.runtime_instance_id)
+        self._runtime_metadata = deepcopy(runtime_metadata or {})
+        self._identity = _runtime_identity(
+            settings, profile, self.runtime_instance_id, self._runtime_metadata
+        )
 
     def identity_snapshot(self) -> dict[str, Any]:
         """Return immutable request-facing identity for this loaded runtime instance."""
@@ -269,13 +455,16 @@ class SystemOneRuntime:
 
     def refresh_identity(self) -> None:
         """Refresh installation metadata without changing this runtime instance identity."""
-        self._identity = _runtime_identity(self.settings, self.profile, self.runtime_instance_id)
+        self._identity = _runtime_identity(
+            self.settings, self.profile, self.runtime_instance_id, self._runtime_metadata
+        )
 
     @classmethod
     def load(cls, settings: Settings) -> "SystemOneRuntime":
         catalog = load_catalog(settings.model_catalog)
         entry = get_model(catalog, settings.model_id)
-        profile = get_profile(catalog, settings.model_id, settings.backend)
+        profile = deepcopy(get_profile(catalog, settings.model_id, settings.backend))
+        profile = _profile_with_installed_pin(settings, profile)
         if str(entry.get("engine")) != settings.engine:
             raise RuntimeError(
                 f"config engine={settings.engine!r} does not match catalog engine={entry.get('engine')!r} "
@@ -293,10 +482,29 @@ class SystemOneRuntime:
             )
 
         cls._validate_accelerator(settings, python)
+        runtime_metadata = (
+            cls._decision2_runtime_metadata(profile, python)
+            if settings.engine == "decision2"
+            else (
+                cls._basal_runtime_metadata(profile, python)
+                if settings.engine == "basal" and profile.get("family") == "basal1.5"
+                else {}
+            )
+        )
 
         port = _free_port()
         env = os.environ.copy()
-        command = cls._command(settings, profile, env_dir, python, port, env)
+        engine_command = cls._command(settings, profile, env_dir, python, port, env)
+        guard = Path(__file__).with_name("sidecar_guard.py").resolve()
+        command = [
+            sys.executable,
+            str(guard),
+            "--parent-pid",
+            str(os.getpid()),
+            "--control-stdin",
+            "--",
+            *engine_command,
+        ]
         if settings.hf_offline_runtime:
             env["HF_HUB_OFFLINE"] = "1"
             env["TRANSFORMERS_OFFLINE"] = "1"
@@ -304,18 +512,29 @@ class SystemOneRuntime:
         address = f"http://127.0.0.1:{port}"
         sidecar_start(engine=settings.engine, address=address)
         env["PYTHONUNBUFFERED"] = "1"
+        popen_kwargs: dict[str, Any] = {}
+        if os.name != "nt":
+            # The direct child is the Deqio supervisor. It gets its own process
+            # group so close() can stop it reliably; the supervisor starts the
+            # actual engine tree in a separate process group and tears that tree
+            # down both on graceful shutdown and if the Deqio parent disappears.
+            popen_kwargs["start_new_session"] = True
         process = subprocess.Popen(
             command,
             env=env,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            **popen_kwargs,
         )
         log_thread = start_sidecar_log_pump(process, settings.engine)
-        runtime = cls(settings, entry, profile, process, port, log_thread)
+        runtime = cls(
+            settings, entry, profile, process, port, log_thread, runtime_metadata
+        )
         try:
             _wait_for_port(port, process, timeout=float(settings.sidecar_process_ready_seconds))
             sidecar_process_ready(engine=settings.engine, address=address)
@@ -329,6 +548,38 @@ class SystemOneRuntime:
 
     @staticmethod
     def _validate_accelerator(settings: Settings, python: Path) -> None:
+        if settings.engine == "decision2":
+            if settings.backend != "cuda":
+                raise RuntimeError(
+                    "Decision 2.0 requires the official CUDA runtime. "
+                    "No CPU, MPS or MLX fallback will be used."
+                )
+            if platform.system() != "Linux":
+                suffix = (
+                    " This model is not available on macOS/Apple Silicon in Deqio 0.5."
+                    if platform.system() == "Darwin"
+                    else " The current official Deqio profile is supported on Linux CUDA hosts."
+                )
+                raise RuntimeError(
+                    "Decision 2.0 requires the official CUDA runtime." + suffix +
+                    " No CPU, MPS or MLX fallback will be used."
+                )
+            probe = subprocess.run(
+                [
+                    str(python),
+                    "-c",
+                    "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if probe.returncode != 0:
+                raise RuntimeError(
+                    "Decision 2.0 requires the official CUDA runtime, but CUDA is unavailable. "
+                    "No CPU, MPS or MLX fallback will be used."
+                )
+            return
         if settings.backend == "mlx":
             if platform.system() != "Darwin" or platform.machine() != "arm64":
                 raise RuntimeError("MLX backend requires macOS on Apple Silicon (Darwin arm64)")
@@ -350,6 +601,103 @@ class SystemOneRuntime:
                 raise RuntimeError("MPS backend was selected, but PyTorch MPS is not available in the model runtime")
 
     @staticmethod
+    def _decision2_runtime_metadata(
+        profile: dict[str, Any], python: Path
+    ) -> dict[str, Any]:
+        """Capture actual CUDA/runtime and pinned package-manifest provenance."""
+        probe = subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "import json,torch; "
+                    "print(json.dumps({"
+                    "'torch_version': torch.__version__, "
+                    "'cuda_runtime': torch.version.cuda, "
+                    "'cuda_device': torch.cuda.get_device_name(0), "
+                    "'cuda_compute_capability': '.'.join(map(str, torch.cuda.get_device_capability(0)))"
+                    "}))"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        try:
+            metadata = json.loads(probe.stdout.strip())
+        except json.JSONDecodeError as error:
+            raise RuntimeError("Could not read Decision 2.0 CUDA runtime metadata") from error
+
+        from huggingface_hub import snapshot_download
+
+        snapshot = Path(
+            snapshot_download(
+                repo_id=str(profile["model"]),
+                revision=str(profile["model_revision"]),
+                local_files_only=True,
+            )
+        ).resolve()
+        config_path = snapshot / "config.json"
+        manifest_path = snapshot / "MODEL_MANIFEST.json"
+        if not config_path.is_file() or not manifest_path.is_file():
+            raise RuntimeError(
+                "Pinned Decision 2.0 package is missing config.json or MODEL_MANIFEST.json"
+            )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+        runtime = config.get("runtime") if isinstance(config.get("runtime"), dict) else {}
+        if config.get("decision_format") != "vllm-sr-decision" or runtime.get("entry") != "decision2.Decision2.from_pretrained":
+            raise RuntimeError("Pinned package is not an official Decision 2.0 System One package")
+        runtime_source = manifest.get("runtime_source") if isinstance(manifest.get("runtime_source"), dict) else {}
+        metadata.update({
+            "runtime_version": runtime_source.get("commit"),
+            "runtime_entry": runtime.get("entry"),
+            "package_schema": config.get("package_schema"),
+            "decision_format": config.get("decision_format"),
+            "format_version": config.get("format_version"),
+            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "manifest_model_name": manifest.get("model_name"),
+            "manifest_max_input_tokens": manifest.get("max_input_tokens"),
+            "official_package_verified_on_load": True,
+        })
+        return metadata
+
+    @staticmethod
+    def _basal_runtime_metadata(profile: dict[str, Any], python: Path) -> dict[str, Any]:
+        """Capture the installed official Basal runtime version and serving profile."""
+        probe = subprocess.run(
+            [
+                str(python),
+                "-c",
+                (
+                    "import json; "
+                    "from importlib.metadata import version; "
+                    "print(json.dumps({'runtime_version': version('basal')}))"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        try:
+            metadata = json.loads(probe.stdout.strip())
+        except json.JSONDecodeError as error:
+            raise RuntimeError("Could not read Basal runtime metadata") from error
+        expected = str(profile.get("basal_runtime_version", "")).strip()
+        installed = str(metadata.get("runtime_version", "")).strip()
+        if expected and installed != expected:
+            raise RuntimeError(
+                f"Basal runtime version mismatch: expected {expected}, installed {installed or 'unknown'}"
+            )
+        metadata.update({
+            "basal_mode": profile.get("basal_mode"),
+            "basal_backend": profile.get("basal_backend"),
+            "official_runtime": True,
+        })
+        return metadata
+
+    @staticmethod
     def _command(
         settings: Settings,
         profile: dict[str, Any],
@@ -360,6 +708,68 @@ class SystemOneRuntime:
     ) -> list[str]:
         engine = settings.engine
         model = str(profile["model"])
+        launcher = str(profile.get("launcher", ""))
+
+        def local_gguf(directory_key: str, pattern_key: str, default_pattern: str = "*Q8_0.gguf") -> Path:
+            directory_value = profile.get(directory_key)
+            if not directory_value:
+                raise RuntimeError(f"GGUF profile is missing {directory_key}")
+            directory = Path(str(directory_value)).expanduser()
+            if not directory.is_absolute():
+                directory = (settings.config_path.parent / directory).resolve()
+            pattern = str(profile.get(pattern_key, default_pattern))
+            matches = sorted(path for path in directory.glob(pattern) if path.is_file())
+            if len(matches) != 1:
+                raise RuntimeError(
+                    f"Expected exactly one GGUF artifact matching {pattern!r} in {directory}; "
+                    f"found {len(matches)}"
+                )
+            return matches[0].resolve()
+
+        # Generic official GGUF launchers are resolved before engine-specific
+        # backend restrictions.  The launcher still uses each upstream's native
+        # SystemOne/decision readout; Deqio only owns transport and lifecycle.
+        if launcher == "llama_cpp":
+            executable = _runtime_executable(env_dir, "llama-server")
+            if not executable.is_file():
+                raise RuntimeError(f"Pinned llama.cpp server was not installed: {executable}")
+            gguf = local_gguf("llama_cpp_gguf_dir", "llama_cpp_gguf_pattern")
+            return [
+                str(executable),
+                "-m", str(gguf),
+                "-c", str(settings.max_tokens),
+                "-ngl", "99",
+                "--host", "127.0.0.1",
+                "--port", str(port),
+                "--log-disable",
+            ]
+
+        if launcher == "decider_gguf":
+            sidecar = Path(__file__).with_name("decider_gguf_sidecar.py").resolve()
+            gguf = local_gguf("decider_gguf_dir", "decider_gguf_pattern")
+            return [
+                str(python), str(sidecar),
+                "--model-dir", str(gguf.parent),
+                "--gguf", str(gguf),
+                "--max-tokens", str(settings.max_tokens),
+                "--port", str(port),
+            ]
+
+        if launcher == "jevk5_gguf":
+            executable = _runtime_executable(env_dir, "llama-server")
+            if not executable.is_file():
+                raise RuntimeError(f"Pinned llama.cpp server was not installed: {executable}")
+            sidecar = Path(__file__).with_name("jevk5_gguf_sidecar.py").resolve()
+            gguf = local_gguf("jevk5_gguf_dir", "jevk5_gguf_filename")
+            return [
+                str(python), str(sidecar),
+                "--llama-server", str(executable),
+                "--gguf", str(gguf),
+                "--temperature", str(profile.get("jevk5_temperature", 1.0)),
+                "--knockout-temperature", str(profile.get("jevk5_knockout_temperature", 1.0)),
+                "--max-tokens", str(settings.max_tokens),
+                "--port", str(port),
+            ]
 
         if engine == "semif":
             sidecar = Path(__file__).with_name("semif_sidecar.py").resolve()
@@ -433,18 +843,65 @@ class SystemOneRuntime:
                 "--port", str(port),
             ]
 
+        if engine == "decision2":
+            if settings.backend != "cuda":
+                raise RuntimeError(
+                    "Decision 2.0 requires the official CUDA runtime; no fallback is allowed"
+                )
+            sidecar = Path(__file__).with_name("decision2_sidecar.py").resolve()
+            return [
+                str(python),
+                str(sidecar),
+                "--model",
+                model,
+                "--revision",
+                str(profile.get("model_revision", settings.model_revision)),
+                "--port",
+                str(port),
+            ]
+
         if engine == "basal":
-            if settings.backend not in {"mlx", "cuda"}:
-                raise RuntimeError("Basal's Deqio profiles support mlx and cuda")
+            if settings.backend not in {"mlx", "mps", "gguf", "cuda"}:
+                raise RuntimeError("Basal profiles support mlx, mps, gguf and cuda")
             executable = _runtime_executable(env_dir, "basal-serve")
             if not executable.is_file():
                 raise RuntimeError(f"Basal executable was not installed: {executable}")
             command = [str(executable), "--model", model]
+            revision = profile.get("model_revision")
+            if revision and str(revision) not in {"upstream-latest", "main"}:
+                command.extend(["--revision", str(revision)])
             mode = profile.get("basal_mode")
             if mode:
                 command.extend(["--mode", str(mode)])
+            if settings.backend == "gguf":
+                gguf_value = profile.get("basal_gguf")
+                if gguf_value:
+                    gguf_path = Path(str(gguf_value)).expanduser()
+                    if not gguf_path.is_absolute():
+                        gguf_path = (settings.config_path.parent / gguf_path).resolve()
+                else:
+                    gguf_dir_value = profile.get("basal_gguf_dir")
+                    gguf_pattern = str(profile.get("basal_gguf_pattern", "*Q8_0.gguf"))
+                    if not gguf_dir_value:
+                        raise RuntimeError("Basal GGUF profile is missing its artifact directory")
+                    gguf_dir = Path(str(gguf_dir_value)).expanduser()
+                    if not gguf_dir.is_absolute():
+                        gguf_dir = (settings.config_path.parent / gguf_dir).resolve()
+                    matches = sorted(path for path in gguf_dir.glob(gguf_pattern) if path.is_file())
+                    if len(matches) != 1:
+                        raise RuntimeError(
+                            f"Expected exactly one Basal GGUF artifact matching {gguf_pattern!r} in {gguf_dir}; "
+                            f"found {len(matches)}"
+                        )
+                    gguf_path = matches[0].resolve()
+                if not gguf_path.is_file():
+                    raise RuntimeError(f"Basal GGUF weights are missing: {gguf_path}")
+                command.extend(["--gguf", str(gguf_path)])
+            if profile.get("basal_soam") is True:
+                command.extend(["--soam", "on"])
             command.extend(["--port", str(port)])
             return command
+
 
         if engine == "clef":
             if settings.backend != "mlx":
@@ -525,13 +982,48 @@ class SystemOneRuntime:
                 }
             },
         }
-        response = _post_json(f"{self.base_url}/v1/systemone", payload, timeout=timeout)
-        answers = response.get("answers")
-        if not isinstance(answers, dict) or not isinstance(answers.get("ready"), dict):
-            raise RuntimeError("Engine sidecar opened its port but did not pass the model-readiness probe")
+        # llama-server intentionally binds its HTTP port before the model is
+        # loaded and reports HTTP 503 {"message": "Loading model"} during
+        # that window. Treat 503 as a transient readiness state only here;
+        # normal inference requests still surface every HTTP error immediately.
+        deadline = time.monotonic() + timeout
+        last_unavailable: SystemOneSidecarHTTPError | None = None
+        while True:
+            if self.process.poll() is not None:
+                raise RuntimeError(
+                    f"Engine sidecar exited during model startup with code {self.process.returncode}"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                detail = f" Last response: {last_unavailable}" if last_unavailable else ""
+                raise RuntimeError(
+                    f"Timed out waiting {timeout:.1f}s for engine model readiness.{detail}"
+                )
+            try:
+                response = _post_json(
+                    f"{self.base_url}/v1/systemone",
+                    payload,
+                    timeout=remaining,
+                )
+            except SystemOneSidecarHTTPError as error:
+                if error.status_code != 503:
+                    raise
+                last_unavailable = error
+                time.sleep(min(0.2, max(0.0, remaining)))
+                continue
+            answers = response.get("answers")
+            if not isinstance(answers, dict) or not isinstance(answers.get("ready"), dict):
+                raise RuntimeError(
+                    "Engine sidecar opened its port but did not pass the model-readiness probe"
+                )
+            return
 
     def _request(
-        self, state: Any, questions: dict[str, Any], execution_mode: str | None = None
+        self,
+        state: Any,
+        questions: dict[str, Any],
+        execution_mode: str | None = None,
+        request_options: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any], float]:
         payload = {
             "model": str(self.profile.get("wire_model", self.settings.model)),
@@ -540,14 +1032,153 @@ class SystemOneRuntime:
         }
         if execution_mode:
             payload["execution_mode"] = execution_mode
+        if request_options:
+            reserved = {"model", "state", "questions", "execution_mode"}
+            overlap = reserved.intersection(request_options)
+            if overlap:
+                raise RuntimeError("System One request options may not override: " + ", ".join(sorted(overlap)))
+            payload.update(request_options)
         body = _json_body(payload)
         started = time.perf_counter()
         response = _post_json(
             f"{self.base_url}/v1/systemone", payload, timeout=180.0, body=body
         )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
-        latency_ms = float(response.get("latency_ms", elapsed_ms) or elapsed_ms)
+        latency_ms = _protocol_float(
+            response.get("latency_ms", elapsed_ms) or elapsed_ms,
+            field="latency_ms",
+            minimum=0.0,
+        )
         return payload, response, latency_ms
+
+    def system_one(
+        self,
+        state: Any,
+        questions: dict[str, Any],
+        request_options: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Run one native System One request without Deqio-side score rewriting."""
+        if not isinstance(questions, dict) or not questions:
+            raise RuntimeError("questions must be a non-empty object")
+        request_options = dict(request_options or {})
+        capabilities = self.profile.get("capabilities")
+        capabilities = capabilities if isinstance(capabilities, dict) else {}
+
+        if self.engine == "decision2":
+            if request_options:
+                unsupported = ", ".join(sorted(request_options))
+                raise SystemOneCapabilityError(
+                    unsupported,
+                    f"Decision 2.0 does not support System One request option(s): {unsupported}",
+                )
+            if len(questions) > 1 and not capabilities.get("multi_question", False):
+                raise SystemOneCapabilityError(
+                    "multi_question", "Active profile does not support multiple System One questions"
+                )
+            for question_id, question in questions.items():
+                if not isinstance(question, dict):
+                    raise RuntimeError(f"Question {question_id!r} must be an object")
+                question_type = str(question.get("type", ""))
+                if question_type not in {"choice", "noul", "score"}:
+                    raise SystemOneCapabilityError(
+                        question_type,
+                        f"Decision 2.0 does not support question type {question_type!r}; "
+                        "supported types are choice, noul and score",
+                    )
+                if not capabilities.get(question_type, False):
+                    raise SystemOneCapabilityError(
+                        question_type, f"Active profile does not support System One capability {question_type!r}"
+                    )
+            _payload, response, latency_ms = self._request(state, questions)
+
+        elif self.engine == "basal":
+            if self.profile.get("family") != "basal1.5":
+                raise RuntimeError("Native /v1/systemone exposure requires a Basal 1.5 profile")
+            if len(questions) > 1 and not capabilities.get("soam", False):
+                raise SystemOneCapabilityError(
+                    "soam", "Active Basal profile does not support State Once, Ask Many"
+                )
+
+            facts = request_options.get("facts")
+            if facts is not None:
+                if facts not in {"off", "auto"}:
+                    raise RuntimeError('facts must be "off" or "auto"')
+                if facts == "auto" and not capabilities.get("facts", False):
+                    raise SystemOneCapabilityError(
+                        "facts", "Active Basal backend does not support facts: auto"
+                    )
+            allowed_types = {"choice", "noul", "score", "multi", "act"}
+            for question_id, question in questions.items():
+                if not isinstance(question, dict):
+                    raise RuntimeError(f"Question {question_id!r} must be an object")
+                question_type = str(question.get("type", "choice"))
+                if question_type not in allowed_types:
+                    raise SystemOneCapabilityError(
+                        question_type, f"Basal 1.5 does not support question type {question_type!r}"
+                    )
+                if not capabilities.get(question_type, False):
+                    raise SystemOneCapabilityError(
+                        question_type,
+                        f"Active Basal backend does not support System One capability {question_type!r}",
+                    )
+                if "option_keys" in question and not capabilities.get("option_keys", False):
+                    raise SystemOneCapabilityError(
+                        "option_keys", "Active Basal backend does not support option_keys"
+                    )
+                if question.get("evidence"):
+                    if question_type == "multi":
+                        raise SystemOneCapabilityError(
+                            "evidence", "Basal evidence is not supported for multi questions"
+                        )
+                    if not capabilities.get("evidence", False):
+                        raise SystemOneCapabilityError(
+                            "evidence",
+                            f"Evidence is not available on the active Basal {self.settings.backend} backend",
+                        )
+
+            _payload, response, latency_ms = self._request(
+                state, questions, request_options=request_options
+            )
+        elif capabilities.get("systemone", False):
+            if request_options:
+                unsupported = ", ".join(sorted(request_options))
+                raise SystemOneCapabilityError(
+                    unsupported,
+                    f"Active profile does not support System One request option(s): {unsupported}",
+                )
+            if len(questions) > 1 and not capabilities.get("multi_question", False):
+                raise SystemOneCapabilityError(
+                    "multi_question", "Active profile does not support multiple System One questions"
+                )
+            for question_id, question in questions.items():
+                if not isinstance(question, dict):
+                    raise RuntimeError(f"Question {question_id!r} must be an object")
+                question_type = str(question.get("type", "choice"))
+                if not capabilities.get(question_type, False):
+                    raise SystemOneCapabilityError(
+                        question_type,
+                        f"Active profile does not support System One capability {question_type!r}",
+                    )
+                if "option_keys" in question and not capabilities.get("option_keys", False):
+                    raise SystemOneCapabilityError(
+                        "option_keys", "Active profile does not support option_keys"
+                    )
+                if question.get("evidence") and not capabilities.get("evidence", False):
+                    raise SystemOneCapabilityError(
+                        "evidence", "Evidence is not available on the active profile"
+                    )
+            _payload, response, latency_ms = self._request(state, questions)
+
+        else:
+            raise SystemOneCapabilityError(
+                "systemone", "Active profile does not expose native System One"
+            )
+
+        return response, {
+            "total_seconds": latency_ms / 1000.0,
+            "batch_size": len(questions),
+            "engine": self.engine,
+        }
 
     def score(self, row: dict[str, Any], mode: str) -> dict[str, Any]:
         question_id = "decision"
@@ -565,13 +1196,14 @@ class SystemOneRuntime:
         payload, response, latency_ms = self._request(row["state"], questions, mode)
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
-            raise RuntimeError("External engine response is missing answers.decision")
+            raise SystemOneProtocolError("External engine response is missing answers.decision")
         return _choice_raw(
             row=row,
             answer=answers[question_id],
             response=response,
             payload=payload,
             latency_ms=latency_ms,
+            preserve_native=self.engine == "decision2",
         )
 
     def score_noul(self, row: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -585,13 +1217,14 @@ class SystemOneRuntime:
         payload, response, latency_ms = self._request(row["state"], questions, mode)
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
-            raise RuntimeError("External engine response is missing answers.decision")
+            raise SystemOneProtocolError("External engine response is missing answers.decision")
         return _noul_raw(
             row=row,
             answer=answers[question_id],
             response=response,
             payload=payload,
             latency_ms=latency_ms,
+            preserve_native=self.engine == "decision2",
         )
 
     def score_shared(self, rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -614,12 +1247,12 @@ class SystemOneRuntime:
         payload, response, latency_ms = self._request(rows[0]["state"], questions, "shared")
         answers = response.get("answers")
         if not isinstance(answers, dict):
-            raise RuntimeError("External engine response is missing answers")
+            raise SystemOneProtocolError("External engine response is missing answers")
         raw_results = []
         for row, qid in zip(rows, qids):
             answer = answers.get(qid)
             if not isinstance(answer, dict):
-                raise RuntimeError(f"External engine response is missing answers.{qid}")
+                raise SystemOneProtocolError(f"External engine response is missing answers.{qid}")
             raw_results.append(
                 _choice_raw(
                     row=row,
@@ -627,6 +1260,7 @@ class SystemOneRuntime:
                     response=response,
                     payload=payload,
                     latency_ms=latency_ms,
+                    preserve_native=self.engine == "decision2",
                 )
             )
         return raw_results, {
@@ -662,12 +1296,71 @@ class SystemOneRuntime:
         }
 
     def close(self) -> None:
-        if self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
+        pid_value = getattr(self.process, "pid", None)
+        pid = int(pid_value) if isinstance(pid_value, int) else None
+        sidecar_stop(engine=self.engine, pid=pid)
+
+        control_pipe = getattr(self.process, "stdin", None)
+        try:
+            if self.process.poll() is None:
+                # Ask the supervisor to stop the engine tree itself first. This
+                # is the portable graceful path (notably on Windows, where
+                # Popen.terminate() is a hard TerminateProcess call and would
+                # skip the supervisor's child cleanup).
+                if control_pipe is not None:
+                    try:
+                        control_pipe.write("stop\n")
+                        control_pipe.flush()
+                    except (BrokenPipeError, OSError, ValueError):
+                        pass
+
+                try:
+                    self.process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+
+            if self.process.poll() is None:
+                terminated_group = False
+                if os.name != "nt" and pid is not None:
+                    try:
+                        os.killpg(pid, signal.SIGTERM)
+                        terminated_group = True
+                    except ProcessLookupError:
+                        pass
+                    except OSError:
+                        # Fall back to the direct child when the process was not
+                        # started as a session leader for any reason.
+                        terminated_group = False
+                if not terminated_group and self.process.poll() is None:
+                    self.process.terminate()
+
+                try:
+                    self.process.wait(timeout=4)
+                except subprocess.TimeoutExpired:
+                    killed_group = False
+                    if os.name != "nt" and pid is not None:
+                        try:
+                            os.killpg(pid, signal.SIGKILL)
+                            killed_group = True
+                        except ProcessLookupError:
+                            pass
+                        except OSError:
+                            killed_group = False
+                    if not killed_group and self.process.poll() is None:
+                        self.process.kill()
+                    try:
+                        self.process.wait(timeout=5)
+                    except subprocess.TimeoutExpired as error:
+                        raise RuntimeError(
+                            f"Inference sidecar supervisor pid={pid} did not stop after forced termination"
+                        ) from error
+        finally:
+            if control_pipe is not None:
+                try:
+                    control_pipe.close()
+                except (OSError, ValueError):
+                    pass
+
         if self._log_thread is not None:
             self._log_thread.join(timeout=1)
+        sidecar_stopped(engine=self.engine, pid=pid)

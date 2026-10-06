@@ -6,6 +6,8 @@ import os
 import shutil
 import subprocess
 import sys
+from copy import deepcopy
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,8 @@ from .backends import BackendRuntime
 from .config import read_config_data, settings_from_data, write_config_data
 from .hardware import describe_host, detect_host, host_backends, profile_compatibility
 from .installations import installed_profiles, installation_record, load_registry, mark_installed, profile_key, unmark_installed
+from .process_lock import process_lock
+from .runtime_control import discover_server
 from .workspace import ensure_workspace
 
 
@@ -77,9 +81,9 @@ def _runtime_python(env_dir: Path) -> Path:
     return env_dir / "bin" / "python"
 
 
-def _run(command: list[str]) -> None:
+def _run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(command))
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, env=env)
 
 
 def _write_config(path: Path, data: dict[str, Any]) -> None:
@@ -268,8 +272,8 @@ def _ensure_venv(env_dir: Path, python_version: str) -> Path:
     return python_path
 
 
-def _checkout_nimble(runtime_root: Path, *, upgrade: bool) -> Path:
-    source_dir = runtime_root / "nimble-src"
+def _checkout_nimble(runtime_root: Path, *, source_key: str, upgrade: bool) -> Path:
+    source_dir = runtime_root / source_key
     if not (source_dir / ".git").is_dir():
         if source_dir.exists():
             raise RuntimeError(f"Nimble source path exists but is not a git checkout: {source_dir}")
@@ -287,8 +291,22 @@ def _install_nimble(
     upgrade: bool,
 ) -> Path:
     runtime_root = _runtime_root(config_path, data)
+    managed_models = (config_path.parent / "models").resolve()
+    model_dir = Path(str(profile.get("model", "models/nimble-9b"))).expanduser()
+    if not model_dir.is_absolute():
+        model_dir = (config_path.parent / model_dir).resolve()
+    else:
+        model_dir = model_dir.resolve()
+    # Nimble preparation may recursively replace its output on --force. Keep
+    # that destructive output strictly inside Deqio's managed models/ tree.
+    if model_dir == managed_models or not model_dir.is_relative_to(managed_models):
+        raise RuntimeError(
+            f"Nimble prepared model output must be a child of the workspace models directory: {model_dir}"
+        )
+
     runtime_root.mkdir(parents=True, exist_ok=True)
-    source_dir = _checkout_nimble(runtime_root, upgrade=upgrade)
+    source_key = str(profile.get("source_key", "nimble-src"))
+    source_dir = _checkout_nimble(runtime_root, source_key=source_key, upgrade=upgrade)
     backend = str(profile.get("nimble_backend") or data.get("backend") or "")
     if backend not in {"mlx", "cuda"}:
         raise RuntimeError("Nimble supports mlx and cuda profiles in Deqio")
@@ -326,9 +344,6 @@ def _install_nimble(
     ])
     _run(prep_command)
 
-    model_dir = Path(str(profile.get("model", "models/nimble-9b"))).expanduser()
-    if not model_dir.is_absolute():
-        model_dir = (config_path.parent / model_dir).resolve()
     model_config = runtime_root / str(profile.get("model_config", "nimble-model.json"))
     helper = Path(__file__).with_name("nimble_prepare.py").resolve()
     prepare = [
@@ -352,27 +367,24 @@ def _install_basal(
     *,
     upgrade: bool,
 ) -> Path:
-    """Install the Basal runtime with backend-specific dependencies.
-
-    CUDA follows the upstream v1.0.1 installation order and pins PyTorch from
-    the CUDA 12.8 index before installing Basal. The MLX profile follows the
-    upstream-documented Apple Silicon fork and installs MLX explicitly so the
-    isolated runtime never depends on the host Python environment.
-    """
+    """Install an isolated official Basal 1.5 runtime for the selected profile."""
 
     backend = str(profile.get("basal_backend") or data.get("backend") or "")
-    if backend not in {"mlx", "cuda"}:
-        raise RuntimeError("Basal supports mlx and cuda profiles in Deqio")
+    if backend not in {"mlx", "mps", "gguf", "cuda"}:
+        raise RuntimeError("Basal supports mlx, mps, gguf and cuda profiles in Deqio")
 
     runtime_key = str(profile.get("runtime_key", f"basal-{backend}"))
     env_dir = _runtime_root(config_path, data) / runtime_key
     python_version = str(profile.get("python", "3.12"))
     python_path = _ensure_venv(env_dir, python_version)
 
+    if str(profile.get("basal_runtime_version", "")) != "1.5.0":
+        raise RuntimeError("Deqio 0.5 supports Basal 1.5 profiles only")
+
     if backend == "cuda":
-        # Basal's vLLM profile must live in a separate environment and let
-        # vLLM resolve its own compatible PyTorch build.  The native CUDA
-        # profiles keep the upstream pinned torch-first installation order.
+        # Native Basal CUDA uses the upstream PyTorch engine. Install the CUDA
+        # wheel first so the generic Basal dependency cannot resolve a CPU wheel.
+        # Historical vLLM profiles still let vLLM own their torch resolution.
         if str(profile.get("basal_mode", "")) != "vllm":
             torch_command = [
                 "uv", "pip", "install", "--python", str(python_path),
@@ -384,15 +396,6 @@ def _install_basal(
                 "--index-url", "https://download.pytorch.org/whl/cu128",
             ])
             _run(torch_command)
-    else:
-        mlx_command = [
-            "uv", "pip", "install", "--python", str(python_path),
-        ]
-        if upgrade:
-            mlx_command.append("--upgrade")
-        mlx_command.append("mlx>=0.32,<0.33")
-        _run(mlx_command)
-
     package = str(profile.get("basal_package", "")).strip()
     if not package:
         raise RuntimeError("Basal profile is missing basal_package")
@@ -404,11 +407,213 @@ def _install_basal(
     return env_dir
 
 
+def _install_decision2(
+    config_path: Path,
+    data: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    upgrade: bool,
+) -> Path:
+    """Install the official Decision 2.0 Python runtime dependencies.
+
+    The model package itself contains the official ``decision2`` runtime and is
+    loaded from the pinned Hugging Face revision.  Deqio only supplies an
+    isolated CUDA environment plus a localhost transport sidecar; it does not
+    reimplement Decision 2.0 scoring or model conversion.
+    """
+
+    if str(profile.get("platform")) != "cuda":
+        raise RuntimeError("Decision 2.0 in Deqio 0.5 requires the official CUDA runtime")
+
+    runtime_key = str(profile.get("runtime_key", "decision2-cuda"))
+    env_dir = _runtime_root(config_path, data) / runtime_key
+    python_version = str(profile.get("python", "3.12.13"))
+    python_path = _ensure_venv(env_dir, python_version)
+
+    # The current official Decision 2.0 manifests are built/tested with the
+    # versions below.  PyTorch is installed first because the hybrid Qwen
+    # runtime dependencies import/build against it.  We intentionally do not
+    # install any MLX/MPS/CPU-specific Decision implementation.
+    torch_command = [
+        "uv", "pip", "install", "--python", str(python_path),
+    ]
+    if upgrade:
+        torch_command.append("--upgrade")
+    torch_command.append("torch==2.12.0")
+    _run(torch_command)
+
+    packages = profile.get("packages")
+    if not isinstance(packages, list) or not packages:
+        raise RuntimeError("Decision 2.0 profile does not declare its pinned runtime packages")
+
+    command = ["uv", "pip", "install", "--python", str(python_path)]
+    if upgrade:
+        command.append("--upgrade")
+    command.extend(str(package) for package in packages)
+    # FastAPI/Uvicorn are Deqio's localhost transport only; the model and all
+    # scoring/runtime logic remain the verified package shipped by upstream.
+    command.extend(["fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    _run(command)
+    return env_dir
+
+
+
+def _install_llama_cpp_runtime(
+    config_path: Path,
+    data: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    upgrade: bool,
+) -> Path:
+    """Build the pinned official llama.cpp SystemOne server in an isolated runtime."""
+    runtime_key = str(profile.get("runtime_key", "llama-cpp-systemone"))
+    env_dir = _runtime_root(config_path, data) / runtime_key
+    python_version = str(profile.get("python", "3.12"))
+    python = _ensure_venv(env_dir, python_version)
+    # Keep the GGUF provisioning path self-contained: cmake/ninja are installed
+    # into the isolated runtime instead of assuming a global CMake install.
+    tool_command = ["uv", "pip", "install", "--python", str(python)]
+    if upgrade:
+        tool_command.append("--upgrade")
+    tool_command.extend(["cmake>=3.20,<5", "ninja>=1.11,<2"])
+    _run(tool_command)
+    bin_dir = env_dir / ("Scripts" if os.name == "nt" else "bin")
+    cmake_exe = bin_dir / ("cmake.exe" if os.name == "nt" else "cmake")
+    ninja_exe = bin_dir / ("ninja.exe" if os.name == "nt" else "ninja")
+    if not cmake_exe.is_file() or not ninja_exe.is_file():
+        raise RuntimeError(
+            f"Isolated llama.cpp build tools are incomplete under {bin_dir}; "
+            "expected both cmake and ninja"
+        )
+    build_env = os.environ.copy()
+    build_env["PATH"] = str(bin_dir) + os.pathsep + build_env.get("PATH", "")
+
+    revision = str(profile.get("llama_cpp_revision", "")).strip()
+    if not revision:
+        raise RuntimeError("llama.cpp GGUF profile is missing llama_cpp_revision")
+    source = env_dir / "llama.cpp"
+    build = env_dir / "llama-build"
+    if not source.is_dir():
+        _run(["git", "clone", "--filter=blob:none", "https://github.com/ggml-org/llama.cpp.git", str(source)])
+    # Fetch the immutable commit used by the catalog.  This is deliberately not
+    # a moving master checkout because decision-model support is runtime-sensitive.
+    _run(["git", "-C", str(source), "fetch", "--depth", "1", "origin", revision])
+    _run(["git", "-C", str(source), "checkout", "--detach", "FETCH_HEAD"])
+
+    # A failed configure can leave CMakeCache.txt behind (for example when
+    # Ninja was not visible on PATH).  Always configure the pinned runtime from
+    # a clean build tree so a retry after Fix02 cannot inherit that broken cache.
+    if build.exists():
+        shutil.rmtree(build)
+
+    cmake = [
+        str(cmake_exe), "-G", "Ninja", "-S", str(source), "-B", str(build),
+        "-DCMAKE_BUILD_TYPE=Release", f"-DCMAKE_MAKE_PROGRAM={ninja_exe}",
+    ]
+    if sys.platform == "darwin":
+        xcrun = shutil.which("xcrun", path=build_env.get("PATH"))
+        if not xcrun:
+            raise RuntimeError(
+                "Building the pinned llama.cpp runtime on macOS requires Xcode Command Line Tools; "
+                "install them with: xcode-select --install"
+            )
+        try:
+            clang = subprocess.run(
+                [xcrun, "--find", "clang"], check=True, capture_output=True, text=True, env=build_env
+            ).stdout.strip()
+            clangxx = subprocess.run(
+                [xcrun, "--find", "clang++"], check=True, capture_output=True, text=True, env=build_env
+            ).stdout.strip()
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Xcode Command Line Tools are present but clang/clang++ could not be resolved; "
+                "run: xcode-select --install"
+            ) from exc
+        if not clang or not clangxx:
+            raise RuntimeError(
+                "Xcode Command Line Tools did not provide clang and clang++; run: xcode-select --install"
+            )
+        cmake.extend([
+            "-DGGML_METAL=ON",
+            f"-DCMAKE_C_COMPILER={clang}",
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
+        ])
+    elif shutil.which("nvidia-smi"):
+        cmake.append("-DGGML_CUDA=ON")
+    _run(cmake, env=build_env)
+    build_cmd = [str(cmake_exe), "--build", str(build), "--config", "Release", "--target", "llama-server"]
+    jobs = os.cpu_count() or 1
+    build_cmd.extend(["-j", str(max(1, min(jobs, 8)))])
+    _run(build_cmd, env=build_env)
+
+    candidates = [build / "bin" / "llama-server", build / "bin" / "Release" / "llama-server.exe"]
+    binary = next((item for item in candidates if item.is_file()), None)
+    if binary is None:
+        raise RuntimeError(f"Pinned llama.cpp build did not produce llama-server under {build / 'bin'}")
+    target = env_dir / ("Scripts" if os.name == "nt" else "bin") / ("llama-server.exe" if os.name == "nt" else "llama-server")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, target)
+    if os.name != "nt":
+        target.chmod(target.stat().st_mode | 0o111)
+    return env_dir
+
+
+def _install_llama_cpp(
+    config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool
+) -> Path:
+    return _install_llama_cpp_runtime(config_path, data, profile, upgrade=upgrade)
+
+
+def _install_jevk5_gguf(
+    config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool
+) -> Path:
+    env_dir = _install_llama_cpp_runtime(config_path, data, profile, upgrade=upgrade)
+    python = _runtime_python(env_dir)
+    package = str(profile.get("jevk5_package", "")).strip()
+    if not package:
+        raise RuntimeError("JevK5 GGUF profile is missing jevk5_package")
+    command = ["uv", "pip", "install", "--python", str(python)]
+    if upgrade:
+        command.append("--upgrade")
+    command.extend([package, "fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    _run(command)
+    return env_dir
+
+
+def _install_decider_gguf(
+    config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool
+) -> Path:
+    runtime_key = str(profile.get("runtime_key", "decider-gguf"))
+    env_dir = _runtime_root(config_path, data) / runtime_key
+    python = _ensure_venv(env_dir, str(profile.get("python", "3.12")))
+    package = str(profile.get("decider_package", "")).strip()
+    if not package:
+        raise RuntimeError("Decider GGUF profile is missing decider_package")
+    command = ["uv", "pip", "install", "--python", str(python)]
+    if upgrade:
+        command.append("--upgrade")
+    command.extend([package, "fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    env = os.environ.copy()
+    if sys.platform == "darwin":
+        env["CMAKE_ARGS"] = "-DGGML_METAL=on"
+    elif shutil.which("nvidia-smi"):
+        env["CMAKE_ARGS"] = "-DGGML_CUDA=on"
+    _run(command, env=env)
+    return env_dir
+
 def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str, Any], *, upgrade: bool) -> Path:
     if profile.get("installer") == "nimble":
         return _install_nimble(config_path, data, profile, upgrade=upgrade)
     if profile.get("installer") == "basal":
         return _install_basal(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "decision2":
+        return _install_decision2(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "llama_cpp":
+        return _install_llama_cpp(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "jevk5_gguf":
+        return _install_jevk5_gguf(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "decider_gguf":
+        return _install_decider_gguf(config_path, data, profile, upgrade=upgrade)
 
     runtime_key = profile.get("runtime_key")
     packages = profile.get("packages")
@@ -465,9 +670,20 @@ def _prefetch_one_download(
         local_dir = Path(str(local_dir_value)).expanduser()
         if not local_dir.is_absolute():
             local_dir = (config_path.parent / local_dir).resolve()
+        else:
+            local_dir = local_dir.resolve()
+        models_root = (config_path.parent / "models").resolve()
+        if local_dir == models_root or not local_dir.is_relative_to(models_root):
+            raise RuntimeError(
+                "Managed model download local_dir must be a child of the workspace models/ directory"
+            )
         local_dir.mkdir(parents=True, exist_ok=True)
         kwargs["local_dir"] = str(local_dir)
     if kind == "snapshot":
+        if isinstance(download.get("allow_patterns"), list):
+            kwargs["allow_patterns"] = [str(item) for item in download["allow_patterns"]]
+        if isinstance(download.get("ignore_patterns"), list):
+            kwargs["ignore_patterns"] = [str(item) for item in download["ignore_patterns"]]
         path = snapshot_download(**kwargs)
         return f"Downloaded {repo_id} -> {path}"
     if kind == "file":
@@ -531,6 +747,8 @@ def _artifact_attestation(config_path: Path, data: dict[str, Any], profile: dict
             "requested_revision": requested if requested not in ("",) else None,
             "resolved_revision": _resolved_hf_revision(repo_id, requested),
         }
+        if download.get("role"):
+            row["role"] = str(download["role"])
         if download.get("filename"):
             row["filename"] = str(download["filename"])
         if download.get("local_dir"):
@@ -599,6 +817,75 @@ def _artifact_attestation(config_path: Path, data: dict[str, Any], profile: dict
     return artifacts
 
 
+
+def _pin_profile_hf_revisions(profile: dict[str, Any]) -> dict[str, Any]:
+    """Resolve a pin-on-install profile to immutable Hub commits and exact files.
+
+    Some official model repositories publish a moving ``main`` rather than a
+    release tag. Deqio resolves those revisions once during the network-enabled
+    install/update phase, resolves single-file patterns when required, and stores
+    the resulting commit/file identity in the installation attestation. Runtime
+    loading then reuses that immutable identity offline.
+    """
+    if not profile.get("pin_hf_revisions_at_install"):
+        return profile
+
+    pinned = deepcopy(profile)
+    resolved: dict[str, str] = {}
+    api = HfApi()
+
+    def resolve(repo_id: str, requested: Any) -> str:
+        if not repo_id:
+            raise RuntimeError("Pinned profile contains an empty Hugging Face repo id")
+        requested_text = None if requested in (None, "", "upstream-latest") else str(requested)
+        if requested_text and len(requested_text) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in requested_text):
+            return requested_text.lower()
+        key = f"{repo_id}@{requested_text or 'main'}"
+        if key not in resolved:
+            try:
+                info = api.model_info(repo_id, revision=requested_text)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not resolve immutable revision for {repo_id}@{requested_text or 'main'}"
+                ) from exc
+            sha = getattr(info, "sha", None)
+            if not sha:
+                raise RuntimeError(f"Hugging Face did not return a commit SHA for {repo_id}")
+            resolved[key] = str(sha)
+        return resolved[key]
+
+    downloads = _declared_downloads(pinned)
+    for download in downloads:
+        repo_id = str(download.get("repo_id", ""))
+        if not repo_id:
+            continue
+        download["revision"] = resolve(repo_id, download.get("revision", "main"))
+        if download.get("type") == "file" and not download.get("filename") and download.get("filename_pattern"):
+            pattern = str(download["filename_pattern"])
+            try:
+                files = api.list_repo_files(repo_id, revision=str(download["revision"]))
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not enumerate pinned artifacts for {repo_id}@{download['revision']}"
+                ) from exc
+            matches = sorted(str(name) for name in files if fnmatch(str(name), pattern))
+            if len(matches) != 1:
+                raise RuntimeError(
+                    f"Expected exactly one {pattern!r} artifact in {repo_id}@{download['revision']}; "
+                    f"found {len(matches)}"
+                )
+            download["filename"] = matches[0]
+
+    model = pinned.get("model")
+    if _looks_like_hf_repo(model):
+        model_repo = str(model)
+        model_revision = resolve(model_repo, pinned.get("model_revision", "main"))
+        pinned["model_revision"] = model_revision
+        for download in downloads:
+            if str(download.get("repo_id", "")) == model_repo and download.get("role") in {"basal-model", "basal-metadata"}:
+                download["revision"] = model_revision
+    return pinned
+
 def _preflight_profile(
     model_id: str,
     backend: str,
@@ -640,13 +927,11 @@ def _verify_model_ready(
         f"Verifying model readiness online (timeout={settings.sidecar_startup_seconds}s): "
         f"{entry['id']} / {backend}"
     )
+    # SystemOneRuntime.load already performs a real typed-decision readiness
+    # probe. Reaching this point means the model can answer requests. Always
+    # close the temporary runtime immediately after verification.
     runtime = BackendRuntime.load(settings)
-    try:
-        # SystemOneRuntime.load already performs a real typed-decision readiness
-        # probe. Reaching this point means the model can answer requests.
-        pass
-    finally:
-        runtime.close()
+    runtime.close()
 
 
 def _install_profile(
@@ -661,7 +946,7 @@ def _install_profile(
     max_input_tokens: int | None = None,
 ) -> int:
     entry = get_model(catalog, model_id)
-    profile = get_profile(catalog, model_id, backend)
+    profile = _pin_profile_hf_revisions(get_profile(catalog, model_id, backend))
     compatibility = _preflight_profile(model_id, backend, profile, force=force)
     chosen_max_input_tokens = _validate_max_input_tokens(
         profile,
@@ -908,15 +1193,25 @@ def _catalog_profile_for_key(catalog: dict[str, Any], key: str) -> tuple[dict[st
 
 
 def _local_artifact_paths(config_path: Path, profile: dict[str, Any]) -> set[Path]:
+    managed_root = (config_path.parent / "models").resolve()
     paths: set[Path] = set()
+
+    def add_if_managed(path_value: str) -> None:
+        path = Path(path_value).expanduser()
+        resolved = (path if path.is_absolute() else config_path.parent / path).resolve()
+        # Automatic deletion is deliberately restricted to Deqio's workspace
+        # model directory. An external absolute/local model path is user-owned
+        # and must never be recursively removed by `deqio models delete`.
+        if resolved != managed_root and not resolved.is_relative_to(managed_root):
+            return
+        paths.add(resolved)
+
     for download in _declared_downloads(profile):
         if download.get("local_dir"):
-            path = Path(str(download["local_dir"])).expanduser()
-            paths.add((path if path.is_absolute() else config_path.parent / path).resolve())
+            add_if_managed(str(download["local_dir"]))
     model = profile.get("model")
     if isinstance(model, str) and (model.startswith(("./", "../", "~/", "/", "models/"))):
-        path = Path(model).expanduser()
-        paths.add((path if path.is_absolute() else config_path.parent / path).resolve())
+        add_if_managed(model)
     return paths
 
 
@@ -1016,7 +1311,11 @@ def _cleanup_profile_artifacts(
                 break
         if not any_nimble:
             root = _runtime_root(config_path, data)
-            for name in ("nimble-src", "nimble-prep", str(profile.get("model_config", "nimble-model.json"))):
+            for name in (
+                str(profile.get("source_key", "nimble-src")),
+                "nimble-prep",
+                str(profile.get("model_config", "nimble-model.json")),
+            ):
                 path = root / name
                 if path.is_dir():
                     shutil.rmtree(path)
@@ -1148,8 +1447,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
     available_backends = host_backends()
     if not available_backends:
         raise RuntimeError(
-            "No supported accelerator backend was detected. Apple Silicon requires macOS; "
-            "Linux/Windows CUDA requires a working NVIDIA driver visible through nvidia-smi."
+            "No supported Deqio backend was detected. Apple Silicon requires macOS; "
+            "Linux/Windows can use Basal 1.5 GGUF, while CUDA additionally requires a working NVIDIA driver visible through nvidia-smi."
         )
     print(f"Host: {describe_host(host)}")
     print("Available backends for this host:")
@@ -1307,6 +1606,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        mutates_artifacts = args.command in {"setup", "install", "update", "delete"} or (
+            args.command == "select" and bool(getattr(args, "install", False))
+        )
+        if mutates_artifacts:
+            config_path = _config_path(args.config)
+            lock_path = config_path.parent / ".deqio" / "model-management.lock"
+            with process_lock(
+                lock_path,
+                timeout=0.0,
+                live_owner_error="Another Deqio model-management operation is already running in this workspace (pid={pid})",
+            ):
+                running_server = discover_server(config_path)
+                if running_server is not None:
+                    raise RuntimeError(
+                        "Stop the active Deqio server before installing, updating, or deleting model artifacts "
+                        f"in this workspace (pid={running_server.get('pid')})."
+                    )
+                return int(args.func(args))
         return int(args.func(args))
     except (RuntimeError, ValueError, subprocess.CalledProcessError) as error:
         print(f"error: {error}", file=sys.stderr)

@@ -67,6 +67,11 @@ def test_public_routes_are_registered() -> None:
     assert "/v1/choice" in routes
     assert "/v1/decision" in routes
     assert "/v1/shared" in routes
+    assert "/v1/score" in routes
+    assert "/v1/multi" in routes
+    assert "/v1/act" in routes
+    assert "/v1/soam" in routes
+    assert "/v1/systemone" in routes
     assert "/v1/cache/clear" in routes
     assert "/v1/models" in routes
 
@@ -236,19 +241,19 @@ def test_catalog_rejects_unsupported_backend() -> None:
 
 
 
-def test_model_manager_exposes_mlx_and_mps_on_apple_silicon(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_model_manager_exposes_mlx_mps_and_gguf_on_apple_silicon(monkeypatch: pytest.MonkeyPatch) -> None:
     import deqio.hardware as hardware
 
     monkeypatch.setattr(hardware.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(hardware.platform, "machine", lambda: "arm64")
 
-    assert hardware.host_backends() == ("mlx", "mps")
+    assert hardware.host_backends() == ("mlx", "mps", "gguf")
 
 
-def test_supported_backends_are_accelerator_only() -> None:
+def test_supported_backends_include_official_basal_gguf() -> None:
     from deqio.catalog import SUPPORTED_BACKENDS, load_catalog
 
-    assert SUPPORTED_BACKENDS == ("mlx", "mps", "cuda")
+    assert SUPPORTED_BACKENDS == ("mlx", "mps", "gguf", "cuda")
     catalog = load_catalog(Path("models.json"))
     for entry in catalog["models"]:
         assert set(entry["backends"]) <= set(SUPPORTED_BACKENDS)
@@ -809,13 +814,13 @@ def test_models_use_lists_only_installed_host_compatible_profiles_and_persists_s
                 },
             },
             {
-                "id": "basal-1.5b",
+                "id": "basal-1.5-mini",
                 "engine": "basal",
-                "label": "Basal 1.5B",
+                "label": "Basal 1.5 Mini",
                 "backends": {
                     "mlx": {
-                        "model": "Remek/basal-1.0-1.5B",
-                        "model_revision": "basal-1.5b",
+                        "model": "Remek/basal-1.5-mini-MLX-8bit",
+                        "model_revision": "main",
                     }
                 },
             },
@@ -847,10 +852,10 @@ def test_models_use_lists_only_installed_host_compatible_profiles_and_persists_s
             "max_input_tokens": 4096,
         },
         {
-            "model_id": "basal-1.5b",
+            "model_id": "basal-1.5-mini",
             "backend": "mlx",
             "engine": "basal",
-            "label": "Basal 1.5B",
+            "label": "Basal 1.5 Mini",
             "installed": True,
             "host_compatible": True,
             "active": False,
@@ -885,17 +890,17 @@ def test_models_use_lists_only_installed_host_compatible_profiles_and_persists_s
     assert result == 0
     output = capsys.readouterr().out
     assert "Kev 0.8B — mlx (kev) [active]" in output
-    assert "Basal 1.5B — mlx (basal)" in output
+    assert "Basal 1.5 Mini — mlx (basal)" in output
     assert "Hidden Uninstalled" not in output
     assert "Hidden Incompatible" not in output
-    assert "Selected installed profile basal-1.5b / mlx" in output
+    assert "Selected installed profile basal-1.5-mini / mlx" in output
 
     selected = json.loads(config_path.read_text(encoding="utf-8"))
     assert selected["engine"] == "basal"
-    assert selected["model_id"] == "basal-1.5b"
+    assert selected["model_id"] == "basal-1.5-mini"
     assert selected["backend"] == "mlx"
-    assert selected["model"] == "Remek/basal-1.0-1.5B"
-    assert selected["model_revision"] == "basal-1.5b"
+    assert selected["model"] == "Remek/basal-1.5-mini-MLX-8bit"
+    assert selected["model_revision"] == "main"
     assert selected["max_tokens"] == 8192
 
 
@@ -917,6 +922,8 @@ def test_watch_ui_uses_disk_backed_session_endpoints() -> None:
     assert 'id="modelFilter"' in WATCH_DASHBOARD
     assert 'id="watchAutoClear"' in WATCH_DASHBOARD
     assert 'href="/ui"' in WATCH_DASHBOARD
+    assert 'href="/ui#benchmarkPanel"' not in WATCH_DASHBOARD
+    assert 'Benchmark comparison</a>' not in WATCH_DASHBOARD
     assert 'id="watchAutoClear"' in DASHBOARD
 
 
@@ -974,7 +981,8 @@ def test_watch_session_records_full_request_response_on_disk_and_rejects_stale_s
         settings_snapshot=settings,
     )
 
-    session, rows = server._watch_rows_snapshot()
+    watch_snapshot = server._watch_store().list_events()
+    session, rows = watch_snapshot["session"], watch_snapshot["events"]
     assert session["requests"] == 1
     assert session["decisions"] == 1
     assert session["errors"] == 0
@@ -1003,7 +1011,8 @@ def test_watch_session_records_full_request_response_on_disk_and_rejects_stale_s
         decisions=1,
         settings_snapshot=settings,
     )
-    reset_session, reset_rows = server._watch_rows_snapshot()
+    reset_snapshot = server._watch_store().list_events()
+    reset_session, reset_rows = reset_snapshot["session"], reset_snapshot["events"]
     assert reset_session["id"] != session_id
     assert reset_session["requests"] == 0
     assert reset_rows == []
@@ -1109,7 +1118,8 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     persisted = json.loads(config_path.read_text())
     assert persisted["model_id"] == "decider-2b"
     assert persisted["backend"] == "mps"
-    watch_session, watch_rows = server._watch_rows_snapshot()
+    watch_snapshot = server._watch_store().list_events()
+    watch_session, watch_rows = watch_snapshot["session"], watch_snapshot["events"]
     assert watch_session["id"] == previous_watch_session
     assert watch_rows == []
 
@@ -1121,32 +1131,9 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.3.0"
+    assert __version__ == "0.5.0"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
-
-
-def test_native_runtime_close_releases_model_references() -> None:
-    from types import SimpleNamespace
-
-    from deqio.backends import BackendRuntime
-
-    runtime = BackendRuntime(
-        settings=SimpleNamespace(backend="test", max_tokens=4096),
-        model=object(),
-        tokenizer=object(),
-        metadata={"test": True},
-        direct_score=lambda *args, **kwargs: {},
-        serial_factory=lambda *args, **kwargs: object(),
-        shared_score=lambda *args, **kwargs: ([], {}),
-    )
-
-    runtime.close()
-
-    assert runtime.model is None
-    assert runtime.tokenizer is None
-    assert runtime.serial_scorer is None
-    assert runtime.metadata == {}
 
 
 def test_catalog_contains_nimble_mlx_and_cuda_only() -> None:
@@ -1449,13 +1436,15 @@ def test_semif_mlx_command_passes_quantization_bits(tmp_path: Path) -> None:
     assert command[command.index("--model") + 1] == "Qwen/Qwen3.5-4B"
 
 
-def test_kev_profiles_are_pinned_to_release_1_0_and_9b_guardrail_stays_bf16() -> None:
+def test_kev_native_profiles_stay_pinned_and_official_q8_gguf_is_separate() -> None:
     from deqio.catalog import get_profile, load_catalog
 
     catalog = load_catalog(Path("models.json"))
     for model_id in ("kev-0.8b", "kev-4b", "kev-9b", "kev-27b"):
         entry = next(item for item in catalog["models"] if item["id"] == model_id)
-        for profile in entry["backends"].values():
+        for backend, profile in entry["backends"].items():
+            if backend == "gguf":
+                continue
             assert profile["model"].endswith("@v1.0")
             assert profile["model_revision"] == "v1.0"
             assert profile["download"]["revision"] == "v1.0"
@@ -1463,11 +1452,19 @@ def test_kev_profiles_are_pinned_to_release_1_0_and_9b_guardrail_stays_bf16() ->
                 "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
             ]
 
+    for model_id in ("kev-0.8b", "kev-4b", "kev-9b"):
+        gguf = get_profile(catalog, model_id, "gguf")
+        assert gguf["source"] == "official"
+        assert gguf["precision"] == "q8_0"
+        assert gguf["launcher"] == "llama_cpp"
+        assert gguf["download"]["filename_pattern"] == "*Q8_0.gguf"
+    with pytest.raises(RuntimeError, match="does not support backend"):
+        get_profile(catalog, "kev-27b", "gguf")
+
     kev9 = get_profile(catalog, "kev-9b", "mlx")
     assert kev9["min_memory_gib"] == 22
     assert kev9["recommended_memory_gib"] == 32
     assert "quantization" not in kev9
-
 
 def test_runtime_identity_binds_catalog_quantization(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import deqio.systemone_runtime as runtime_module
@@ -1744,7 +1741,15 @@ def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline
     monkeypatch.setattr(
         runtime_module.subprocess,
         "Popen",
-        lambda *a, **k: (observed.update(env=k["env"]) or DummyProcess()),
+        lambda *a, **k: (
+            observed.update(
+                command=list(a[0]),
+                env=k["env"],
+                start_new_session=k.get("start_new_session"),
+                stdin=k.get("stdin"),
+            )
+            or DummyProcess()
+        ),
     )
     monkeypatch.setattr(
         runtime_module.SystemOneRuntime,
@@ -1757,6 +1762,16 @@ def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline
 
     assert observed["port_timeout"] == 17.0
     assert observed["model_timeout"] == 321.0
+    import os
+
+    if os.name != "nt":
+        assert observed["start_new_session"] is True
+    command = observed["command"]
+    assert isinstance(command, list)
+    assert Path(command[1]).name == "sidecar_guard.py"
+    assert command[2] == "--parent-pid"
+    assert command[4:7] == ["--control-stdin", "--", "demo"]
+    assert observed["stdin"] is runtime_module.subprocess.PIPE
     env = observed["env"]
     assert isinstance(env, dict)
     assert env["HF_HUB_OFFLINE"] == "1"
@@ -1861,6 +1876,103 @@ def test_delete_cleanup_preserves_shared_runtime_until_last_profile(tmp_path: Pa
         purge_cache=False,
     )
     assert not runtime_dir.exists()
+
+
+def test_delete_cleanup_never_removes_external_user_model_path(tmp_path: Path) -> None:
+    import deqio.model_manager as manager
+
+    config_path = tmp_path / "workspace" / "config.json"
+    config_path.parent.mkdir()
+    config_path.write_text("{}")
+    external = tmp_path / "user-owned-model"
+    external.mkdir()
+    (external / "weights.bin").write_bytes(b"keep")
+
+    profile = {"model": str(external)}
+    manager._cleanup_profile_artifacts(
+        config_path=config_path,
+        data={"runtime_dir": ".model-runtimes"},
+        catalog={"models": []},
+        profile=profile,
+        remaining_keys=set(),
+        purge_cache=False,
+    )
+
+    assert external.is_dir()
+    assert (external / "weights.bin").read_bytes() == b"keep"
+
+
+def test_catalog_rejects_runtime_key_path_traversal() -> None:
+    from deqio.catalog import get_profile
+
+    catalog = {
+        "models": [
+            {
+                "id": "unsafe",
+                "engine": "kev",
+                "backends": {
+                    "mlx": {
+                        "model": "owner/model",
+                        "runtime_key": "../../outside",
+                    }
+                },
+            }
+        ]
+    }
+
+    with pytest.raises(RuntimeError, match="Invalid runtime_key"):
+        get_profile(catalog, "unsafe", "mlx")
+
+
+def test_catalog_rejects_nimble_support_path_traversal() -> None:
+    from deqio.catalog import get_profile
+
+    for field, value in (("source_key", "../outside"), ("model_config", "/tmp/outside.json")):
+        catalog = {
+            "models": [
+                {
+                    "id": "unsafe-nimble",
+                    "engine": "nimble",
+                    "backends": {
+                        "mlx": {
+                            "model": "owner/model",
+                            "installer": "nimble",
+                            field: value,
+                        }
+                    },
+                }
+            ]
+        }
+        with pytest.raises(RuntimeError, match=f"Invalid {field}"):
+            get_profile(catalog, "unsafe-nimble", "mlx")
+
+
+def test_nimble_install_refuses_destructive_external_model_output(tmp_path: Path) -> None:
+    import deqio.model_manager as manager
+
+    config_path = tmp_path / "workspace" / "config.json"
+    config_path.parent.mkdir()
+    config_path.write_text("{}\n", encoding="utf-8")
+    external = tmp_path / "user-owned-model"
+    external.mkdir()
+    (external / "weights.bin").write_bytes(b"keep")
+
+    with pytest.raises(RuntimeError, match="must be a child of the workspace models directory"):
+        manager._install_nimble(
+            config_path,
+            {"runtime_dir": ".model-runtimes", "backend": "mlx"},
+            {
+                "installer": "nimble",
+                "nimble_backend": "mlx",
+                "runtime_key": "nimble-mlx",
+                "source_key": "nimble-src",
+                "model_config": "nimble-model.json",
+                "model": str(external),
+            },
+            upgrade=True,
+        )
+
+    assert (external / "weights.bin").read_bytes() == b"keep"
 
 
 def test_catalog_contains_current_decision_families_and_nimble() -> None:
@@ -2209,6 +2321,67 @@ def test_external_choice_score_provenance_marks_synthetic_one_hot() -> None:
     assert raw["score_provenance"]["synthetic"] is True
     assert raw["score_provenance"]["transforms"] == ["one_hot_fallback"]
     assert "not a model confidence score" in raw["probability_status"]
+
+
+def test_external_choice_rejects_missing_or_invalid_probabilities() -> None:
+    from deqio.systemone_runtime import _choice_raw
+
+    row = {
+        "id": "route",
+        "state": "state",
+        "question": "Which?",
+        "options": [
+            {"id": "a", "description": "A"},
+            {"id": "b", "description": "B"},
+        ],
+    }
+    common = {"row": row, "response": {}, "payload": {"state": "state", "questions": {}}, "latency_ms": 1.0}
+
+    with pytest.raises(RuntimeError, match="missing option"):
+        _choice_raw(answer={"choice": "a", "probabilities": {"a": 1.0}}, **common)
+    with pytest.raises(RuntimeError, match="invalid choice probabilities"):
+        _choice_raw(answer={"choice": "a", "probabilities": {"a": float("nan"), "b": 0.0}}, **common)
+    with pytest.raises(RuntimeError, match="invalid choice probabilities"):
+        _choice_raw(answer={"choice": "a", "probabilities": {"a": "not-a-number", "b": 0.0}}, **common)
+
+
+def test_native_probabilities_reject_nonfinite_or_out_of_range_values() -> None:
+    from deqio.systemone_runtime import _choice_raw, _noul_raw
+
+    row = {
+        "id": "route",
+        "state": "state",
+        "question": "Which?",
+        "options": [
+            {"id": "a", "description": "A"},
+            {"id": "b", "description": "B"},
+        ],
+    }
+    with pytest.raises(RuntimeError, match="invalid native choice probabilities"):
+        _choice_raw(
+            row=row,
+            answer={"choice": "a", "probabilities": {"a": 1.2, "b": -0.2}},
+            response={},
+            payload={"state": "state", "questions": {}},
+            latency_ms=1.0,
+            preserve_native=True,
+        )
+    with pytest.raises(RuntimeError, match="invalid Noul probability"):
+        _noul_raw(
+            row={"id": "n", "state": "state", "question": "True?"},
+            answer={"noul": float("nan")},
+            response={},
+            payload={"state": "state", "questions": {}},
+            latency_ms=1.0,
+        )
+    with pytest.raises(RuntimeError, match="invalid Noul probability"):
+        _noul_raw(
+            row={"id": "n", "state": "state", "question": "True?"},
+            answer={"noul": "not-a-number"},
+            response={},
+            payload={"state": "state", "questions": {}},
+            latency_ms=1.0,
+        )
 
 
 def test_external_choice_score_provenance_records_renormalization() -> None:
@@ -2640,81 +2813,52 @@ def test_unknown_input_contract_rejected_before_endpoint_parsing() -> None:
     assert body["error"]["inference_performed"] is False
 
 
-def test_basal_15b_catalog_profiles_are_mlx_and_cuda_only() -> None:
-    from deqio.catalog import get_profile, load_catalog
+def test_legacy_basal10_catalog_profiles_are_removed() -> None:
+    from deqio.catalog import load_catalog
 
     catalog = load_catalog(Path("models.json"))
-    basal = next(entry for entry in catalog["models"] if entry["id"] == "basal-1.5b")
+    ids = {entry["id"] for entry in catalog["models"]}
+    assert "basal-1.5b" not in ids
+    assert "basal-4.5b" not in ids
+    assert {"basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"}.issubset(ids)
 
-    assert basal["engine"] == "basal"
-    assert set(basal["backends"]) == {"mlx", "cuda"}
-    mlx = get_profile(catalog, "basal-1.5b", "mlx")
-    cuda = get_profile(catalog, "basal-1.5b", "cuda")
-    assert mlx["model"] == "pawelkiszczak/basal-1.0-1.5B-MLX-8bit"
-    assert mlx["installer"] == "basal"
-    assert mlx["basal_mode"] == "mlx"
-    assert mlx["quantization"]["bits"] == 8
-    assert mlx["model_revision"] == "097465843096292389d039e22265de8b972d2b7b"
-    assert cuda["model_revision"] == "81a74acc6e7f7604008697b2daa83b3652d85b68"
-    assert mlx["min_memory_gib"] == 3
-    assert mlx["recommended_memory_gib"] == 4
-    assert mlx["systems"] == ["Darwin"]
-    assert cuda["model"] == "Remek/basal-1.0-1.5B"
-    assert cuda["installer"] == "basal"
-    assert cuda["systems"] == ["Linux"]
-    assert cuda["basal_mode"] == "fast-nocompile"
-    with pytest.raises(RuntimeError, match="does not support backend"):
-        get_profile(catalog, "basal-1.5b", "mps")
-
-
-def test_basal_installer_uses_backend_specific_packages(
+def test_basal15_installer_uses_official_backend_specific_packages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import deqio.model_manager as manager
 
     commands: list[list[str]] = []
-    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+    python = tmp_path / ".model-runtimes" / "basal15" / "bin" / "python"
+    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
+    monkeypatch.setattr(manager, "_run", lambda command, **kwargs: commands.append(list(command)))
 
-    mlx_env = tmp_path / ".model-runtimes" / "basal-mlx"
-    mlx_python = mlx_env / "bin" / "python"
-    mlx_python.parent.mkdir(parents=True)
-    mlx_python.write_text("", encoding="utf-8")
-    manager._install_basal(
-        tmp_path / "config.json",
-        {"backend": "mlx", "runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "basal-mlx",
-            "python": "3.12",
-            "basal_backend": "mlx",
-            "basal_package": "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main",
-        },
-        upgrade=False,
-    )
-    assert commands[0][-1] == "mlx>=0.32,<0.33"
-    assert commands[1][-1] == "basal[mlx] @ git+https://github.com/pawelkiszczak/basal.git@main"
+    for backend, package in (
+        ("mlx", "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
+        ("mps", "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
+        ("cuda", "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
+    ):
+        commands.clear()
+        manager._install_basal(
+            tmp_path / "config.json",
+            {"backend": backend, "runtime_dir": ".model-runtimes"},
+            {
+                "runtime_key": "basal15",
+                "python": "3.12",
+                "basal_backend": backend,
+                "basal_runtime_version": "1.5.0",
+                "basal_package": package,
+            },
+            upgrade=False,
+        )
+        if backend == "cuda":
+            assert len(commands) == 2
+            assert "torch==2.11.0" in commands[0]
+            assert commands[1][-1] == package
+        else:
+            assert len(commands) == 1
+            assert commands[0][-1] == package
 
-    commands.clear()
-    cuda_env = tmp_path / ".model-runtimes" / "basal-cuda"
-    cuda_python = cuda_env / "bin" / "python"
-    cuda_python.parent.mkdir(parents=True)
-    cuda_python.write_text("", encoding="utf-8")
-    manager._install_basal(
-        tmp_path / "config.json",
-        {"backend": "cuda", "runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "basal-cuda",
-            "python": "3.12",
-            "basal_backend": "cuda",
-            "basal_package": "basal[fp8] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
-        },
-        upgrade=False,
-    )
-    assert "torch==2.11.0" in commands[0]
-    assert "https://download.pytorch.org/whl/cu128" in commands[0]
-    assert commands[1][-1].endswith("basal/archive/refs/tags/v1.0.1.tar.gz")
-
-
-def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
+def test_basal15_systemone_commands_use_official_server_for_mlx_and_mps(tmp_path: Path) -> None:
     from types import SimpleNamespace
     from deqio.systemone_runtime import SystemOneRuntime
 
@@ -2725,44 +2869,18 @@ def test_basal_systemone_commands_use_native_server(tmp_path: Path) -> None:
     python = env_dir / "bin" / "python"
     python.write_text("", encoding="utf-8")
 
-    mlx = SimpleNamespace(engine="basal", backend="mlx")
-    command = SystemOneRuntime._command(
-        mlx,
-        {
-            "model": "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
-            "basal_mode": "mlx",
-        },
-        env_dir,
-        python,
-        9020,
-        {},
-    )
-    assert command == [
-        str(executable),
-        "--model", "pawelkiszczak/basal-1.0-1.5B-MLX-8bit",
-        "--mode", "mlx",
-        "--port", "9020",
-    ]
-
-    cuda = SimpleNamespace(engine="basal", backend="cuda")
-    command = SystemOneRuntime._command(
-        cuda,
-        {
-            "model": "Remek/basal-1.0-1.5B",
-            "basal_mode": "fast-nocompile",
-        },
-        env_dir,
-        python,
-        9021,
-        {},
-    )
-    assert command == [
-        str(executable),
-        "--model", "Remek/basal-1.0-1.5B",
-        "--mode", "fast-nocompile",
-        "--port", "9021",
-    ]
-
+    for backend, model, mode in (
+        ("mlx", "Remek/basal-1.5-mini-MLX-8bit", "mlx"),
+        ("mps", "Remek/basal-1.5-mini", "mps"),
+    ):
+        command = SystemOneRuntime._command(
+            SimpleNamespace(engine="basal", backend=backend, model_revision="main", config_path=tmp_path / "config.json"),
+            {"model": model, "model_revision": "main", "basal_mode": mode, "basal_soam": True},
+            env_dir, python, 9020, {},
+        )
+        assert command == [
+            str(executable), "--model", model, "--mode", mode, "--soam", "on", "--port", "9020"
+        ]
 
 def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
     from deqio.catalog import get_profile, load_catalog
@@ -2797,23 +2915,23 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
     assert clef["min_memory_gib"] == pytest.approx(30.8)
     assert clef["recommended_memory_gib"] == 44
 
-    basal = get_profile(catalog, "basal-4.5b", "mlx")
-    assert basal["model"] == "pawelkiszczak/basal-1.0-4.5B-MLX-8bit"
-    assert basal["model_revision"] == "7c8291bce44c9096da1ca52ba2136a9722975c3e"
-    assert basal["runtime_key"] == "basal-mlx-45"
+    basal = get_profile(catalog, "basal-1.5-main", "mlx")
+    assert basal["model"] == "Remek/basal-1.5-4.5B-MLX-8bit"
+    assert basal["runtime_key"] == "basal15-main-mlx"
     assert basal["basal_mode"] == "mlx"
     assert basal["quantization"]["bits"] == 8
-    assert basal["min_memory_gib"] == 6
+    assert basal["min_memory_gib"] == pytest.approx(5.2)
     assert basal["recommended_memory_gib"] == 8
 
-    basal_cuda = get_profile(catalog, "basal-4.5b", "cuda")
-    assert basal_cuda["model"] == "Remek/basal-1.0-4.5B-FP8"
-    assert basal_cuda["model_revision"] == "6a4718943f85d80612242be688eb57e3037ec88e"
-    assert basal_cuda["runtime_key"] == "basal-cuda-vllm"
-    assert basal_cuda["basal_mode"] == "vllm"
-    assert basal_cuda["min_cuda_compute_capability"] == 9.0
-    assert basal_cuda["quantization"]["kind"] == "fp8"
-    assert basal_cuda["quantization"]["output_head_precision"] == "bf16"
+    basal_cuda = get_profile(catalog, "basal-1.5-main", "cuda")
+    assert basal_cuda["model"] == "Remek/basal-1.5-4.5B"
+    assert basal_cuda["runtime_key"] == "basal15-main-cuda"
+    assert basal_cuda["basal_mode"] == "fast-nocompile"
+    assert basal_cuda["basal_runtime_version"] == "1.5.0"
+
+    basal_mps = get_profile(catalog, "basal-1.5-main", "mps")
+    assert basal_mps["basal_mode"] == "mps"
+    assert basal_mps["capabilities"]["evidence"] is True
 
     for model_id in ("clef-flash", "clef"):
         with pytest.raises(RuntimeError, match="does not support backend"):
@@ -2821,8 +2939,6 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
         with pytest.raises(RuntimeError, match="does not support backend"):
             get_profile(catalog, model_id, "mps")
 
-    with pytest.raises(RuntimeError, match="does not support backend"):
-        get_profile(catalog, "basal-4.5b", "mps")
 
 
 def test_clef_systemone_command_uses_pinned_mlx_sidecar(tmp_path: Path) -> None:
@@ -2894,40 +3010,36 @@ def test_clef_sidecar_executes_cached_upstream_server_without_truncation(tmp_pat
     ]
 
 
-def test_basal_vllm_installer_leaves_torch_resolution_to_vllm(
+def test_basal15_cuda_installer_leaves_torch_resolution_to_official_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import deqio.model_manager as manager
 
     commands: list[list[str]] = []
-    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
-
-    env = tmp_path / ".model-runtimes" / "basal-cuda-vllm"
-    python = env / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text("", encoding="utf-8")
+    python = tmp_path / ".model-runtimes" / "basal15-main-cuda" / "bin" / "python"
+    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
+    monkeypatch.setattr(manager, "_run", lambda command, **kwargs: commands.append(list(command)))
 
     manager._install_basal(
         tmp_path / "config.json",
         {"backend": "cuda", "runtime_dir": ".model-runtimes"},
         {
-            "runtime_key": "basal-cuda-vllm",
+            "runtime_key": "basal15-main-cuda",
             "python": "3.12",
             "basal_backend": "cuda",
-            "basal_mode": "vllm",
-            "basal_package": "basal[vllm] @ https://github.com/rkinas/basal/archive/refs/tags/v1.0.1.tar.gz",
+            "basal_runtime_version": "1.5.0",
+            "basal_mode": "fast-nocompile",
+            "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
         },
         upgrade=False,
     )
+    assert len(commands) == 2
+    assert "torch==2.11.0" in commands[0]
+    assert "https://download.pytorch.org/whl/cu128" in commands[0]
+    assert commands[1][-1].endswith("basal/archive/refs/tags/v1.5.0.tar.gz")
 
-    assert len(commands) == 1
-    assert commands[0][-1].endswith("basal/archive/refs/tags/v1.0.1.tar.gz")
-    assert all("torch==" not in part for part in commands[0])
-
-
-def test_basal_45b_systemone_cuda_uses_vllm_mode(tmp_path: Path) -> None:
+def test_basal15_main_cuda_uses_official_fast_nocompile_mode(tmp_path: Path) -> None:
     from types import SimpleNamespace
-
     from deqio.systemone_runtime import SystemOneRuntime
 
     env_dir = tmp_path / "runtime"
@@ -2938,23 +3050,14 @@ def test_basal_45b_systemone_cuda_uses_vllm_mode(tmp_path: Path) -> None:
     python.write_text("", encoding="utf-8")
 
     command = SystemOneRuntime._command(
-        SimpleNamespace(engine="basal", backend="cuda"),
-        {
-            "model": "Remek/basal-1.0-4.5B-FP8",
-            "basal_mode": "vllm",
-        },
-        env_dir,
-        python,
-        9033,
-        {},
+        SimpleNamespace(engine="basal", backend="cuda", model_revision="main", config_path=tmp_path / "config.json"),
+        {"model": "Remek/basal-1.5-4.5B", "model_revision": "main", "basal_mode": "fast-nocompile", "basal_soam": True},
+        env_dir, python, 9033, {},
     )
     assert command == [
-        str(executable),
-        "--model", "Remek/basal-1.0-4.5B-FP8",
-        "--mode", "vllm",
-        "--port", "9033",
+        str(executable), "--model", "Remek/basal-1.5-4.5B",
+        "--mode", "fast-nocompile", "--soam", "on", "--port", "9033",
     ]
-
 
 def test_cuda_compute_capability_guard_is_fail_closed_for_fp8_profiles() -> None:
     from deqio.hardware import HostCapabilities, profile_compatibility
@@ -3002,3 +3105,2024 @@ def test_clef_flash_8bit_is_short_context_compatible_on_16gib_apple_host() -> No
     assert available == [4096]
     assert any(value == 8192 for value, _reason in blocked)
     assert any(value == 32768 and "profile limit is 16384" in reason for value, reason in blocked)
+
+
+def test_patch1_decision2_catalog_is_official_cuda_only() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    expected = {
+        "decision-2.0-kai": ("vllm-sr/Decision-2.0-Kai-0.6B", 8192),
+        "decision-2.0-eos": ("vllm-sr/Decision-2.0-Eos-0.8B", 16384),
+        "decision-2.0-sol": ("vllm-sr/Decision-2.0-Sol-2B", 16384),
+        "decision-2.0-nox": ("vllm-sr/Decision-2.0-Nox-4B", 16384),
+        "decision-2.0-lux": ("vllm-sr/Decision-2.0-Lux-9B", 16384),
+        "decision-2.0-vega": ("vllm-sr/Decision-2.0-Vega-27B", 32768),
+    }
+
+    for model_id, (repo_id, max_tokens) in expected.items():
+        entry = next(item for item in catalog["models"] if item["id"] == model_id)
+        assert entry["engine"] == "decision2"
+        assert set(entry["backends"]) == {"cuda"}
+        profile = get_profile(catalog, model_id, "cuda")
+        assert profile["model"] == repo_id
+        assert len(profile["model_revision"]) == 40
+        assert profile["family"] == "decision2"
+        assert profile["runtime"] == "decision2-native"
+        assert profile["platform"] == "cuda"
+        assert profile["source"] == "official"
+        assert profile["systems"] == ["Linux"]
+        assert profile["max_input_tokens"] == max_tokens
+        assert profile["capabilities"] == {
+            "systemone": True,
+            "choice": True,
+            "noul": True,
+            "score": True,
+            "multi_question": True,
+            "multi": False,
+            "act": False,
+            "facts": False,
+            "evidence": False,
+        }
+        for unsupported in ("mlx", "mps"):
+            with pytest.raises(RuntimeError):
+                get_profile(catalog, model_id, unsupported)
+
+    vega = get_profile(catalog, "decision-2.0-vega", "cuda")
+    assert vega["downloads"][1] == {
+        "type": "snapshot",
+        "repo_id": "Qwen/Qwen3.8-27B",
+        "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+        "role": "pinned-base",
+    }
+    kai = get_profile(catalog, "decision-2.0-kai", "cuda")
+    assert "flash-linear-attention==0.5.2" not in kai["packages"]
+    eos = get_profile(catalog, "decision-2.0-eos", "cuda")
+    assert "flash-linear-attention==0.5.2" in eos["packages"]
+    assert "causal-conv1d==1.7.0" in eos["packages"]
+    assert "peft==0.21.0" not in eos["packages"]
+    assert "peft==0.21.0" in vega["packages"]
+    assert "huggingface-hub==1.31.0" in vega["packages"]
+
+
+def test_patch1_vega_attestation_preserves_package_and_pinned_base_roles(tmp_path: Path) -> None:
+    import deqio.model_manager as manager
+    from deqio.catalog import get_profile, load_catalog
+
+    profile = get_profile(load_catalog(Path("models.json")), "decision-2.0-vega", "cuda")
+    artifacts = manager._artifact_attestation(
+        tmp_path / "config.json", {"runtime_dir": ".model-runtimes"}, profile
+    )
+
+    assert [(item["role"], item["repo_id"], item["resolved_revision"]) for item in artifacts] == [
+        (
+            "decision2-package",
+            "vllm-sr/Decision-2.0-Vega-27B",
+            "7aec49ae11a18741706da549ab626b9052795fe7",
+        ),
+        (
+            "pinned-base",
+            "Qwen/Qwen3.8-27B",
+            "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+        ),
+    ]
+
+
+def test_patch1_decision2_installer_pins_official_runtime_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    env = tmp_path / ".model-runtimes" / "decision2-cuda"
+    python = env / "bin" / "python"
+    commands: list[list[str]] = []
+    monkeypatch.setattr(manager, "_ensure_venv", lambda *a, **k: python)
+    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+
+    result = manager._install_decision2(
+        tmp_path / "config.json",
+        {"runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "decision2-cuda",
+            "python": "3.12.13",
+            "platform": "cuda",
+            "packages": [
+                "transformers==5.17.0",
+                "safetensors==0.8.0",
+                "tokenizers==0.23.2",
+                "triton==3.7.1",
+                "causal-conv1d==1.7.0",
+                "flash-linear-attention==0.5.2",
+                "huggingface-hub==1.31.0",
+                "peft==0.21.0",
+            ],
+        },
+        upgrade=False,
+    )
+
+    assert result == env
+    assert commands[0][-1] == "torch==2.12.0"
+    assert "transformers==5.17.0" in commands[1]
+    assert "safetensors==0.8.0" in commands[1]
+    assert "flash-linear-attention==0.5.2" in commands[1]
+    assert "causal-conv1d==1.7.0" in commands[1]
+    assert "peft==0.21.0" in commands[1]
+    assert not any("mlx" in part.lower() or "mps" in part.lower() for command in commands for part in command)
+
+
+def test_patch1_decision2_command_is_transport_to_pinned_official_model(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    python = tmp_path / "python"
+    command = SystemOneRuntime._command(
+        SimpleNamespace(
+            engine="decision2",
+            backend="cuda",
+            model_revision="a" * 40,
+        ),
+        {
+            "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+            "model_revision": "b" * 40,
+        },
+        tmp_path,
+        python,
+        9123,
+        {},
+    )
+
+    assert command[0] == str(python)
+    assert command[1].endswith("decision2_sidecar.py")
+    assert command[2:] == [
+        "--model",
+        "vllm-sr/Decision-2.0-Kai-0.6B",
+        "--revision",
+        "b" * 40,
+        "--port",
+        "9123",
+    ]
+
+
+def test_patch1_decision2_accelerator_fails_closed_without_cuda_on_linux(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deqio.systemone_runtime import SystemOneRuntime
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Linux")
+    monkeypatch.setattr(
+        "deqio.systemone_runtime.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=1),
+    )
+    with pytest.raises(RuntimeError, match="CUDA is unavailable") as exc:
+        SystemOneRuntime._validate_accelerator(
+            SimpleNamespace(engine="decision2", backend="cuda"), Path("/runtime/python")
+        )
+    assert "No CPU, MPS or MLX fallback" in str(exc.value)
+
+
+def test_patch1_decision2_accelerator_never_falls_back_on_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from deqio.systemone_runtime import SystemOneRuntime
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Darwin")
+    with pytest.raises(RuntimeError, match="CUDA runtime") as exc:
+        SystemOneRuntime._validate_accelerator(
+            SimpleNamespace(engine="decision2", backend="cuda"), Path("/missing/python")
+        )
+    message = str(exc.value)
+    assert "macOS/Apple Silicon" in message
+    assert "No CPU, MPS or MLX fallback" in message
+
+
+def test_patch1_decision2_choice_probabilities_are_not_renormalized() -> None:
+    from deqio.systemone_runtime import _choice_raw
+
+    result = _choice_raw(
+        row={
+            "id": "q",
+            "options": [
+                {"id": "a", "description": "A"},
+                {"id": "b", "description": "B"},
+            ],
+        },
+        answer={"choice": "a", "probabilities": {"a": 0.51, "b": 0.48}},
+        response={"usage": {"input_tokens": 12}},
+        payload={"state": "s", "questions": {}},
+        latency_ms=1.0,
+        preserve_native=True,
+    )
+
+    assert result["probabilities"] == [0.51, 0.48]
+    assert result["score_provenance"]["normalized"] is False
+    assert result["score_provenance"]["transforms"] == []
+    assert "preserved unchanged" in result["probability_status"]
+
+
+def test_patch1_decision2_native_systemone_keeps_mixed_questions_in_one_request() -> None:
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "decision2"
+    runtime.profile = {
+        "capabilities": {
+            "choice": True,
+            "noul": True,
+            "score": True,
+            "multi_question": True,
+        }
+    }
+    calls: list[tuple[object, object, object]] = []
+
+    def fake_request(state, questions, execution_mode=None):
+        calls.append((state, questions, execution_mode))
+        return (
+            {"model": "decision2", "state": state, "questions": questions},
+            {
+                "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+                "answers": {
+                    "route": {"choice": "support", "probabilities": {"support": 0.8, "sales": 0.2}},
+                    "urgent": {"noul": 0.7},
+                    "severity": {"score": 2.4, "probabilities": {"1": 0.1, "2": 0.4, "3": 0.5}},
+                },
+                "usage": {"input_tokens": 42, "output_tokens": 0},
+            },
+            3.5,
+        )
+
+    runtime._request = fake_request
+    questions = {
+        "route": {"type": "choice", "instructions": "Route", "criteria": {"support": "S", "sales": "P"}},
+        "urgent": {"type": "noul", "instructions": "Urgent?"},
+        "severity": {"type": "score", "instructions": "Severity", "criteria": ["low", "mid", "high"]},
+    }
+    response, timing = runtime.system_one("state", questions)
+
+    assert len(calls) == 1
+    assert calls[0] == ("state", questions, None)
+    assert response["answers"]["urgent"]["noul"] == 0.7
+    assert response["answers"]["severity"]["score"] == 2.4
+    assert timing["batch_size"] == 3
+
+
+def test_patch1_decision2_systemone_rejects_non_decision2_capability() -> None:
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "decision2"
+    runtime.profile = {"capabilities": {"choice": True, "noul": True, "score": True, "multi_question": True}}
+    with pytest.raises(RuntimeError, match="does not support question type"):
+        runtime.system_one(
+            "state",
+            {"labels": {"type": "multi", "instructions": "Select all"}},
+        )
+
+
+def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def identity_snapshot(self):
+            return {
+                "runtime_instance_id": "decision2-runtime",
+                "engine": "decision2",
+                "model_id": "decision-2.0-kai",
+                "backend": "cuda",
+                "requested_revision": "d" * 40,
+                "artifact_revisions_resolved": True,
+            }
+
+        def system_one(self, state, questions):
+            return (
+                {
+                    "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+                    "answers": {
+                        "pick": {
+                            "choice": "a",
+                            "probabilities": {"a": 0.51, "b": 0.48},
+                        }
+                    },
+                    "usage": {"input_tokens": 9, "output_tokens": 0},
+                },
+                {"total_seconds": 0.002, "batch_size": 1, "engine": "decision2"},
+            )
+
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_record_watch_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+
+    result = asyncio.run(server.system_one(server.SystemOneRequest(
+        state="state",
+        questions={
+            "pick": {
+                "type": "choice",
+                "instructions": "Pick",
+                "criteria": {"a": "A", "b": "B"},
+            }
+        },
+    )))
+
+    assert result["model"] == "vllm-sr/Decision-2.0-Kai-0.6B"
+    assert result["answers"]["pick"]["probabilities"] == {"a": 0.51, "b": 0.48}
+    assert result["usage"] == {"input_tokens": 9, "output_tokens": 0}
+    assert result["deqio"]["runtime"]["runtime_instance_id"] == "decision2-runtime"
+    assert result["deqio"]["timing"]["total_ms"] == 2.0
+
+
+
+def test_patch2_basal15_catalog_has_full_official_family_and_capabilities() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    expected = {
+        "basal-1.5-mini": {
+            "mlx": "Remek/basal-1.5-mini-MLX-8bit",
+            "mps": "Remek/basal-1.5-mini",
+            "gguf": "Remek/basal-1.5-mini",
+            "cuda": "Remek/basal-1.5-mini",
+        },
+        "basal-1.5-main": {
+            "mlx": "Remek/basal-1.5-4.5B-MLX-8bit",
+            "mps": "Remek/basal-1.5-4.5B",
+            "gguf": "Remek/basal-1.5-4.5B",
+            "cuda": "Remek/basal-1.5-4.5B",
+        },
+        "basal-1.5-max": {
+            "mlx": "Remek/basal-1.5-max-MLX-8bit",
+            "mps": "Remek/basal-1.5-max",
+            "gguf": "Remek/basal-1.5-max",
+            "cuda": "Remek/basal-1.5-max",
+        },
+    }
+    for model_id, backends in expected.items():
+        entry = next(item for item in catalog["models"] if item["id"] == model_id)
+        assert entry["engine"] == "basal"
+        assert set(entry["backends"]) == {"mlx", "mps", "gguf", "cuda"}
+        for backend, repo in backends.items():
+            profile = get_profile(catalog, model_id, backend)
+            assert profile["family"] == "basal1.5"
+            assert profile["source"] == "official"
+            assert profile["model"] == repo
+            assert profile["basal_runtime_version"] == "1.5.0"
+            assert profile["pin_hf_revisions_at_install"] is True
+            caps = profile["capabilities"]
+            for capability in ("choice", "noul", "score", "multi", "act", "facts", "soam", "option_keys"):
+                assert caps[capability] is True
+            assert caps["evidence"] is (backend in {"mps", "cuda"})
+
+
+def test_patch2_basal15_mlx_and_gguf_use_quality_profiles() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    for model_id in ("basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"):
+        mlx = get_profile(catalog, model_id, "mlx")
+        gguf = get_profile(catalog, model_id, "gguf")
+        assert mlx["precision"] == "mlx-8bit"
+        assert mlx["quantization"]["bits"] == 8
+        assert mlx["basal_mode"] == "mlx"
+        assert "basal[mlx]" in mlx["basal_package"]
+        assert gguf["precision"] == "q8_0"
+        assert gguf["quantization"]["quantization"] == "Q8_0"
+        assert gguf["basal_mode"] == "gguf"
+        assert gguf["basal_gguf_pattern"] == "*Q8_0.gguf"
+        q8_download = next(item for item in gguf["downloads"] if item.get("role") == "basal-gguf-q8_0")
+        assert q8_download["filename_pattern"] == "*Q8_0.gguf"
+        assert "filename" not in q8_download
+        assert "basal[gguf]" in gguf["basal_package"]
+
+
+def test_patch2_basal15_installer_uses_official_v150_extras(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.model_manager as manager
+
+    commands: list[list[str]] = []
+    python = tmp_path / ".model-runtimes" / "basal15" / "bin" / "python"
+    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
+    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
+
+    manager._install_basal(
+        tmp_path / "config.json",
+        {"backend": "mlx", "runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "basal15",
+            "basal_backend": "mlx",
+            "basal_runtime_version": "1.5.0",
+            "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+        },
+        upgrade=False,
+    )
+    assert len(commands) == 1
+    assert commands[0][-1].endswith("basal/archive/refs/tags/v1.5.0.tar.gz")
+
+    commands.clear()
+    manager._install_basal(
+        tmp_path / "config.json",
+        {"backend": "gguf", "runtime_dir": ".model-runtimes"},
+        {
+            "runtime_key": "basal15",
+            "basal_backend": "gguf",
+            "basal_runtime_version": "1.5.0",
+            "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+        },
+        upgrade=False,
+    )
+    assert len(commands) == 1
+    assert "basal[gguf]" in commands[0][-1]
+
+
+def test_patch2_basal15_command_preserves_official_mlx_soam_and_revision(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+    revision = "a" * 40
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="basal", backend="mlx", model_revision=revision, config_path=tmp_path / "config.json"),
+        {
+            "model": "Remek/basal-1.5-4.5B-MLX-8bit",
+            "model_revision": revision,
+            "basal_mode": "mlx",
+            "basal_soam": True,
+        },
+        env_dir, python, 9441, {},
+    )
+    assert command == [
+        str(executable),
+        "--model", "Remek/basal-1.5-4.5B-MLX-8bit",
+        "--revision", revision,
+        "--mode", "mlx",
+        "--soam", "on",
+        "--port", "9441",
+    ]
+
+
+def test_patch2_basal15_gguf_command_uses_local_q8_and_official_metadata(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+    gguf = tmp_path / "models" / "main-Q8_0.gguf"
+    gguf.parent.mkdir(parents=True)
+    gguf.write_text("weights", encoding="utf-8")
+    revision = "b" * 40
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="basal", backend="gguf", model_revision=revision, config_path=tmp_path / "config.json"),
+        {
+            "model": "Remek/basal-1.5-4.5B",
+            "model_revision": revision,
+            "basal_mode": "gguf",
+            "basal_soam": True,
+            "basal_gguf_dir": "models",
+            "basal_gguf_pattern": "*Q8_0.gguf",
+        },
+        env_dir, python, 9442, {},
+    )
+    assert "--gguf" in command
+    assert command[command.index("--gguf") + 1] == str(gguf.resolve())
+    assert command[command.index("--revision") + 1] == revision
+    assert command[command.index("--mode") + 1] == "gguf"
+
+
+def test_patch2_basal15_systemone_preserves_mixed_native_response_and_one_request() -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "basal"
+    runtime.settings = SimpleNamespace(backend="mlx")
+    runtime.profile = {
+        "family": "basal1.5",
+        "capabilities": {
+            "choice": True, "noul": True, "score": True, "multi": True, "act": True,
+            "facts": True, "soam": True, "option_keys": True, "evidence": False,
+            "early_exit": False,
+        },
+    }
+    calls: list[tuple[object, object, object]] = []
+    native = {
+        "model": "Remek/basal-1.5-4.5B-MLX-8bit",
+        "answers": {
+            "route": {"choice": "support", "probabilities": {"support": 0.61, "sales": 0.39}},
+            "risk": {"noul": 0.73},
+            "severity": {"score": 2.2, "probabilities": {"low": 0.1, "mid": 0.6, "high": 0.3}},
+            "labels": {"probabilities": {"a": 0.8, "b": 0.7}, "selected": ["a", "b"], "threshold": 0.5, "set_confidence": 0.74},
+            "action": {"action": "defer", "expected_costs": {"approve": 3.1, "defer": 1.2}},
+        },
+        "facts": {"vat": 23},
+        "usage": {"input_tokens": 77},
+    }
+
+    def fake_request(state, questions, execution_mode=None, request_options=None):
+        calls.append((state, questions, request_options))
+        return ({"state": state, "questions": questions, **(request_options or {})}, native, 4.0)
+
+    runtime._request = fake_request
+    questions = {
+        "route": {"type": "choice", "instructions": "Route", "criteria": {"support": "S", "sales": "P"}, "option_keys": "show"},
+        "risk": {"type": "noul", "instructions": "Risk?"},
+        "severity": {"type": "score", "instructions": "Severity", "criteria": ["low", "mid", "high"]},
+        "labels": {"type": "multi", "instructions": "Labels", "criteria": {"a": "A", "b": "B"}, "threshold": 0.5},
+        "action": {
+            "type": "act",
+            "instructions": "Act",
+            "criteria": {"true": "Approve", "false": "Reject"},
+            "costs": {
+                "approve": {"true": 0, "false": 5},
+                "defer": {"true": 1, "false": 1},
+            },
+        },
+    }
+    response, timing = runtime.system_one("state", questions, {"facts": "auto"})
+
+    assert len(calls) == 1
+    assert calls[0] == ("state", questions, {"facts": "auto"})
+    assert response is native
+    assert response["answers"]["labels"]["probabilities"] == {"a": 0.8, "b": 0.7}
+    assert sum(response["answers"]["labels"]["probabilities"].values()) == pytest.approx(1.5)
+    assert response["answers"]["action"]["expected_costs"] == {"approve": 3.1, "defer": 1.2}
+    assert timing["batch_size"] == 5
+
+
+def test_patch2_basal15_evidence_is_capability_aware() -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneCapabilityError, SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "basal"
+    runtime.settings = SimpleNamespace(backend="mlx")
+    runtime.profile = {
+        "family": "basal1.5",
+        "capabilities": {"choice": True, "soam": True, "evidence": False},
+    }
+    with pytest.raises(SystemOneCapabilityError, match="Evidence is not available") as exc:
+        runtime.system_one(
+            "The receipt is valid.",
+            {"proof": {"type": "choice", "instructions": "Valid?", "criteria": {"yes": "Yes", "no": "No"}, "evidence": True}},
+        )
+    assert exc.value.capability == "evidence"
+
+    runtime.settings = SimpleNamespace(backend="mps")
+    runtime.profile["capabilities"]["evidence"] = True
+    native = {
+        "answers": {
+            "proof": {
+                "choice": "yes",
+                "probabilities": {"yes": 0.9, "no": 0.1},
+                "evidence": [{"text": "receipt", "start": 4, "end": 11, "probability": 0.88}],
+            }
+        }
+    }
+    runtime._request = lambda state, questions, execution_mode=None, request_options=None: ({}, native, 1.0)
+    response, _timing = runtime.system_one(
+        "The receipt is valid.",
+        {"proof": {"type": "choice", "instructions": "Valid?", "criteria": {"yes": "Yes", "no": "No"}, "evidence": True}},
+    )
+    span = response["answers"]["proof"]["evidence"][0]
+    assert "The receipt is valid."[span["start"]:span["end"]] == span["text"]
+
+
+def test_patch2_basal15_rejects_evidence_for_multi_even_on_native_backend() -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneCapabilityError, SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "basal"
+    runtime.settings = SimpleNamespace(backend="mps")
+    runtime.profile = {
+        "family": "basal1.5",
+        "capabilities": {"multi": True, "soam": True, "evidence": True},
+    }
+    with pytest.raises(SystemOneCapabilityError, match="not supported for multi"):
+        runtime.system_one(
+            "state",
+            {"labels": {"type": "multi", "instructions": "Labels", "criteria": {"a": "A"}, "evidence": True}},
+        )
+
+
+def test_patch2_basal15_api_passes_facts_auto_and_preserves_native_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deqio.server as server
+
+    calls: list[tuple[object, object, object]] = []
+
+    class FakeRuntime:
+        def identity_snapshot(self):
+            return {"runtime_instance_id": "basal15-runtime", "engine": "basal", "backend": "mlx"}
+
+        def system_one(self, state, questions, options=None):
+            calls.append((state, questions, options))
+            return (
+                {
+                    "answers": {"labels": {"probabilities": {"a": 0.8, "b": 0.7}, "selected": ["a", "b"]}},
+                    "facts": {"vat": 23},
+                    "calibration": {"source": "basal"},
+                },
+                {"total_seconds": 0.003, "batch_size": 1, "engine": "basal"},
+            )
+
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_record_watch_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+
+    result = asyncio.run(server.system_one(server.SystemOneRequest(
+        state="VAT 23%",
+        facts="auto",
+        questions={"labels": {"type": "multi", "instructions": "Labels", "criteria": {"a": "A", "b": "B"}}},
+    )))
+    assert calls[0][2] == {"facts": "auto"}
+    assert result["answers"]["labels"]["probabilities"] == {"a": 0.8, "b": 0.7}
+    assert result["facts"] == {"vat": 23}
+    assert result["calibration"] == {"source": "basal"}
+    assert result["deqio"]["runtime"]["runtime_instance_id"] == "basal15-runtime"
+
+
+def test_patch2_basal15_api_returns_422_for_unsupported_capability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deqio.server as server
+    from deqio.systemone_runtime import SystemOneCapabilityError
+
+    class FakeRuntime:
+        def identity_snapshot(self):
+            return {"runtime_instance_id": "basal15-runtime", "engine": "basal", "backend": "mlx"}
+
+        def system_one(self, state, questions, options=None):
+            raise SystemOneCapabilityError("evidence", "Evidence is not available on the active Basal mlx backend")
+
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_record_watch_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+
+    with pytest.raises(Exception) as exc:
+        asyncio.run(server.system_one(server.SystemOneRequest(
+            state="state",
+            questions={"proof": {"type": "choice", "evidence": True}},
+        )))
+    assert getattr(exc.value, "status_code", None) == 422
+    assert "Evidence is not available" in str(getattr(exc.value, "detail", ""))
+
+
+def test_patch2_basal15_profile_pin_prefers_selected_exact_revision_before_install_record() -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import _profile_with_installed_pin
+
+    revision = "c" * 40
+    settings = SimpleNamespace(
+        model_revision=revision,
+        config_path=Path("/tmp/config.json"),
+        model_id="basal-1.5-main",
+        backend="mlx",
+    )
+    profile = {
+        "model": "Remek/basal-1.5-4.5B-MLX-8bit",
+        "model_revision": "main",
+        "pin_hf_revisions_at_install": True,
+    }
+    pinned = _profile_with_installed_pin(settings, profile)
+    assert pinned["model_revision"] == revision
+    assert profile["model_revision"] == "main"
+
+
+def test_patch2_basal15_runtime_metadata_requires_official_v150(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    monkeypatch.setattr(
+        "deqio.systemone_runtime.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(stdout='{"runtime_version":"1.5.0"}'),
+    )
+    metadata = SystemOneRuntime._basal_runtime_metadata(
+        {"basal_runtime_version": "1.5.0", "basal_mode": "mlx", "basal_backend": "mlx"},
+        tmp_path / "python",
+    )
+    assert metadata == {
+        "runtime_version": "1.5.0",
+        "basal_mode": "mlx",
+        "basal_backend": "mlx",
+        "official_runtime": True,
+    }
+
+
+def test_patch2_systemone_request_rejects_unknown_top_level_options() -> None:
+    from pydantic import ValidationError
+    import deqio.server as server
+
+    with pytest.raises(ValidationError):
+        server.SystemOneRequest(
+            state="state",
+            questions={"q": {"type": "noul", "instructions": "Q?"}},
+            silently_ignored_feature=True,
+        )
+
+
+def test_patch2_basal15_pin_resolves_exact_q8_artifact_without_filename_guessing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    import deqio.model_manager as manager
+
+    class FakeApi:
+        def model_info(self, repo_id, revision=None):
+            suffix = "1" if repo_id.endswith("4.5B") else "2"
+            return SimpleNamespace(sha=suffix * 40)
+
+        def list_repo_files(self, repo_id, revision=None):
+            assert revision == "2" * 40
+            return ["README.md", "official-basal-main-Q8_0.gguf", "official-basal-main-Q4_K_M.gguf"]
+
+    monkeypatch.setattr(manager, "HfApi", lambda: FakeApi())
+    profile = {
+        "pin_hf_revisions_at_install": True,
+        "model": "Remek/basal-1.5-4.5B",
+        "model_revision": "main",
+        "downloads": [
+            {
+                "type": "snapshot",
+                "repo_id": "Remek/basal-1.5-4.5B",
+                "revision": "main",
+                "role": "basal-metadata",
+            },
+            {
+                "type": "file",
+                "repo_id": "Remek/basal-1.5-4.5B-GGUF",
+                "revision": "main",
+                "role": "basal-gguf-q8_0",
+                "filename_pattern": "*Q8_0.gguf",
+                "local_dir": "models/basal-1.5-4.5B-GGUF",
+            },
+        ],
+    }
+    pinned = manager._pin_profile_hf_revisions(profile)
+    assert pinned["model_revision"] == "1" * 40
+    assert pinned["downloads"][0]["revision"] == "1" * 40
+    assert pinned["downloads"][1]["revision"] == "2" * 40
+    assert pinned["downloads"][1]["filename"] == "official-basal-main-Q8_0.gguf"
+    assert "filename" not in profile["downloads"][1]
+
+
+def test_patch4_adds_native_convenience_endpoints_without_inventing_modifier_endpoints() -> None:
+    routes = {route.path for route in app.routes}
+    for path in ("/v1/systemone", "/v1/soam", "/v1/score", "/v1/multi", "/v1/act"):
+        assert path in routes
+    # Facts, evidence and option_keys remain native request/question modifiers.
+    assert "/v1/evidence" not in routes
+    assert "/v1/facts" not in routes
+    assert "/v1/option-key" not in routes
+    assert "/v1/optionKey" not in routes
+
+
+def test_fix01_installed_profiles_use_attested_resolved_revision_for_pin_on_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+    from deqio.hardware import HostCapabilities
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    runtime_python = tmp_path / ".model-runtimes" / "basal15-mini-mlx" / "bin" / "python"
+    runtime_python.parent.mkdir(parents=True)
+    runtime_python.write_text("", encoding="utf-8")
+    resolved = "6ea29c486e39e1a217932ab56b222c0d1bc4ba82"
+    catalog = {
+        "models": [{
+            "id": "basal-1.5-mini",
+            "engine": "basal",
+            "label": "Basal 1.5 Mini — 1.5B",
+            "backends": {"mlx": {
+                "model": "Remek/basal-1.5-mini-MLX-8bit",
+                "model_revision": "main",
+                "runtime_key": "basal15-mini-mlx",
+                "family": "basal1.5",
+                "runtime": "basal-1.5-mlx",
+                "source": "official",
+                "precision": "mlx-8bit",
+                "capabilities": {"systemone": True, "choice": True},
+                "download": {
+                    "type": "snapshot",
+                    "repo_id": "Remek/basal-1.5-mini-MLX-8bit",
+                    "revision": "main",
+                    "role": "basal-model",
+                },
+            }},
+        }]
+    }
+    monkeypatch.setattr(
+        installations,
+        "_cached_hf_state",
+        lambda: {"Remek/basal-1.5-mini-MLX-8bit": {resolved}},
+    )
+    monkeypatch.setattr(
+        installations,
+        "detect_host",
+        lambda: HostCapabilities("Darwin", "arm64", ("mlx", "mps", "gguf"), 16.0, None),
+    )
+    installations.mark_installed(
+        config_path,
+        "basal-1.5-mini",
+        "mlx",
+        verified=True,
+        artifacts=[{
+            "source": "huggingface",
+            "repo_id": "Remek/basal-1.5-mini-MLX-8bit",
+            "requested_revision": resolved,
+            "resolved_revision": resolved,
+            "role": "basal-model",
+        }],
+        max_input_tokens=8192,
+    )
+
+    row = installations.installed_profiles(
+        config_path=config_path,
+        config_data={"runtime_dir": ".model-runtimes"},
+        catalog=catalog,
+        active_model_id="basal-1.5-mini",
+        active_backend="mlx",
+    )[0]
+    assert row["installed"] is True
+    assert row["verified"] is True
+    assert row["status"] == "active"
+    assert row["capabilities"] == {"systemone": True, "choice": True}
+    assert row["precision"] == "mlx-8bit"
+    assert row["source"] == "official"
+
+
+def test_patch4_ui_exposes_native_endpoints_and_capability_matrix() -> None:
+    assert 'id="systemOneTab"' in DASHBOARD
+    assert 'SOAM · /v1/soam' in DASHBOARD
+    assert 'data-endpoint="score"' in DASHBOARD
+    assert 'data-endpoint="multi"' in DASHBOARD
+    assert 'data-endpoint="act"' in DASHBOARD
+    assert 'raw /v1/systemone' in DASHBOARD
+    assert 'id="systemOneQuestions"' in DASHBOARD
+    assert 'id="factsMode"' in DASHBOARD
+    assert 'id="nativeQuestionInput"' in DASHBOARD
+    for label in ("Multi", "Act", "Evidence modifier", "Facts modifier", "SOAM", "Option keys modifier"):
+        assert label in DASHBOARD
+    assert "refreshSystemOneCapabilities" in DASHBOARD
+    assert "activeProfile()?.capabilities" in DASHBOARD
+
+
+def test_fix01_generic_systemone_profiles_are_exposed_without_schema_rewrite() -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "kev"
+    runtime.settings = SimpleNamespace(backend="gguf")
+    runtime.profile = {
+        "capabilities": {
+            "systemone": True,
+            "choice": True,
+            "noul": True,
+            "score": True,
+            "multi_question": True,
+            "multi": False,
+            "act": False,
+            "facts": False,
+            "evidence": False,
+        }
+    }
+    native = {
+        "answers": {
+            "route": {"type": "choice", "choice": "a", "probabilities": {"a": 0.7, "b": 0.3}},
+            "risk": {"type": "noul", "noul": 0.4},
+        },
+        "usage": {"input_tokens": 33, "output_tokens": 0},
+    }
+    calls = []
+    runtime._request = lambda state, questions, execution_mode=None, request_options=None: (
+        calls.append((state, questions, request_options)) or {}, native, 3.0
+    )
+    questions = {
+        "route": {"type": "choice", "instructions": "Route", "criteria": {"a": "A", "b": "B"}},
+        "risk": {"type": "noul", "instructions": "Risk?"},
+    }
+    result, timing = runtime.system_one("state", questions)
+    assert result is native
+    assert calls == [("state", questions, None)]
+    assert timing["batch_size"] == 2
+
+
+def test_fix01_catalog_adds_only_audited_official_q8_gguf_profiles() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    expected = {
+        "kev-0.8b": "ggml-org/Kev-0.8B-GGUF",
+        "kev-4b": "ggml-org/Kev-4B-GGUF",
+        "kev-9b": "ggml-org/Kev-9B-GGUF",
+        "jevk5-4b": "alibiserikbay/JevK5-GGUF",
+        "jevk5-9b": "alibiserikbay/JevK5-GGUF",
+        "decider-2b": "Mapika/decider-2b-GGUF",
+        "decider-4b": "Mapika/decider-4b-GGUF",
+        "laya-english": "ggml-org/Laya-GGUF",
+        "clef-flash": "ggml-org/Clef-Flash-GGUF",
+        "clef": "ggml-org/Clef-GGUF",
+    }
+    for model_id, repo_id in expected.items():
+        profile = get_profile(catalog, model_id, "gguf")
+        assert profile["model"] == repo_id
+        assert profile["source"] == "official"
+        assert profile["precision"] == "q8_0"
+        assert profile["quantization"]["quantization"] == "Q8_0"
+        assert profile["capabilities"]["systemone"] is True
+        downloads = profile.get("downloads") or [profile.get("download")]
+        q8 = [item for item in downloads if isinstance(item, dict) and "q8" in str(item.get("role", "")).lower()]
+        assert q8
+        artifact = q8[-1]
+        assert artifact.get("filename", "").endswith("Q8_0.gguf") or artifact.get("filename_pattern") == "*Q8_0.gguf"
+
+    # Deliberately absent: no exact official Q8 integration for these current Deqio profiles.
+    for model_id in ("kev-27b", "decider-0.8b", "laya-multilingual", "laya-typed-decisions", "nimble-9b"):
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "gguf")
+    for model_id in (
+        "decision-2.0-kai", "decision-2.0-eos", "decision-2.0-sol",
+        "decision-2.0-nox", "decision-2.0-lux", "decision-2.0-vega",
+    ):
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, model_id, "gguf")
+
+
+def test_fix01_official_gguf_launchers_use_local_q8_and_native_readout(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    config_path = tmp_path / "config.json"
+    runtime = tmp_path / "runtime"
+    python = runtime / "bin" / "python"
+    llama_server = runtime / "bin" / "llama-server"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    llama_server.write_text("", encoding="utf-8")
+
+    kev_dir = tmp_path / "models" / "kev"
+    kev_dir.mkdir(parents=True)
+    kev = kev_dir / "Kev-4B-Q8_0.gguf"
+    kev.write_text("weights", encoding="utf-8")
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="kev", backend="gguf", max_tokens=8192, config_path=config_path),
+        {
+            "model": "ggml-org/Kev-4B-GGUF", "launcher": "llama_cpp",
+            "llama_cpp_gguf_dir": "models/kev", "llama_cpp_gguf_pattern": "*Q8_0.gguf",
+        },
+        runtime, python, 9001, {},
+    )
+    assert command[0] == str(llama_server)
+    assert command[command.index("-m") + 1] == str(kev.resolve())
+
+    decider_dir = tmp_path / "models" / "decider"
+    decider_dir.mkdir(parents=True)
+    decider = decider_dir / "decider-2b-v11-Q8_0.gguf"
+    decider.write_text("weights", encoding="utf-8")
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="decider", backend="gguf", max_tokens=8192, config_path=config_path),
+        {
+            "model": "Mapika/decider-2b-GGUF", "launcher": "decider_gguf",
+            "decider_gguf_dir": "models/decider", "decider_gguf_pattern": "*Q8_0.gguf",
+        },
+        runtime, python, 9002, {},
+    )
+    assert Path(command[1]).name == "decider_gguf_sidecar.py"
+    assert command[command.index("--gguf") + 1] == str(decider.resolve())
+
+    jev_dir = tmp_path / "models" / "jev"
+    jev_dir.mkdir(parents=True)
+    jev = jev_dir / "jevk5-9b-v0.3.3-Q8_0.gguf"
+    jev.write_text("weights", encoding="utf-8")
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="jevk5", backend="gguf", max_tokens=8192, config_path=config_path),
+        {
+            "model": "alibiserikbay/JevK5-GGUF", "launcher": "jevk5_gguf",
+            "jevk5_gguf_dir": "models/jev", "jevk5_gguf_pattern": "*Q8_0.gguf",
+            "jevk5_temperature": 1.316, "jevk5_knockout_temperature": 1.05,
+        },
+        runtime, python, 9003, {},
+    )
+    assert Path(command[1]).name == "jevk5_gguf_sidecar.py"
+    assert command[command.index("--gguf") + 1] == str(jev.resolve())
+    assert command[command.index("--temperature") + 1] == "1.316"
+
+
+@pytest.mark.parametrize("model_id", ["basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"])
+def test_fix01_basal15_native_mps_family_preserves_exact_evidence_spans(model_id: str, tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.catalog import get_profile, load_catalog
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    profile = get_profile(load_catalog(Path("models.json")), model_id, "mps")
+    assert profile["basal_mode"] == "mps"
+    assert profile["capabilities"]["evidence"] is True
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="basal", backend="mps", model_revision="main", config_path=tmp_path / "config.json"),
+        profile,
+        env_dir, python, 9330, {},
+    )
+    assert command[command.index("--mode") + 1] == "mps"
+
+    runtime = object.__new__(SystemOneRuntime)
+    runtime.engine = "basal"
+    runtime.settings = SimpleNamespace(backend="mps")
+    runtime.profile = profile
+    state = "The damaged laptop arrived yesterday."
+    start = state.index("damaged laptop")
+    text = "damaged laptop"
+    end = start + len(text)
+    native = {
+        "answers": {
+            "proof": {
+                "type": "noul",
+                "noul": 0.93,
+                "probabilities": {"true": 0.93, "false": 0.07},
+                "evidence": [{"text": text, "start": start, "end": end, "probability": 0.91}],
+            }
+        }
+    }
+    runtime._request = lambda state, questions, execution_mode=None, request_options=None: ({}, native, 1.0)
+    response, _ = runtime.system_one(
+        state,
+        {"proof": {"type": "noul", "instructions": "Was it damaged?", "evidence": True}},
+    )
+    span = response["answers"]["proof"]["evidence"][0]
+    assert state[span["start"]:span["end"]] == span["text"]
+
+
+def test_fix01_von_and_clm_expose_native_systemone_capabilities() -> None:
+    from deqio.catalog import get_profile, load_catalog
+
+    catalog = load_catalog(Path("models.json"))
+    for model_id, backend in (("von", "mps"), ("von", "cuda"), ("clm-8b", "cuda")):
+        capabilities = get_profile(catalog, model_id, backend)["capabilities"]
+        assert capabilities == {
+            "systemone": True,
+            "choice": True,
+            "noul": True,
+            "score": True,
+            "multi_question": True,
+            "multi": False,
+            "act": False,
+            "facts": False,
+            "evidence": False,
+        }
+
+
+def test_fix01_shared_local_gguf_directory_requires_exact_profile_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.installations as installations
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    shared = tmp_path / "models" / "jevk5-GGUF"
+    shared.mkdir(parents=True)
+    (shared / "jevk5-4b-v0.3-Q8_0.gguf").write_text("4b", encoding="utf-8")
+
+    profile_4b = {
+        "model": "alibiserikbay/JevK5-GGUF",
+        "download": {
+            "type": "file",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "local_dir": "models/jevk5-GGUF",
+            "filename": "jevk5-4b-v0.3-Q8_0.gguf",
+        },
+    }
+    profile_9b = {
+        "model": "alibiserikbay/JevK5-GGUF",
+        "download": {
+            "type": "file",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "local_dir": "models/jevk5-GGUF",
+            "filename": "jevk5-9b-v0.3.3-Q8_0.gguf",
+        },
+    }
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {})
+    ready_4b, _ = installations._artifact_ready(config_path, profile_4b, {})
+    ready_9b, _ = installations._artifact_ready(config_path, profile_9b, {})
+    assert ready_4b is True
+    assert ready_9b is False
+
+
+def test_fix01_jevk5_gguf_launcher_selects_exact_file_when_both_sizes_are_installed(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime = tmp_path / "runtime"
+    python = runtime / "bin" / "python"
+    llama_server = runtime / "bin" / "llama-server"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    llama_server.write_text("", encoding="utf-8")
+    directory = tmp_path / "models" / "jevk5-GGUF"
+    directory.mkdir(parents=True)
+    file4 = directory / "jevk5-4b-v0.3-Q8_0.gguf"
+    file9 = directory / "jevk5-9b-v0.3.3-Q8_0.gguf"
+    file4.write_text("4b", encoding="utf-8")
+    file9.write_text("9b", encoding="utf-8")
+
+    profile = {
+        "model": "alibiserikbay/JevK5-GGUF",
+        "launcher": "jevk5_gguf",
+        "jevk5_gguf_dir": "models/jevk5-GGUF",
+        "jevk5_gguf_filename": file9.name,
+        "jevk5_temperature": 1.316,
+        "jevk5_knockout_temperature": 1.05,
+    }
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="jevk5", backend="gguf", max_tokens=8192, config_path=tmp_path / "config.json"),
+        profile, runtime, python, 9003, {},
+    )
+    assert command[command.index("--gguf") + 1] == str(file9.resolve())
+
+
+def test_fix02_pin_on_install_accepts_non_basal_artifact_roles(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    import deqio.systemone_runtime as runtime_module
+
+    revision = "d" * 40
+    monkeypatch.setattr(
+        runtime_module,
+        "installation_record",
+        lambda *args, **kwargs: {
+            "artifacts": [
+                {
+                    "source": "huggingface",
+                    "repo_id": "Mapika/decider-2b-GGUF",
+                    "role": "decider-gguf-q8_0",
+                    "requested_revision": "main",
+                    "resolved_revision": revision,
+                }
+            ]
+        },
+    )
+    settings = SimpleNamespace(
+        model_revision="main",
+        config_path=tmp_path / "config.json",
+        model_id="decider-2b",
+        backend="gguf",
+    )
+    profile = {
+        "model": "Mapika/decider-2b-GGUF",
+        "model_revision": "main",
+        "pin_hf_revisions_at_install": True,
+    }
+
+    pinned = runtime_module._profile_with_installed_pin(settings, profile)
+
+    assert pinned["model_revision"] == revision
+    assert profile["model_revision"] == "main"
+
+
+def test_fix02_llama_cpp_build_exposes_isolated_ninja_to_cmake(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import os
+    import deqio.model_manager as manager
+
+    config_path = tmp_path / "config.json"
+    runtime_root = tmp_path / ".model-runtimes"
+    env_dir = runtime_root / "llama-cpp-systemone"
+    bin_dir = env_dir / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True)
+    python = bin_dir / ("python.exe" if os.name == "nt" else "python")
+    cmake = bin_dir / ("cmake.exe" if os.name == "nt" else "cmake")
+    ninja = bin_dir / ("ninja.exe" if os.name == "nt" else "ninja")
+    for executable in (python, cmake, ninja):
+        executable.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
+    monkeypatch.setattr(manager.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        manager.shutil,
+        "which",
+        lambda name, path=None: "/usr/bin/xcrun" if name == "xcrun" else None,
+    )
+
+    class ProbeResult:
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    monkeypatch.setattr(
+        manager.subprocess,
+        "run",
+        lambda command, **kwargs: ProbeResult(
+            "/usr/bin/clang++\n" if command[-1] == "clang++" else "/usr/bin/clang\n"
+        ),
+    )
+    calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+    def fake_run(command: list[str], *, env: dict[str, str] | None = None) -> None:
+        calls.append((list(command), env))
+        if command[:2] == ["git", "clone"]:
+            Path(command[-1]).mkdir(parents=True, exist_ok=True)
+        if "--build" in command:
+            binary = env_dir / "llama-build" / "bin" / "llama-server"
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_text("server", encoding="utf-8")
+
+    monkeypatch.setattr(manager, "_run", fake_run)
+    profile = {
+        "runtime_key": "llama-cpp-systemone",
+        "python": "3.12",
+        "llama_cpp_revision": "1" * 40,
+    }
+
+    result = manager._install_llama_cpp_runtime(
+        config_path,
+        {"runtime_dir": str(runtime_root)},
+        profile,
+        upgrade=False,
+    )
+
+    configure = next((command, env) for command, env in calls if "-G" in command and "Ninja" in command)
+    command, env = configure
+    assert f"-DCMAKE_MAKE_PROGRAM={ninja}" in command
+    assert "-DGGML_METAL=ON" in command
+    assert "-DCMAKE_C_COMPILER=/usr/bin/clang" in command
+    assert "-DCMAKE_CXX_COMPILER=/usr/bin/clang++" in command
+    assert env is not None
+    assert env["PATH"].split(os.pathsep)[0] == str(bin_dir)
+    build_command, build_env = next((command, env) for command, env in calls if "--build" in command)
+    assert build_env is not None
+    assert build_env["PATH"].split(os.pathsep)[0] == str(bin_dir)
+    assert result == env_dir
+    assert (bin_dir / ("llama-server.exe" if os.name == "nt" else "llama-server")).is_file()
+
+
+def test_fix03_model_readiness_retries_transient_http_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    import deqio.systemone_runtime as runtime_module
+
+    runtime = object.__new__(runtime_module.SystemOneRuntime)
+    runtime.base_url = "http://127.0.0.1:9999"
+    runtime.profile = {"wire_model": "kev-latest"}
+    runtime.settings = SimpleNamespace(model="ggml-org/Kev-0.8B-GGUF")
+    runtime.process = SimpleNamespace(poll=lambda: None, returncode=None)
+
+    calls = {"count": 0}
+
+    def fake_post_json(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] < 3:
+            raise runtime_module.SystemOneSidecarHTTPError(
+                503,
+                '{"error":{"message":"Loading model","type":"unavailable_error","code":503}}',
+            )
+        return {"answers": {"ready": {"type": "choice", "choice": "ready"}}}
+
+    monkeypatch.setattr(runtime_module, "_post_json", fake_post_json)
+    monkeypatch.setattr(runtime_module.time, "sleep", lambda *_: None)
+
+    runtime._probe_model_ready(timeout=5.0)
+
+    assert calls["count"] == 3
+
+
+def test_fix03_model_readiness_does_not_hide_non_503_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    import deqio.systemone_runtime as runtime_module
+
+    runtime = object.__new__(runtime_module.SystemOneRuntime)
+    runtime.base_url = "http://127.0.0.1:9999"
+    runtime.profile = {"wire_model": "kev-latest"}
+    runtime.settings = SimpleNamespace(model="ggml-org/Kev-0.8B-GGUF")
+    runtime.process = SimpleNamespace(poll=lambda: None, returncode=None)
+
+    calls = {"count": 0}
+
+    def fake_post_json(*args, **kwargs):
+        calls["count"] += 1
+        raise runtime_module.SystemOneSidecarHTTPError(422, '{"detail":"invalid request"}')
+
+    monkeypatch.setattr(runtime_module, "_post_json", fake_post_json)
+
+    with pytest.raises(RuntimeError, match=r"HTTP 422"):
+        runtime._probe_model_ready(timeout=5.0)
+
+    assert calls["count"] == 1
+
+
+def test_systemone_runtime_close_terminates_posix_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import os
+    import signal
+    import deqio.systemone_runtime as runtime_module
+
+    if os.name == "nt":
+        pytest.skip("POSIX process-group lifecycle test")
+
+    class DummyProcess:
+        pid = 4242
+        returncode = None
+        stdout = None
+        terminate_called = False
+        kill_called = False
+        wait_calls = 0
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.terminate_called = True
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise runtime_module.subprocess.TimeoutExpired("guard", timeout)
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.kill_called = True
+            self.returncode = -9
+
+    signals: list[tuple[int, signal.Signals]] = []
+    monkeypatch.setattr(
+        runtime_module.os, "killpg", lambda pgid, sig: signals.append((pgid, sig))
+    )
+
+    runtime = object.__new__(runtime_module.SystemOneRuntime)
+    runtime.process = DummyProcess()
+    runtime.engine = "jevk5"
+    runtime._log_thread = None
+
+    runtime.close()
+
+    assert signals == [(4242, signal.SIGTERM)]
+    assert runtime.process.terminate_called is False
+    assert runtime.process.kill_called is False
+
+
+def test_jevk5_inner_llama_server_cleanup_waits_for_exit() -> None:
+    from deqio.jevk5_gguf_sidecar import _terminate
+
+    class DummyProcess:
+        returncode = None
+        terminate_called = False
+        waited: list[int | None] = []
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.terminate_called = True
+
+        def wait(self, timeout=None):
+            self.waited.append(timeout)
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            self.returncode = -9
+
+    process = DummyProcess()
+    _terminate(process)
+
+    assert process.terminate_called is True
+    assert process.waited == [10]
+
+
+def test_load_warmed_runtime_closes_runtime_when_warmup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake = FakeRuntime()
+
+    class FakeBackendRuntime:
+        @staticmethod
+        def load(settings):
+            return fake
+
+    monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
+    monkeypatch.setattr(
+        server,
+        "_warmup_runtime",
+        lambda target, announce: (_ for _ in ()).throw(RuntimeError("warmup failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="warmup failed"):
+        server._load_warmed_runtime(server.SETTINGS, announce=False)
+
+    assert fake.closed is True
+
+
+def test_rejected_second_server_does_not_clear_watch_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    events: list[str] = []
+    monkeypatch.setenv("DEQIO_SERVER_CONTROL", "1")
+    monkeypatch.setattr(server, "startup_header", lambda **kwargs: None)
+    monkeypatch.setattr(
+        server,
+        "register_server",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("already running")),
+    )
+    monkeypatch.setattr(
+        server, "_reset_watch_session", lambda **kwargs: events.append("watch-reset") or {}
+    )
+
+    async def invoke() -> None:
+        with pytest.raises(RuntimeError, match="already running"):
+            async with server.lifespan(server.app):
+                pass
+
+    asyncio.run(invoke())
+    assert events == []
+
+
+def test_failed_startup_unregisters_control_before_propagating(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    events: list[str] = []
+
+    monkeypatch.setenv("DEQIO_SERVER_CONTROL", "1")
+    monkeypatch.setenv("DEQIO_SERVER_HOST", "127.0.0.1")
+    monkeypatch.setenv("DEQIO_SERVER_PORT", "8787")
+    monkeypatch.setattr(server, "_reset_watch_session", lambda **kwargs: {})
+    monkeypatch.setattr(server, "startup_header", lambda **kwargs: None)
+    monkeypatch.setattr(
+        server,
+        "register_server",
+        lambda *args, **kwargs: events.append("register") or {"pid": 123, "token": "token"},
+    )
+    monkeypatch.setattr(
+        server,
+        "unregister_server",
+        lambda *args, **kwargs: events.append("unregister"),
+    )
+    monkeypatch.setattr(
+        server,
+        "_load_warmed_runtime",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("startup failed")),
+    )
+
+    async def invoke() -> None:
+        with pytest.raises(RuntimeError, match="startup failed"):
+            async with server.lifespan(server.app):
+                pass
+
+    asyncio.run(invoke())
+
+    assert events == ["register", "unregister"]
+    assert server.runtime_control_token is None
+
+
+def test_choice_rejects_empty_or_duplicate_option_ids_before_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    called = False
+
+    def fail_if_called(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("inference must not run")
+
+    monkeypatch.setattr(server, "run_decision", fail_if_called)
+
+    for options in (
+        [],
+        [{"id": "same", "description": "A"}, {"id": "same", "description": "B"}],
+        [{"id": "   ", "description": "blank"}],
+    ):
+        status, payload = _asgi_post_json(
+            "/v1/choice",
+            json.dumps({"state": "state", "question": "Choose", "options": options}),
+            {"content-type": "application/json"},
+        )
+        assert status == 400
+        assert "option" in str(payload["detail"]).lower()
+
+    assert called is False
+
+
+def test_shared_rejects_duplicate_decision_or_option_ids_before_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class NoInferenceRuntime:
+        def score_shared(self, rows):
+            raise AssertionError("inference must not run")
+
+    monkeypatch.setattr(server, "runtime", NoInferenceRuntime())
+
+    duplicate_decisions = {
+        "state": "state",
+        "decisions": [
+            {"id": "same", "question": "A?", "options": [{"id": "a", "description": "A"}]},
+            {"id": "same", "question": "B?", "options": [{"id": "b", "description": "B"}]},
+        ],
+    }
+    status, payload = _asgi_post_json(
+        "/v1/shared", json.dumps(duplicate_decisions), {"content-type": "application/json"}
+    )
+    assert status == 400
+    assert "duplicate decision ids" in str(payload["detail"])
+
+    duplicate_options = {
+        "state": "state",
+        "decisions": [
+            {
+                "question": "A?",
+                "options": [
+                    {"id": "same", "description": "A"},
+                    {"id": "same", "description": "B"},
+                ],
+            }
+        ],
+    }
+    status, payload = _asgi_post_json(
+        "/v1/shared", json.dumps(duplicate_options), {"content-type": "application/json"}
+    )
+    assert status == 400
+    assert "duplicate option ids" in str(payload["detail"])
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (
+            "/v1/choice",
+            {
+                "state": "state",
+                "question": "Choose",
+                "options": [
+                    {"id": "a", "description": "A"},
+                    {"id": "b", "description": "B"},
+                ],
+            },
+        ),
+        ("/v1/noul", {"state": "state", "question": "Is this true?"}),
+        (
+            "/v1/shared",
+            {
+                "state": "state",
+                "decisions": [
+                    {
+                        "question": "Choose",
+                        "options": [
+                            {"id": "a", "description": "A"},
+                            {"id": "b", "description": "B"},
+                        ],
+                    }
+                ],
+            },
+        ),
+    ],
+)
+def test_portable_endpoints_preserve_503_while_runtime_is_suspended(
+    path: str, body: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.server as server
+
+    monkeypatch.setattr(server, "runtime", None)
+    monkeypatch.setattr(
+        server,
+        "runtime_suspension",
+        {
+            "owner": "benchmark",
+            "reason": "benchmark",
+            "lease_id": "lease-http",
+            "owner_pid": 12345,
+            "started_at": "2026-10-06T00:00:00+00:00",
+            "previous_profile": server._active_model(),
+            "restore_error": None,
+        },
+    )
+
+    status, payload = _asgi_post_json(
+        path,
+        json.dumps(body),
+        {"content-type": "application/json"},
+    )
+
+    assert status == 503
+    assert payload["detail"]["code"] == "runtime_suspended_for_benchmark"
+
+
+def test_runtime_suspension_keeps_server_state_but_unloads_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    active = FakeRuntime()
+    monkeypatch.setattr(server, "runtime", active)
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "switching_runtime", False)
+
+    response = server._suspend_runtime_for_benchmark(
+        lease_id="lease-1",
+        owner_pid=12345,
+        reason="benchmark",
+    )
+
+    assert response["status"] == "suspended"
+    assert active.closed is True
+    assert server.runtime is None
+    assert server.runtime_suspension["lease_id"] == "lease-1"
+    with pytest.raises(server.HTTPException) as error:
+        server._runtime()
+    assert error.value.status_code == 503
+    assert error.value.detail["code"] == "runtime_suspended_for_benchmark"
+
+
+def test_runtime_resume_restores_previous_server_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def close(self):
+            pass
+
+        def refresh_identity(self):
+            pass
+
+    restored = FakeRuntime()
+
+    class FakeBackendRuntime:
+        @staticmethod
+        def load(settings):
+            assert settings is server.SETTINGS
+            return restored
+
+    monkeypatch.setattr(server, "runtime", None)
+    monkeypatch.setattr(server, "runtime_suspension", {
+        "owner": "benchmark",
+        "reason": "benchmark",
+        "lease_id": "lease-2",
+        "owner_pid": 12345,
+        "started_at": "2026-10-05T00:00:00+00:00",
+        "previous_profile": server._active_model(),
+        "restore_error": None,
+    })
+    monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
+    monkeypatch.setattr(server, "_warmup_runtime", lambda runtime, announce=False: None)
+    monkeypatch.setattr(server, "mark_installed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(server, "_reset_session_metrics", lambda: None)
+
+    response = server._resume_runtime_after_benchmark(lease_id="lease-2")
+
+    assert response["status"] == "restored"
+    assert server.runtime is restored
+    assert server.runtime_suspension is None
+
+
+def test_model_switch_is_blocked_while_benchmark_owns_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    monkeypatch.setattr(server, "runtime_suspension", {
+        "owner": "benchmark",
+        "reason": "benchmark",
+        "lease_id": "lease-3",
+        "owner_pid": 12345,
+        "started_at": "2026-10-05T00:00:00+00:00",
+        "previous_profile": server._active_model(),
+        "restore_error": None,
+    })
+    with pytest.raises(server.HTTPException) as error:
+        server.activate_model(server.ModelActivateRequest(model_id="whatever", backend="mlx"))
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "runtime_suspended_for_benchmark"
+
+
+def test_model_switch_rechecks_benchmark_suspension_after_waiting_for_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.server as server
+    from deqio.catalog import load_catalog
+    from deqio.config import settings_from_data
+
+    catalog_path = Path("models.json").resolve()
+    config_path = tmp_path / "config.json"
+    data = {
+        "engine": "laya",
+        "model_id": "laya-typed-decisions",
+        "backend": "mlx",
+        "model": "aac6fef/laya-typed-decisions-mlx",
+        "model_revision": "laya-typed-decisions",
+        "model_catalog": str(catalog_path),
+        "runtime_dir": str(tmp_path / ".model-runtimes"),
+        "max_tokens": 4096,
+        "mlx_cache_mib": 256,
+        "log": str(tmp_path / "requests.jsonl"),
+        "torch_dtype": "bfloat16",
+        "sidecar_startup_seconds": 900,
+    }
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+    old_settings = settings_from_data(config_path, data, apply_environment=False)
+    catalog = load_catalog(catalog_path)
+
+    class ExistingRuntime:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    existing = ExistingRuntime()
+    suspension = {
+        "owner": "benchmark",
+        "reason": "benchmark",
+        "lease_id": "race-lease",
+        "owner_pid": 12345,
+        "started_at": "2026-10-06T00:00:00+00:00",
+        "previous_profile": server._active_model(),
+        "restore_error": None,
+    }
+
+    class RaceLock:
+        def __enter__(self):
+            # Simulate the benchmark acquiring the lock after activate_model's
+            # initial fast-path check but before model switching starts.
+            monkeypatch.setattr(server, "runtime_suspension", suspension)
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    row = {
+        "model_id": "decider-2b",
+        "backend": "mps",
+        "engine": "decider",
+        "installed": True,
+        "host_compatible": True,
+        "max_input_tokens": 4096,
+    }
+    monkeypatch.setattr(server, "SETTINGS", old_settings)
+    monkeypatch.setattr(server, "runtime", existing)
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "inference_lock", RaceLock())
+    monkeypatch.setattr(server, "_installation_rows", lambda: (catalog, [row]))
+    for env_name in server.MODEL_SELECTION_ENV_VARS:
+        monkeypatch.delenv(env_name, raising=False)
+
+    with pytest.raises(server.HTTPException) as error:
+        server.activate_model(server.ModelActivateRequest(model_id="decider-2b", backend="mps"))
+
+    assert error.value.status_code == 409
+    assert error.value.detail["code"] == "runtime_suspended_for_benchmark"
+    assert existing.closed is False
+
+
+def test_same_profile_activation_reloads_when_runtime_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.server as server
+    from deqio.catalog import load_catalog
+    from deqio.config import settings_from_data
+
+    catalog_path = Path("models.json").resolve()
+    config_path = tmp_path / "config.json"
+    data = {
+        "engine": "laya",
+        "model_id": "laya-typed-decisions",
+        "backend": "mlx",
+        "model": "aac6fef/laya-typed-decisions-mlx",
+        "model_revision": "laya-typed-decisions",
+        "model_catalog": str(catalog_path),
+        "runtime_dir": str(tmp_path / ".model-runtimes"),
+        "max_tokens": 4096,
+        "mlx_cache_mib": 256,
+        "log": str(tmp_path / "requests.jsonl"),
+        "torch_dtype": "bfloat16",
+        "sidecar_startup_seconds": 900,
+    }
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+    settings = settings_from_data(config_path, data, apply_environment=False)
+    catalog = load_catalog(catalog_path)
+    row = {
+        "model_id": settings.model_id,
+        "backend": settings.backend,
+        "engine": settings.engine,
+        "installed": True,
+        "host_compatible": True,
+        "max_input_tokens": 4096,
+    }
+
+    class FakeRuntime:
+        def refresh_identity(self):
+            pass
+
+        def close(self):
+            pass
+
+    fake = FakeRuntime()
+
+    class FakeBackendRuntime:
+        @staticmethod
+        def load(candidate_settings):
+            assert candidate_settings.model_id == settings.model_id
+            return fake
+
+    monkeypatch.setattr(server, "SETTINGS", settings)
+    monkeypatch.setattr(server, "runtime", None)
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
+    monkeypatch.setattr(server, "_warmup_runtime", lambda runtime, announce=False: None)
+    monkeypatch.setattr(server, "_installation_rows", lambda: (catalog, [row]))
+    monkeypatch.setattr(server, "mark_installed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(server, "_reset_session_metrics", lambda: None)
+    for env_name in server.MODEL_SELECTION_ENV_VARS:
+        monkeypatch.delenv(env_name, raising=False)
+
+    response = server.activate_model(
+        server.ModelActivateRequest(model_id=settings.model_id, backend=settings.backend)
+    )
+
+    assert response["status"] == "ok"
+    assert server.runtime is fake
+
+
+def test_failed_benchmark_suspend_never_leaves_half_closed_runtime_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deqio.server as server
+
+    class BrokenRuntime:
+        def close(self):
+            raise RuntimeError("close failed")
+
+    monkeypatch.setattr(server, "runtime", BrokenRuntime())
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "switching_runtime", False)
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        server._suspend_runtime_for_benchmark(
+            lease_id="lease-close-failure", owner_pid=12345, reason="benchmark"
+        )
+
+    # Keep the reference when close itself fails. Dropping it would make a
+    # still-live sidecar impossible to retry/clean during shutdown and is the
+    # exact shape that can produce an orphaned model process.
+    assert isinstance(server.runtime, BrokenRuntime)
+    assert server.runtime_suspension is None
+    assert server.switching_runtime is False
+
+
+def test_patch3_routes_and_ui_are_exposed() -> None:
+    routes = {route.path for route in app.routes}
+    assert "/v1/benchmarks/compare" in routes
+    assert "/v1/internal/runtime/suspend" in routes
+    assert "/v1/internal/runtime/resume" in routes
+    assert 'data-benchmark-view="compare"' in DASHBOARD
+    assert "benchmarkCompareLeft" in DASHBOARD
+    assert "benchmarkCompareRight" in DASHBOARD
+    assert "runtime_suspension" in WATCH_DASHBOARD
+
+
+@pytest.mark.parametrize("endpoint_name,question_type", [("score_native", "score"), ("multi_native", "multi"), ("act_native", "act")])
+def test_patch4_native_single_endpoint_wrappers_inject_type_and_preserve_response(
+    endpoint_name: str, question_type: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import deqio.server as server
+
+    calls: list[tuple[object, dict, dict | None]] = []
+
+    class FakeRuntime:
+        def identity_snapshot(self):
+            return {
+                "runtime_instance_id": "native-runtime", "engine": "basal",
+                "model_id": "basal-1.5-mini", "backend": "mlx",
+                "artifact_revisions_resolved": True,
+            }
+
+        def system_one(self, state, questions, options=None):
+            calls.append((state, questions, options))
+            name, question = next(iter(questions.items()))
+            return (
+                {
+                    "model": "native-model",
+                    "answers": {name: {"type": question["type"], "probabilities": {"x": 1.0}}},
+                    "usage": {"input_tokens": 3, "output_tokens": 0},
+                },
+                {"total_seconds": 0.001},
+            )
+
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_record_watch_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+
+    handler = getattr(server, endpoint_name)
+    result = asyncio.run(handler(server.TypedSystemOneRequest(
+        state="state", name="check", question={"instructions": "Evaluate", "criteria": ["x"]}, facts="auto"
+    )))
+
+    assert calls == [("state", {"check": {"instructions": "Evaluate", "criteria": ["x"], "type": question_type}}, {"facts": "auto"})]
+    assert result["answers"]["check"]["type"] == question_type
+    assert result["deqio"]["timing"]["decisions"] == 1
+
+
+def test_patch4_soam_alias_uses_same_native_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    calls = []
+
+    class FakeRuntime:
+        def identity_snapshot(self):
+            return {"runtime_instance_id": "r", "engine": "kev", "model_id": "kev-0.8b", "backend": "mlx"}
+
+        def system_one(self, state, questions):
+            calls.append((state, questions))
+            return ({"model": "kev", "answers": {"a": {"type": "noul", "noul": 0.8}}}, {"total_seconds": 0.002})
+
+    monkeypatch.setattr(server, "runtime", FakeRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_record_watch_event", lambda **kwargs: None)
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+
+    payload = server.SystemOneRequest(state="state", questions={"a": {"type": "noul", "instructions": "Allowed?"}})
+    result = asyncio.run(server.soam(payload))
+    assert calls == [("state", {"a": {"type": "noul", "instructions": "Allowed?"}})]
+    assert result["answers"]["a"]["noul"] == 0.8
+
+
+def test_patch4_ui_reloads_native_example_when_active_profile_changes() -> None:
+    assert "activeModelKey !== systemOneExampleModelKey" in DASHBOARD
+    assert "endpointInitialized.delete(nativeEndpoint)" in DASHBOARD
+    assert "loadEndpointExample(endpoint)" in DASHBOARD
+
+
+def test_patch4_watch_filter_lists_new_native_endpoints() -> None:
+    for path in ("/v1/score", "/v1/multi", "/v1/act", "/v1/soam", "/v1/systemone"):
+        assert f'<option value="{path}">{path}</option>' in WATCH_DASHBOARD
+
+
+def test_patch4_benchmark_compare_uses_responsive_cards_not_wide_metric_table() -> None:
+    assert 'id="benchmarkCompareCards"' in DASHBOARD
+    assert 'class="compare-card"' in DASHBOARD
+    assert 'class="compare-metrics"' in DASHBOARD
+    assert 'id="benchmarkCompareRows"' not in DASHBOARD
+
+
+def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert len(readme.splitlines()) < 700
+    for heading in (
+        "## API at a glance",
+        "### Small models (up to 2.5B)",
+        "### Large models",
+        "## Installation",
+        "# API examples",
+    ):
+        assert heading in readme
+    for path in ("/v1/noul", "/v1/choice", "/v1/shared", "/v1/score", "/v1/multi", "/v1/act", "/v1/soam", "/v1/systemone"):
+        assert path in readme
+    assert '`facts: "auto"`' in readme
+    assert "not `/v1/facts`" in readme
+    assert "convenience alias over the native SystemOne contract" in readme
+    assert "same native SystemOne execution path" in readme
+    assert "`/v1/soam` vs `/v1/systemone`" in readme
+    assert "Extra inference layer" in readme
+    assert "**Decision in, probabilities out.**" in readme
+    assert "20261006T082750Z" in readme
+    assert "20261006T083557Z" in readme
+    assert "20261006T090441Z" in readme
+    assert "20261006T091845Z" in readme
+    assert "Basal 1.5 Mini 1.5B" in readme
+    assert "Decider 0.8B" in readme
+    assert "Laya Typed Decisions 421M" in readme
+    assert "Basal 1.5 Main 4.5B" in readme
+    assert "JevK5 4B" in readme
+    assert "### Large models (4B–4.5B in this snapshot)" in readme
+    assert readme.count("#### Runs") == 2
+    assert "0 runtime errors" in readme
+    assert "Laya English 421M" not in readme
+    assert "earlier local snapshot from **2026-10-03**" not in readme

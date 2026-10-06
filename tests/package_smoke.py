@@ -90,6 +90,10 @@ def main() -> int:
             ["deqio", "benchmark", "--help"], cwd=work, env=env, check=True,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
+        subprocess.run(
+            ["deqio", "benchmark", "compare", "--help"], cwd=work, env=env, check=True,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
 
         for relative in ("config.json", "models.json", "benchmarks/basic.json", "benchmarks/pl.json"):
             if not (work / relative).is_file():
@@ -115,7 +119,7 @@ def main() -> int:
                 "-c",
                 "from deqio.server import app; "
                 "paths={r.path for r in app.routes}; "
-                "assert '/ui' in paths and '/ui/watch' in paths and '/v1/noul' in paths and '/v1/watch' in paths and '/v1/watch/settings' in paths and '/v1/benchmarks' in paths",
+                "assert '/ui' in paths and '/ui/watch' in paths and '/v1/noul' in paths and '/v1/watch' in paths and '/v1/watch/settings' in paths and '/v1/benchmarks' in paths and '/v1/benchmarks/compare' in paths",
             ],
             cwd=work,
             env=env,
