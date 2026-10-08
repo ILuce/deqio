@@ -1393,7 +1393,13 @@ def cmd_delete(args: argparse.Namespace) -> int:
             replacement_profile = get_profile(catalog, str(replacement["model_id"]), str(replacement["backend"]))
             _write_config(
                 config_path,
-                _select_data(data, entry, replacement_profile, str(replacement["backend"])),
+                _select_data(
+                    data,
+                    entry,
+                    replacement_profile,
+                    str(replacement["backend"]),
+                    max_input_tokens=replacement.get("max_input_tokens"),
+                ),
             )
             print(f"Active profile removed; selected {replacement['model_id']} / {replacement['backend']} instead.")
         else:

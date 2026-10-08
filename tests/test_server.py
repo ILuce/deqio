@@ -1293,47 +1293,6 @@ def test_benchmark_routes_and_ui_are_exposed() -> None:
     from deqio.server import app
     from deqio.ui import DASHBOARD, WATCH_DASHBOARD
 
-
-def _asgi_post_json(path: str, body: bytes | str, headers: dict[str, str]) -> tuple[int, dict]:
-    raw = body.encode("utf-8") if isinstance(body, str) else body
-
-    async def invoke() -> tuple[int, dict]:
-        sent: list[dict] = []
-        delivered = False
-
-        async def receive() -> dict:
-            nonlocal delivered
-            if delivered:
-                return {"type": "http.disconnect"}
-            delivered = True
-            return {"type": "http.request", "body": raw, "more_body": False}
-
-        async def send(message: dict) -> None:
-            sent.append(message)
-
-        scope = {
-            "type": "http",
-            "asgi": {"version": "3.0", "spec_version": "2.3"},
-            "http_version": "1.1",
-            "method": "POST",
-            "scheme": "http",
-            "path": path,
-            "raw_path": path.encode("ascii"),
-            "query_string": b"",
-            "headers": [(key.lower().encode("latin-1"), value.encode("latin-1")) for key, value in headers.items()],
-            "client": ("testclient", 123),
-            "server": ("testserver", 80),
-            "root_path": "",
-        }
-        await app(scope, receive, send)
-        status = next(message["status"] for message in sent if message["type"] == "http.response.start")
-        response_body = b"".join(
-            message.get("body", b"") for message in sent if message["type"] == "http.response.body"
-        )
-        return int(status), json.loads(response_body.decode("utf-8"))
-
-    return asyncio.run(invoke())
-
     routes = {route.path for route in app.routes}
     assert "/v1/benchmarks" in routes
     assert "/v1/benchmarks/{run_id}/summary" in routes
@@ -1770,7 +1729,11 @@ def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline
     assert isinstance(command, list)
     assert Path(command[1]).name == "sidecar_guard.py"
     assert command[2] == "--parent-pid"
-    assert command[4:7] == ["--control-stdin", "--", "demo"]
+    assert command[4:6] == ["--control-stdin", "--engine-pid-file"]
+    assert command[6].endswith(".pid")
+    assert command[7:9] == ["--", "demo"]
+    # close() reaps the published engine PID file together with the supervisor.
+    assert not Path(command[6]).exists()
     assert observed["stdin"] is runtime_module.subprocess.PIPE
     env = observed["env"]
     assert isinstance(env, dict)
@@ -4475,6 +4438,7 @@ def test_systemone_runtime_close_terminates_posix_process_group(
     runtime.process = DummyProcess()
     runtime.engine = "jevk5"
     runtime._log_thread = None
+    runtime._engine_pid_file = None
 
     runtime.close()
 
@@ -5141,3 +5105,458 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "20261006T091845Z" in pl_summary
     assert "2026-10-03" not in eng_summary
     assert "2026-10-03" not in pl_summary
+
+
+# --- Production audit regressions (Deqio 0.5 freeze) -------------------------
+
+
+def _raw_decision(decision_id: str = "r1") -> dict:
+    return {
+        "id": decision_id,
+        "option_ids": ["yes", "no"],
+        "probabilities": [0.8, 0.2],
+        "input_tokens": 3,
+        "total_seconds": 0.002,
+        "prompt_sha256": "sha",
+        "probability_status": "test",
+    }
+
+
+def test_portable_endpoints_keep_watch_and_request_log_off_the_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Watch storage takes a process lock and does disk I/O.
+
+    Every portable decision handler must call it from a worker thread, exactly
+    like the native SystemOne path does, otherwise a contended Watch lock or a
+    slow disk freezes /health, the UI and every other in-flight request.
+    """
+    import threading
+
+    import deqio.server as server
+
+    loop_thread = threading.current_thread()
+    offending: list[str] = []
+
+    def _assert_off_loop(label: str) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        offending.append(label)
+
+    class SpyWatch:
+        def session_token(self):
+            _assert_off_loop("session_token")
+            return "session"
+
+        def append(self, event, *, expected_session_id=None):
+            _assert_off_loop(f"append:{event['endpoint']}")
+            return "000001-00001-abcdef"
+
+    def fake_log_write(**kwargs):
+        _assert_off_loop(f"record_event:{kwargs['endpoint']}")
+
+    identity = {"engine": "kev", "model_id": "demo", "backend": "mps", "runtime_instance_id": "rt"}
+    monkeypatch.setattr(server, "_watch_store", lambda: SpyWatch())
+    monkeypatch.setattr(server, "record_event", fake_log_write)
+    monkeypatch.setattr(
+        server,
+        "run_decision",
+        lambda payload, *, endpoint, contract: server.format_result(_raw_decision(), runtime_identity=identity),
+    )
+    monkeypatch.setattr(
+        server,
+        "_score_noul_inference",
+        lambda row, mode, contract, request_id: (server.SETTINGS, identity, _raw_decision(request_id)),
+    )
+    monkeypatch.setattr(
+        server,
+        "_score_shared_inference",
+        lambda rows, contract, request_id: (
+            server.SETTINGS,
+            identity,
+            [_raw_decision(str(row["id"])) for row in rows],
+            {"total_seconds": 0.004},
+        ),
+    )
+
+    headers = {"content-type": "application/json"}
+    status, _ = _asgi_post_json(
+        "/v1/choice",
+        json.dumps({"state": "s", "question": "q", "options": [{"id": "yes", "description": "Y"}, {"id": "no", "description": "N"}]}),
+        headers,
+    )
+    assert status == 200
+    status, _ = _asgi_post_json("/v1/noul", json.dumps({"state": "s", "question": "q"}), headers)
+    assert status == 200
+    status, _ = _asgi_post_json(
+        "/v1/shared",
+        json.dumps({"state": "s", "decisions": [{"question": "q", "options": [{"id": "yes", "description": "Y"}, {"id": "no", "description": "N"}]}]}),
+        headers,
+    )
+    assert status == 200
+    # A rejected request must record its Watch row off the loop as well.
+    status, _ = _asgi_post_json(
+        "/v1/choice",
+        json.dumps({"state": "s", "question": "q", "options": [{"id": "dup", "description": "A"}, {"id": "dup", "description": "B"}]}),
+        headers,
+    )
+    assert status == 400
+
+    assert offending == []
+    assert threading.current_thread() is loop_thread
+
+
+def test_watch_event_reads_native_systemone_timing_and_usage() -> None:
+    import deqio.server as server
+
+    captured: list[dict] = []
+
+    class SpyWatch:
+        def append(self, event, *, expected_session_id=None):
+            captured.append(event)
+            return "000001-00001-abcdef"
+
+    native_response = {
+        "answers": {"ready": {"answer": "yes"}},
+        "usage": {"input_tokens": 55},
+        "deqio": {
+            "provenance_schema_version": 1,
+            "runtime": {"engine": "basal", "model_id": "basal-1.5-mini", "backend": "mlx", "runtime_instance_id": "rt-1"},
+            "timing": {"total_ms": 12.3, "decisions": 1},
+        },
+    }
+    original = server._watch_store
+    server._watch_store = lambda: SpyWatch()
+    try:
+        event_id = server._record_watch_event(
+            expected_session_id="session",
+            endpoint="/v1/score",
+            request_payload={"state": "s", "name": "ready", "question": {}},
+            response_payload=native_response,
+            status_code=200,
+            request_id="systemone-1",
+            mode="systemone",
+            decisions=1,
+            settings_snapshot=server.SETTINGS,
+        )
+    finally:
+        server._watch_store = original
+
+    assert event_id is not None
+    event = captured[0]
+    assert event["latency_ms"] == 12.3
+    assert event["input_tokens"] == 55
+    assert event["runtime_instance_id"] == "rt-1"
+    assert event["model_id"] == "basal-1.5-mini"
+    # The full native response is still stored for the Watch detail view.
+    assert event["response"]["deqio"]["timing"]["total_ms"] == 12.3
+
+
+def _activation_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, base_overrides: dict | None = None):
+    import deqio.server as server
+    from deqio.config import settings_from_data
+
+    config_path = tmp_path / "config.json"
+    base_data = {
+        "engine": "decider",
+        "model_id": "decider-0.8b",
+        "backend": "mps",
+        "model": "Mapika/decider-0.8b",
+        "model_revision": "decider-0.8b",
+        "model_catalog": "models.json",
+        "runtime_dir": ".model-runtimes",
+        "max_tokens": 4096,
+        "mlx_cache_mib": 256,
+        "log": "logs/requests.jsonl",
+        "torch_dtype": "bfloat16",
+        "sidecar_startup_seconds": 900,
+        **(base_overrides or {}),
+    }
+    config_path.write_text(json.dumps(base_data))
+    catalog = {
+        "models": [
+            {"id": "decider-0.8b", "engine": "decider", "label": "Decider 0.8B", "backends": {"mps": {"model": "Mapika/decider-0.8b"}}},
+            {"id": "decider-2b", "engine": "decider", "label": "Decider 2B", "backends": {"mps": {"model": "Mapika/decider-2b"}}},
+        ]
+    }
+    rows = [
+        {"model_id": "decider-0.8b", "backend": "mps", "engine": "decider", "installed": True, "host_compatible": True},
+        {"model_id": "decider-2b", "backend": "mps", "engine": "decider", "installed": True, "host_compatible": True},
+    ]
+
+    class FakeRuntime:
+        def __init__(self, settings):
+            self.settings = settings
+            self.closed = False
+
+        def score(self, row, mode):
+            return _raw_decision(row["id"])
+
+        def close(self):
+            self.closed = True
+
+    class FakeBackendRuntime:
+        loaded: list = []
+
+        @staticmethod
+        def load(settings):
+            instance = FakeRuntime(settings)
+            FakeBackendRuntime.loaded.append(instance)
+            return instance
+
+    old_settings = settings_from_data(config_path, base_data, apply_environment=True)
+    monkeypatch.setattr(server, "SETTINGS", old_settings)
+    monkeypatch.setattr(server, "runtime", FakeRuntime(old_settings))
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
+    monkeypatch.setattr(server, "_installation_rows", lambda: (catalog, rows))
+    monkeypatch.setattr(server, "mark_installed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(server, "_watch_session_token", lambda: None)
+    monkeypatch.setattr(server, "_reset_session_metrics", lambda: None)
+    for env_name in server.MODEL_SELECTION_ENV_VARS:
+        monkeypatch.delenv(env_name, raising=False)
+    return server, FakeBackendRuntime
+
+
+def test_live_activation_keeps_non_selection_environment_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    custom_runtimes = tmp_path / "custom-runtimes"
+    custom_log = tmp_path / "custom" / "requests.jsonl"
+    monkeypatch.setenv("DEQIO_RUNTIME_DIR", str(custom_runtimes))
+    monkeypatch.setenv("DEQIO_LOG", str(custom_log))
+    monkeypatch.setenv("DEQIO_SIDECAR_STARTUP_SECONDS", "3600")
+    monkeypatch.setenv("DEQIO_HF_OFFLINE_RUNTIME", "0")
+    server, backend = _activation_fixture(tmp_path, monkeypatch)
+    assert server.SETTINGS.runtime_dir == custom_runtimes.resolve()
+
+    response = server.activate_model(server.ModelActivateRequest(model_id="decider-2b", backend="mps"))
+
+    assert response["status"] == "ok"
+    loaded = backend.loaded[-1].settings
+    assert loaded.model_id == "decider-2b"
+    assert loaded.runtime_dir == custom_runtimes.resolve()
+    assert loaded.log_path == custom_log.resolve()
+    assert loaded.sidecar_startup_seconds == 3600
+    assert loaded.hf_offline_runtime is False
+    assert server.SETTINGS is loaded
+    # The persisted selection still does not bake the environment in.
+    persisted = json.loads((tmp_path / "config.json").read_text())
+    assert persisted["runtime_dir"] == ".model-runtimes"
+    assert persisted["model_id"] == "decider-2b"
+
+
+def test_live_activation_bookkeeping_failure_does_not_fail_or_stick_the_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The request-log directory cannot be created (its parent is a file) and
+    # the registry cannot be written: both are bookkeeping, not the switch.
+    (tmp_path / "blocker").write_text("not a directory")
+    server, backend = _activation_fixture(
+        tmp_path, monkeypatch, base_overrides={"log": str(tmp_path / "blocker" / "requests.jsonl")}
+    )
+
+    def broken_registry(*args, **kwargs):
+        raise OSError("registry is read-only")
+
+    monkeypatch.setattr(server, "mark_installed", broken_registry)
+    monkeypatch.setattr(server, "switching_runtime", False)
+    messages: list[str] = []
+    monkeypatch.setattr(server, "info", messages.append)
+
+    response = server.activate_model(server.ModelActivateRequest(model_id="decider-2b", backend="mps"))
+
+    assert response["status"] == "ok"
+    assert server.SETTINGS.model_id == "decider-2b"
+    assert server.runtime is backend.loaded[-1]
+    assert server.switching_runtime is False
+    assert any("installed-model registry" in message for message in messages)
+
+
+def test_live_activation_clears_switching_flag_when_switch_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server, backend = _activation_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(server, "switching_runtime", False)
+
+    def explode(settings, *, announce):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(server, "_load_warmed_runtime", explode)
+
+    with pytest.raises(server.HTTPException) as error:
+        server.activate_model(server.ModelActivateRequest(model_id="decider-2b", backend="mps"))
+
+    assert error.value.status_code == 500
+    assert server.switching_runtime is False
+    assert server.runtime is None
+
+
+def test_benchmark_restore_survives_registry_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    restored = FakeRuntime()
+
+    class FakeBackendRuntime:
+        @staticmethod
+        def load(settings):
+            return restored
+
+    def broken_registry(*args, **kwargs):
+        raise OSError("registry lock timeout")
+
+    monkeypatch.setattr(server, "runtime", None)
+    monkeypatch.setattr(server, "runtime_suspension", {
+        "owner": "benchmark",
+        "reason": "benchmark",
+        "lease_id": "lease-9",
+        "owner_pid": 12345,
+        "started_at": "2026-10-07T00:00:00+00:00",
+        "previous_profile": server._active_model(),
+        "restore_error": None,
+    })
+    monkeypatch.setattr(server, "BackendRuntime", FakeBackendRuntime)
+    monkeypatch.setattr(server, "_warmup_runtime", lambda runtime, announce=False: None)
+    monkeypatch.setattr(server, "mark_installed", broken_registry)
+    monkeypatch.setattr(server, "_reset_session_metrics", lambda: None)
+    messages: list[str] = []
+    monkeypatch.setattr(server, "info", messages.append)
+
+    response = server._resume_runtime_after_benchmark(lease_id="lease-9")
+
+    assert response["status"] == "restored"
+    assert server.runtime is restored
+    assert restored.closed is False
+    assert server.runtime_suspension is None
+    assert any("installed-model registry" in message for message in messages)
+
+
+def test_startup_survives_registry_write_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    class FakeRuntime:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    loaded = FakeRuntime()
+    monkeypatch.delenv("DEQIO_SERVER_CONTROL", raising=False)
+    monkeypatch.setattr(server, "_reset_watch_session", lambda **kwargs: {})
+    monkeypatch.setattr(server, "startup_header", lambda **kwargs: None)
+    monkeypatch.setattr(server, "server_ready", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_load_warmed_runtime", lambda *args, **kwargs: loaded)
+    monkeypatch.setattr(server, "mark_installed", lambda *a, **k: (_ for _ in ()).throw(OSError("read-only")))
+    monkeypatch.setattr(server, "runtime", None)
+
+    async def invoke() -> None:
+        async with server.lifespan(server.app):
+            assert server.runtime is loaded
+            assert loaded.closed is False
+
+    asyncio.run(invoke())
+    assert loaded.closed is True
+
+
+def test_shutdown_closes_runtime_before_releasing_workspace_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    events: list[str] = []
+
+    class FakeRuntime:
+        def close(self):
+            events.append("close")
+            raise RuntimeError("sidecar refused to stop")
+
+    monkeypatch.setenv("DEQIO_SERVER_CONTROL", "1")
+    monkeypatch.setenv("DEQIO_SERVER_HOST", "127.0.0.1")
+    monkeypatch.setenv("DEQIO_SERVER_PORT", "8787")
+    monkeypatch.setattr(server, "_reset_watch_session", lambda **kwargs: {})
+    monkeypatch.setattr(server, "startup_header", lambda **kwargs: None)
+    monkeypatch.setattr(server, "server_ready", lambda **kwargs: None)
+    monkeypatch.setattr(server, "register_server", lambda *a, **k: events.append("register") or {"pid": 1, "token": "t"})
+    monkeypatch.setattr(server, "unregister_server", lambda *a, **k: events.append("unregister"))
+    monkeypatch.setattr(server, "_load_warmed_runtime", lambda *a, **k: FakeRuntime())
+    monkeypatch.setattr(server, "mark_installed", lambda *a, **k: None)
+    monkeypatch.setattr(server, "runtime", None)
+
+    async def invoke() -> None:
+        with pytest.raises(RuntimeError, match="refused to stop"):
+            async with server.lifespan(server.app):
+                pass
+
+    asyncio.run(invoke())
+
+    assert events == ["register", "close", "unregister"]
+    assert server.runtime is None
+    assert server.runtime_control_token is None
+
+
+def test_delete_active_profile_replacement_restores_recorded_token_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import argparse
+
+    from deqio import installations, model_manager
+    from deqio.installations import registry_path
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({
+        "engine": "kev",
+        "model_id": "big",
+        "backend": "gguf",
+        "model": "owner/big",
+        "model_revision": "main",
+        "model_catalog": "models.json",
+        "runtime_dir": ".model-runtimes",
+        "max_tokens": 32768,
+        "mlx_cache_mib": 256,
+        "log": "logs/requests.jsonl",
+        "torch_dtype": "bfloat16",
+        "sidecar_startup_seconds": 900,
+    }))
+    (tmp_path / "models.json").write_text(json.dumps({
+        "models": [
+            {"id": "big", "engine": "kev", "label": "Big", "backends": {"gguf": {"model": "owner/big", "runtime_key": "rt-big"}}},
+            {"id": "small", "engine": "kev", "label": "Small", "backends": {"gguf": {"model": "owner/small", "runtime_key": "rt-small"}}},
+        ]
+    }))
+    for key in ("rt-big", "rt-small"):
+        python = model_manager._runtime_python(tmp_path / ".model-runtimes" / key)
+        python.parent.mkdir(parents=True)
+        python.write_text("")
+    installations.mark_installed(config_path, "big", "gguf", verified=True, max_input_tokens=32768)
+    installations.mark_installed(config_path, "small", "gguf", verified=True, max_input_tokens=4096)
+    assert registry_path(config_path).is_file()
+
+    from deqio.hardware import HostCapabilities
+
+    host = HostCapabilities(
+        system="Linux",
+        machine="x86_64",
+        backends=("gguf",),
+        system_memory_gib=64.0,
+        cuda_memory_gib=None,
+        cuda_compute_capability=None,
+    )
+    monkeypatch.setattr(installations, "_cached_hf_state", lambda: {})
+    monkeypatch.setattr(installations, "_artifact_ready", lambda *args, **kwargs: (True, False))
+    monkeypatch.setattr(installations, "detect_host", lambda: host)
+    monkeypatch.setattr(model_manager, "_cleanup_profile_artifacts", lambda **kwargs: None)
+
+    args = argparse.Namespace(config=str(config_path), model_id="big", backend="gguf", yes=True, purge_cache=False)
+    assert model_manager.cmd_delete(args) == 0
+
+    persisted = json.loads(config_path.read_text())
+    assert persisted["model_id"] == "small"
+    assert persisted["max_tokens"] == 4096

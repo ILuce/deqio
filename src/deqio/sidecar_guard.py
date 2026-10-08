@@ -7,42 +7,22 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import Sequence
 
-
-def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
-
-
-def _process_group_alive(pgid: int) -> bool:
-    try:
-        os.killpg(pgid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+# The guard is launched with the Deqio interpreter, so the Deqio package is the
+# one dependency it may rely on. One liveness probe is shared with the server
+# and the runtime-control code; it must never signal the probed process.
+from deqio.process_lock import pgid_alive, pid_alive
 
 
 def _wait_for_process_group_exit(pgid: int, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not _process_group_alive(pgid):
+        if not pgid_alive(pgid):
             return True
         time.sleep(0.05)
-    return not _process_group_alive(pgid)
+    return not pgid_alive(pgid)
 
 
 def _terminate_tree(process: subprocess.Popen[object]) -> None:
@@ -105,7 +85,13 @@ def _terminate_tree(process: subprocess.Popen[object]) -> None:
     _wait_for_process_group_exit(pgid, 2.0)
 
 
-def run(parent_pid: int, command: Sequence[str], *, control_stdin: bool = False) -> int:
+def run(
+    parent_pid: int,
+    command: Sequence[str],
+    *,
+    control_stdin: bool = False,
+    engine_pid_file: Path | None = None,
+) -> int:
     if parent_pid <= 0:
         raise ValueError("parent_pid must be positive")
     if not command:
@@ -149,6 +135,12 @@ def run(parent_pid: int, command: Sequence[str], *, control_stdin: bool = False)
 
     process = subprocess.Popen(list(command), **popen_kwargs)
     try:
+        if engine_pid_file is not None:
+            # The engine tree lives in its own session, which the Deqio parent
+            # cannot address through this guard's process group. Publishing the
+            # engine PID lets the parent reap that tree if the guard itself is
+            # killed before it can run its own cleanup.
+            engine_pid_file.write_text(f"{process.pid}\n", encoding="utf-8")
         while True:
             code = process.poll()
             if code is not None:
@@ -157,7 +149,7 @@ def run(parent_pid: int, command: Sequence[str], *, control_stdin: bool = False)
                 return 0
             # Checking both PPID and process existence makes parent death
             # detection immediate on POSIX and still useful on Windows.
-            if os.getppid() != parent_pid or not _pid_alive(parent_pid):
+            if os.getppid() != parent_pid or not pid_alive(parent_pid):
                 return 0
             time.sleep(0.2)
     finally:
@@ -168,12 +160,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Supervise one Deqio inference sidecar.")
     parser.add_argument("--parent-pid", type=int, required=True)
     parser.add_argument("--control-stdin", action="store_true")
+    parser.add_argument("--engine-pid-file", type=Path, default=None)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = list(args.command)
     if command and command[0] == "--":
         command = command[1:]
-    return run(args.parent_pid, command, control_stdin=bool(args.control_stdin))
+    return run(
+        args.parent_pid,
+        command,
+        control_stdin=bool(args.control_stdin),
+        engine_pid_file=args.engine_pid_file,
+    )
 
 
 if __name__ == "__main__":

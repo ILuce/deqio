@@ -9,6 +9,7 @@ import platform
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -21,7 +22,9 @@ from . import __version__
 from .catalog import get_model, get_profile, load_catalog
 from .config import Settings
 from .installations import installation_record
+from .process_lock import pgid_alive
 from .console import (
+    info,
     sidecar_model_wait,
     sidecar_process_ready,
     sidecar_ready,
@@ -433,6 +436,7 @@ class SystemOneRuntime:
         port: int,
         log_thread: Any = None,
         runtime_metadata: dict[str, Any] | None = None,
+        engine_pid_file: Path | None = None,
     ) -> None:
         self.settings = settings
         self.entry = entry
@@ -443,6 +447,7 @@ class SystemOneRuntime:
         self.engine = settings.engine
         self.base_url = f"http://127.0.0.1:{port}"
         self._log_thread = log_thread
+        self._engine_pid_file = engine_pid_file
         self.runtime_instance_id = uuid4().hex
         self._runtime_metadata = deepcopy(runtime_metadata or {})
         self._identity = _runtime_identity(
@@ -496,12 +501,17 @@ class SystemOneRuntime:
         env = os.environ.copy()
         engine_command = cls._command(settings, profile, env_dir, python, port, env)
         guard = Path(__file__).with_name("sidecar_guard.py").resolve()
+        descriptor, pid_file_name = tempfile.mkstemp(prefix="deqio-sidecar-", suffix=".pid")
+        os.close(descriptor)
+        engine_pid_file = Path(pid_file_name)
         command = [
             sys.executable,
             str(guard),
             "--parent-pid",
             str(os.getpid()),
             "--control-stdin",
+            "--engine-pid-file",
+            str(engine_pid_file),
             "--",
             *engine_command,
         ]
@@ -519,29 +529,50 @@ class SystemOneRuntime:
             # actual engine tree in a separate process group and tears that tree
             # down both on graceful shutdown and if the Deqio parent disappears.
             popen_kwargs["start_new_session"] = True
-        process = subprocess.Popen(
-            command,
-            env=env,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-            **popen_kwargs,
-        )
-        log_thread = start_sidecar_log_pump(process, settings.engine)
-        runtime = cls(
-            settings, entry, profile, process, port, log_thread, runtime_metadata
-        )
         try:
+            process = subprocess.Popen(
+                command,
+                env=env,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                **popen_kwargs,
+            )
+        except Exception:
+            engine_pid_file.unlink(missing_ok=True)
+            raise
+
+        # From here on the supervisor is alive: every failure below must end in
+        # the one supervisor cleanup path, including failures that happen before
+        # the runtime object exists (log pump start, identity/registry parsing).
+        log_thread = None
+        try:
+            log_thread = start_sidecar_log_pump(process, settings.engine)
+            runtime = cls(
+                settings,
+                entry,
+                profile,
+                process,
+                port,
+                log_thread,
+                runtime_metadata,
+                engine_pid_file=engine_pid_file,
+            )
             _wait_for_port(port, process, timeout=float(settings.sidecar_process_ready_seconds))
             sidecar_process_ready(engine=settings.engine, address=address)
             sidecar_model_wait(engine=settings.engine, timeout_seconds=float(settings.sidecar_startup_seconds))
             runtime._probe_model_ready(timeout=float(settings.sidecar_startup_seconds))
         except Exception:
-            runtime.close()
+            _stop_supervisor(
+                process,
+                engine=settings.engine,
+                log_thread=log_thread,
+                engine_pid_file=engine_pid_file,
+            )
             raise
         sidecar_ready(engine=settings.engine, address=address)
         return runtime
@@ -1296,71 +1327,168 @@ class SystemOneRuntime:
         }
 
     def close(self) -> None:
-        pid_value = getattr(self.process, "pid", None)
-        pid = int(pid_value) if isinstance(pid_value, int) else None
-        sidecar_stop(engine=self.engine, pid=pid)
+        _stop_supervisor(
+            self.process,
+            engine=self.engine,
+            log_thread=self._log_thread,
+            engine_pid_file=self._engine_pid_file,
+        )
 
-        control_pipe = getattr(self.process, "stdin", None)
-        try:
-            if self.process.poll() is None:
-                # Ask the supervisor to stop the engine tree itself first. This
-                # is the portable graceful path (notably on Windows, where
-                # Popen.terminate() is a hard TerminateProcess call and would
-                # skip the supervisor's child cleanup).
-                if control_pipe is not None:
-                    try:
-                        control_pipe.write("stop\n")
-                        control_pipe.flush()
-                    except (BrokenPipeError, OSError, ValueError):
-                        pass
 
+def _stop_supervisor(
+    process: subprocess.Popen[Any],
+    *,
+    engine: str,
+    log_thread: Any = None,
+    engine_pid_file: Path | None = None,
+) -> None:
+    """Stop one sidecar supervisor and everything it owns.
+
+    This is the single cleanup path for a spawned supervisor: ``close()`` and
+    the failure path of ``load()`` both end here, so a runtime that was never
+    fully constructed is torn down exactly like a healthy one.
+    """
+    pid_value = getattr(process, "pid", None)
+    pid = int(pid_value) if isinstance(pid_value, int) else None
+    sidecar_stop(engine=engine, pid=pid)
+
+    control_pipe = getattr(process, "stdin", None)
+    try:
+        if process.poll() is None:
+            # Ask the supervisor to stop the engine tree itself first. This
+            # is the portable graceful path (notably on Windows, where
+            # Popen.terminate() is a hard TerminateProcess call and would
+            # skip the supervisor's child cleanup).
+            if control_pipe is not None:
                 try:
-                    self.process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
+                    control_pipe.write("stop\n")
+                    control_pipe.flush()
+                except (BrokenPipeError, OSError, ValueError):
                     pass
 
-            if self.process.poll() is None:
-                terminated_group = False
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+
+        if process.poll() is None:
+            terminated_group = False
+            if os.name != "nt" and pid is not None:
+                try:
+                    os.killpg(pid, signal.SIGTERM)
+                    terminated_group = True
+                except ProcessLookupError:
+                    pass
+                except OSError:
+                    # Fall back to the direct child when the process was not
+                    # started as a session leader for any reason.
+                    terminated_group = False
+            if not terminated_group and process.poll() is None:
+                process.terminate()
+
+            # The supervisor's own escalation (SIGTERM, 4 s, SIGKILL, 2 s, a
+            # final 2 s group wait) takes up to ~8.2 s on a stubborn engine
+            # tree. Give it that time before taking the tree away from it.
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                killed_group = False
                 if os.name != "nt" and pid is not None:
                     try:
-                        os.killpg(pid, signal.SIGTERM)
-                        terminated_group = True
+                        os.killpg(pid, signal.SIGKILL)
+                        killed_group = True
                     except ProcessLookupError:
                         pass
                     except OSError:
-                        # Fall back to the direct child when the process was not
-                        # started as a session leader for any reason.
-                        terminated_group = False
-                if not terminated_group and self.process.poll() is None:
-                    self.process.terminate()
-
+                        killed_group = False
+                if not killed_group and process.poll() is None:
+                    process.kill()
                 try:
-                    self.process.wait(timeout=4)
-                except subprocess.TimeoutExpired:
-                    killed_group = False
-                    if os.name != "nt" and pid is not None:
-                        try:
-                            os.killpg(pid, signal.SIGKILL)
-                            killed_group = True
-                        except ProcessLookupError:
-                            pass
-                        except OSError:
-                            killed_group = False
-                    if not killed_group and self.process.poll() is None:
-                        self.process.kill()
-                    try:
-                        self.process.wait(timeout=5)
-                    except subprocess.TimeoutExpired as error:
-                        raise RuntimeError(
-                            f"Inference sidecar supervisor pid={pid} did not stop after forced termination"
-                        ) from error
-        finally:
-            if control_pipe is not None:
-                try:
-                    control_pipe.close()
-                except (OSError, ValueError):
-                    pass
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired as error:
+                    raise RuntimeError(
+                        f"Inference sidecar supervisor pid={pid} did not stop after forced termination"
+                    ) from error
+    finally:
+        if control_pipe is not None:
+            try:
+                control_pipe.close()
+            except (OSError, ValueError):
+                pass
+        _reap_orphaned_engine_tree(process, engine=engine, engine_pid_file=engine_pid_file)
 
-        if self._log_thread is not None:
-            self._log_thread.join(timeout=1)
-        sidecar_stopped(engine=self.engine, pid=pid)
+    if log_thread is not None:
+        log_thread.join(timeout=1)
+    sidecar_stopped(engine=engine, pid=pid)
+
+
+def _reap_orphaned_engine_tree(
+    process: subprocess.Popen[Any],
+    *,
+    engine: str,
+    engine_pid_file: Path | None,
+) -> None:
+    """Last-resort cleanup of the engine session when the supervisor was killed.
+
+    The supervisor runs the engine in its own session so it can terminate the
+    whole engine tree without killing itself. That also means the Deqio parent
+    cannot reach the engine through the supervisor's process group. When the
+    supervisor died from a signal (OOM killer, an external kill, or the forced
+    escalation above) its own cleanup never ran, so the engine tree is reaped
+    here using the PID the supervisor published at start.
+    """
+    if engine_pid_file is None:
+        return
+    returncode = getattr(process, "returncode", None)
+    try:
+        if os.name != "nt" and isinstance(returncode, int) and returncode < 0:
+            try:
+                engine_pid = int(engine_pid_file.read_text(encoding="utf-8").strip() or "0")
+            except (OSError, ValueError):
+                engine_pid = 0
+            if engine_pid > 0 and _is_engine_session_leader(engine_pid) and pgid_alive(engine_pid):
+                info(
+                    f"Sidecar supervisor for engine={engine} was killed before its cleanup ran; "
+                    f"terminating the orphaned engine process group pgid={engine_pid}"
+                )
+                _kill_process_group(engine_pid)
+    finally:
+        # Keep the file while the supervisor is still running: a later retry
+        # of close() must still be able to find the engine tree.
+        if returncode is not None:
+            try:
+                engine_pid_file.unlink()
+            except OSError:
+                pass
+
+
+def _is_engine_session_leader(pid: int) -> bool:
+    """Guard against PID reuse before signalling a published engine PID.
+
+    The supervisor starts the engine with ``start_new_session=True``, so the
+    engine PID is also its session ID. An unrelated process that inherited
+    the number after a PID wrap is almost never a session leader.
+    """
+    try:
+        return os.getsid(pid) == pid
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _kill_process_group(pgid: int) -> None:
+    deadline = time.monotonic() + 4.0
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, OSError):
+        return
+    while time.monotonic() < deadline:
+        if not pgid_alive(pgid):
+            return
+        time.sleep(0.05)
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, OSError):
+        return
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and pgid_alive(pgid):
+        time.sleep(0.05)

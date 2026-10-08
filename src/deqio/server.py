@@ -487,16 +487,7 @@ def _resume_runtime_after_benchmark(*, lease_id: str, reason: str = "benchmark-c
         try:
             candidate = _load_warmed_runtime(SETTINGS, announce=False)
             runtime = candidate
-            mark_installed(
-                SETTINGS.config_path,
-                SETTINGS.model_id,
-                SETTINGS.backend,
-                verified=True,
-                source="benchmark-restore",
-            )
-            refresh_identity = getattr(runtime, "refresh_identity", None)
-            if callable(refresh_identity):
-                refresh_identity()
+            _refresh_installed_registry(runtime, source="benchmark-restore")
             _reset_session_metrics()
             runtime_suspension = None
         except Exception as error:
@@ -594,19 +585,35 @@ def _record_watch_event(
 ) -> str | None:
     if expected_session_id is None:
         return None
-    provenance = response_payload.get("provenance") if isinstance(response_payload, dict) else None
-    runtime_identity = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
+    body = response_payload if isinstance(response_payload, dict) else {}
+    # Native SystemOne responses keep upstream fields at the top level and put
+    # Deqio runtime/timing under "deqio"; portable responses use "provenance"
+    # and "timing"/"shared_timing". Read whichever shape this response has.
+    native = body.get("deqio")
+    native = native if isinstance(native, dict) else {}
+    provenance = body.get("provenance")
+    runtime_identity = (
+        provenance.get("runtime", {})
+        if isinstance(provenance, dict)
+        else native.get("runtime", {})
+    )
+    if not isinstance(runtime_identity, dict):
+        runtime_identity = {}
     timing = (
-        response_payload.get("shared_timing", {})
+        body.get("shared_timing", {})
         if endpoint == "/v1/shared"
-        else response_payload.get("timing", {})
-    ) if isinstance(response_payload, dict) else {}
+        else body.get("timing", native.get("timing", {}))
+    )
     latency_ms = timing.get("total_ms") if isinstance(timing, dict) else None
-    decision = response_payload.get("decision") if isinstance(response_payload, dict) else None
-    top_probability = response_payload.get("top_probability") if isinstance(response_payload, dict) else None
-    input_tokens = response_payload.get("input_tokens") if isinstance(response_payload, dict) else None
-    if endpoint == "/v1/shared" and isinstance(response_payload, dict):
-        results = response_payload.get("results")
+    decision = body.get("decision")
+    top_probability = body.get("top_probability")
+    usage = body.get("usage")
+    input_tokens = body.get(
+        "input_tokens",
+        usage.get("input_tokens") if isinstance(usage, dict) else None,
+    )
+    if endpoint == "/v1/shared":
+        results = body.get("results")
         if isinstance(results, list):
             decision = f"{len(results)} decisions"
             token_values = [
@@ -643,6 +650,28 @@ def _record_watch_event(
         # replace a valid inference response or mask the original API error.
         info(f"Watch event write failed: {error}")
         return None
+
+
+def _refresh_installed_registry(target: BackendRuntime, *, source: str) -> None:
+    """Best-effort registry bookkeeping after a runtime was loaded.
+
+    The loaded runtime is the authoritative state. A registry file that cannot
+    be locked or written must never fail startup, a model switch, or the
+    restore after a benchmark; it only loses the ``verified_at`` refresh.
+    """
+    try:
+        mark_installed(
+            SETTINGS.config_path,
+            SETTINGS.model_id,
+            SETTINGS.backend,
+            verified=True,
+            source=source,
+        )
+        refresh_identity = getattr(target, "refresh_identity", None)
+        if callable(refresh_identity):
+            refresh_identity()
+    except Exception as registry_error:
+        info(f"Warning: could not update local installed-model registry: {registry_error}")
 
 
 def _reset_session_metrics() -> None:
@@ -1180,16 +1209,7 @@ async def lifespan(app: FastAPI):
         runtime = _load_warmed_runtime(SETTINGS, announce=True)
         info("Runtime loaded: sidecar. Warmup complete.")
 
-        mark_installed(
-            SETTINGS.config_path,
-            SETTINGS.model_id,
-            SETTINGS.backend,
-            verified=True,
-            source="startup",
-        )
-        refresh_identity = getattr(runtime, "refresh_identity", None)
-        if callable(refresh_identity):
-            refresh_identity()
+        _refresh_installed_registry(runtime, source="startup")
         started_at = time.time()
 
         watch_cleanup_task = asyncio.create_task(_watch_auto_clear_loop())
@@ -1210,15 +1230,19 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
-        if control_registration is not None:
-            unregister_server(SETTINGS.config_path, pid=int(control_registration["pid"]))
-        runtime_control_token = None
-
-        with inference_lock:
-            target = runtime
-            runtime = None
-            if target is not None:
-                target.close()
+        # Release model memory before releasing workspace ownership: while the
+        # sidecar is still shutting down, this process must remain the server
+        # that another CLI (benchmark, model management) can discover.
+        try:
+            with inference_lock:
+                target = runtime
+                runtime = None
+                if target is not None:
+                    target.close()
+        finally:
+            if control_registration is not None:
+                unregister_server(SETTINGS.config_path, pid=int(control_registration["pid"]))
+            runtime_control_token = None
 
 
 app = FastAPI(
@@ -1507,7 +1531,7 @@ async def act_native(payload: TypedSystemOneRequest):
 @app.post("/v1/decision")
 async def decision(payload: DecisionRequest, http_request: Request):
     endpoint = http_request.url.path
-    session_id = _watch_session_token()
+    session_id = await asyncio.to_thread(_watch_session_token)
     request_payload = payload.model_dump(mode="json")
     try:
         contract = await _input_contract_context(
@@ -1522,7 +1546,8 @@ async def decision(payload: DecisionRequest, http_request: Request):
             run_decision, payload, endpoint=endpoint, contract=contract
         )
     except InputContractHTTPError as exc:
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1535,7 +1560,8 @@ async def decision(payload: DecisionRequest, http_request: Request):
         )
         raise
     except HTTPException as exc:
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1548,7 +1574,8 @@ async def decision(payload: DecisionRequest, http_request: Request):
         )
         raise
 
-    _record_watch_event(
+    await asyncio.to_thread(
+        _record_watch_event,
         expected_session_id=session_id,
         endpoint=endpoint,
         request_payload=request_payload,
@@ -1566,7 +1593,7 @@ async def decision(payload: DecisionRequest, http_request: Request):
 async def noul(payload: NoulRequest, http_request: Request):
     request_id = payload.id or uuid4().hex
     endpoint = "/v1/noul"
-    session_id = _watch_session_token()
+    session_id = await asyncio.to_thread(_watch_session_token)
     request_payload = payload.model_dump(mode="json")
     settings_snapshot = SETTINGS
     row = {
@@ -1586,7 +1613,8 @@ async def noul(payload: NoulRequest, http_request: Request):
             _score_noul_inference, row, payload.mode, contract, request_id
         )
     except InputContractHTTPError as exc:
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1602,7 +1630,8 @@ async def noul(payload: NoulRequest, http_request: Request):
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1619,7 +1648,8 @@ async def noul(payload: NoulRequest, http_request: Request):
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1648,7 +1678,8 @@ async def noul(payload: NoulRequest, http_request: Request):
     result = format_result(
         raw, runtime_identity=runtime_identity, input_receipt=input_receipt
     )
-    record_event(
+    await asyncio.to_thread(
+        record_event,
         request_id=request_id,
         mode=payload.mode,
         state=payload.state,
@@ -1657,7 +1688,8 @@ async def noul(payload: NoulRequest, http_request: Request):
         endpoint=endpoint,
         settings_snapshot=settings_snapshot,
     )
-    _record_watch_event(
+    await asyncio.to_thread(
+        _record_watch_event,
         expected_session_id=session_id,
         endpoint=endpoint,
         request_payload=request_payload,
@@ -1675,7 +1707,7 @@ async def noul(payload: NoulRequest, http_request: Request):
 async def shared(payload: SharedRequest, http_request: Request):
     endpoint = "/v1/shared"
     request_id = "shared-" + uuid4().hex[:12]
-    session_id = _watch_session_token()
+    session_id = await asyncio.to_thread(_watch_session_token)
     request_payload = payload.model_dump(mode="json")
     explicit_ids = [item.id for item in payload.decisions]
     try:
@@ -1687,7 +1719,8 @@ async def shared(payload: SharedRequest, http_request: Request):
             option_sets=[_option_ids(item.options) for item in payload.decisions],
         )
     except InputContractHTTPError as exc:
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1707,7 +1740,8 @@ async def shared(payload: SharedRequest, http_request: Request):
             request_body_sha256=contract.request_body_sha256,
             inference_performed=False,
         )
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1724,7 +1758,8 @@ async def shared(payload: SharedRequest, http_request: Request):
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=error, status=400)
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1759,7 +1794,8 @@ async def shared(payload: SharedRequest, http_request: Request):
             _score_shared_inference, rows, contract, request_id
         )
     except InputContractHTTPError as exc:
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1775,7 +1811,8 @@ async def shared(payload: SharedRequest, http_request: Request):
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc.detail, status=exc.status_code)
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1792,7 +1829,8 @@ async def shared(payload: SharedRequest, http_request: Request):
         with stats_lock:
             stats["errors"] += 1
         log_request_error(endpoint, request_id=request_id, error=exc, status=status_code)
-        _record_watch_event(
+        await asyncio.to_thread(
+            _record_watch_event,
             expected_session_id=session_id,
             endpoint=endpoint,
             request_payload=request_payload,
@@ -1857,7 +1895,8 @@ async def shared(payload: SharedRequest, http_request: Request):
         "provenance": batch_provenance,
     }
 
-    record_event(
+    await asyncio.to_thread(
+        record_event,
         request_id=event["id"],
         mode="shared",
         state=payload.state,
@@ -1875,7 +1914,8 @@ async def shared(payload: SharedRequest, http_request: Request):
     }
     if shared_receipt is not None:
         response["input_receipt"] = shared_receipt
-    _record_watch_event(
+    await asyncio.to_thread(
+        _record_watch_event,
         expected_session_id=session_id,
         endpoint=endpoint,
         request_payload=request_payload,
@@ -2030,7 +2070,11 @@ def activate_model(payload: ModelActivateRequest):
     candidate_data = apply_selection(config_data, entry, profile, payload.backend)
     if selected.get("max_input_tokens") is not None:
         candidate_data["max_tokens"] = int(selected["max_input_tokens"])
-    candidate_settings = settings_from_data(config_path, candidate_data, apply_environment=False)
+    # Selection variables are guaranteed unset by the preflight above, so the
+    # environment can only contribute the non-selection overrides (runtime
+    # directory, catalog, log path, timeouts, offline mode). Those must keep
+    # applying after a live switch exactly as they did at server startup.
+    candidate_settings = settings_from_data(config_path, candidate_data, apply_environment=True)
 
     old_settings = SETTINGS
     target_name = f"{payload.model_id}/{payload.backend}"
@@ -2053,69 +2097,62 @@ def activate_model(payload: ModelActivateRequest):
                 },
             )
         switching_runtime = True
-        model_switch_start(current=current_name, target=target_name)
-        old_runtime = runtime
-        if old_runtime is not None:
-            try:
-                old_runtime.close()
-            except Exception as exc:
-                switching_runtime = False
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Could not stop the current runtime before switching: {exc}",
-                ) from exc
-        runtime = None
-
-        candidate_runtime: BackendRuntime | None = None
         try:
-            candidate_runtime = _load_warmed_runtime(candidate_settings, announce=False)
-            write_config_data(config_path, candidate_data)
-        except Exception as exc:
-            if candidate_runtime is not None:
+            model_switch_start(current=current_name, target=target_name)
+            old_runtime = runtime
+            if old_runtime is not None:
                 try:
-                    candidate_runtime.close()
-                except Exception as close_error:
-                    info(f"Warning: failed to close rejected candidate runtime: {close_error}")
-            model_switch_rollback(target=target_name, error=exc)
+                    old_runtime.close()
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Could not stop the current runtime before switching: {exc}",
+                    ) from exc
+            runtime = None
+
+            candidate_runtime: BackendRuntime | None = None
             try:
-                restored = _load_warmed_runtime(old_settings, announce=False)
-                runtime = restored
-                SETTINGS = old_settings
-                model_switch_restored(model_id=old_settings.model_id, backend=old_settings.backend)
-            except Exception as rollback_error:
-                runtime = None
-                switching_runtime = False
+                candidate_runtime = _load_warmed_runtime(candidate_settings, announce=False)
+                write_config_data(config_path, candidate_data)
+            except Exception as exc:
+                if candidate_runtime is not None:
+                    try:
+                        candidate_runtime.close()
+                    except Exception as close_error:
+                        info(f"Warning: failed to close rejected candidate runtime: {close_error}")
+                model_switch_rollback(target=target_name, error=exc)
+                try:
+                    restored = _load_warmed_runtime(old_settings, announce=False)
+                    runtime = restored
+                    SETTINGS = old_settings
+                    model_switch_restored(model_id=old_settings.model_id, backend=old_settings.backend)
+                except Exception as rollback_error:
+                    runtime = None
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            f"Failed to activate {target_name}: {exc}. "
+                            f"Previous runtime could not be restored: {rollback_error}"
+                        ),
+                    ) from exc
                 raise HTTPException(
                     status_code=500,
-                    detail=(
-                        f"Failed to activate {target_name}: {exc}. "
-                        f"Previous runtime could not be restored: {rollback_error}"
-                    ),
+                    detail=f"Failed to activate {target_name}: {exc}. Previous runtime was restored.",
                 ) from exc
-            switching_runtime = False
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to activate {target_name}: {exc}. Previous runtime was restored.",
-            ) from exc
 
-        runtime = candidate_runtime
-        SETTINGS = candidate_settings
-        SETTINGS.log_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            mark_installed(
-                SETTINGS.config_path,
-                SETTINGS.model_id,
-                SETTINGS.backend,
-                verified=True,
-                source="activate",
-            )
-            refresh_identity = getattr(runtime, "refresh_identity", None)
-            if callable(refresh_identity):
-                refresh_identity()
-        except Exception as registry_error:
-            info(f"Warning: could not update local installed-model registry: {registry_error}")
-        _reset_session_metrics()
-        switching_runtime = False
+            runtime = candidate_runtime
+            SETTINGS = candidate_settings
+            # The switch is complete once the runtime and settings are swapped.
+            # Everything below is bookkeeping and must not turn a successful
+            # switch into a failed response or a stuck "switching" state.
+            try:
+                SETTINGS.log_path.parent.mkdir(parents=True, exist_ok=True)
+            except OSError as log_error:
+                info(f"Warning: could not create the request log directory: {log_error}")
+            _refresh_installed_registry(runtime, source="activate")
+            _reset_session_metrics()
+        finally:
+            switching_runtime = False
 
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     model_switch_ok(model_id=SETTINGS.model_id, backend=SETTINGS.backend, elapsed_ms=elapsed_ms)

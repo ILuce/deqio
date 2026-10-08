@@ -642,3 +642,270 @@ def test_benchmark_workspace_lock_conflicts_with_model_management_lock(tmp_path:
         with pytest.raises(RuntimeError, match="model-management operation"):
             with _benchmark_workspace_lock(config_path):
                 pass
+
+
+# --- Production audit regressions (Deqio 0.5 freeze) -------------------------
+def test_pid_alive_is_a_pure_probe_and_is_shared_by_the_sidecar_guard() -> None:
+    """``pid_alive`` must never signal the probed process.
+
+    On Windows ``os.kill(pid, 0)`` terminates the target, which would make the
+    sidecar guard kill the Deqio server it supervises. All callers (guard,
+    server watchdog, runtime control, process locks) share one implementation.
+    """
+    from deqio import process_lock, sidecar_guard
+
+    assert sidecar_guard.pid_alive is process_lock.pid_alive
+    assert process_lock.pid_alive(0) is False
+    assert process_lock.pid_alive(-1) is False
+
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        for _ in range(5):
+            assert process_lock.pid_alive(child.pid) is True
+        time.sleep(0.2)
+        assert child.poll() is None, "liveness probe must not terminate the process"
+    finally:
+        child.kill()
+        child.wait(timeout=5)
+    assert _wait_until(lambda: not process_lock.pid_alive(child.pid), timeout=3.0)
+
+
+def _dead_or_zombie(pid: int) -> bool:
+    from deqio.process_lock import pid_alive
+
+    if not pid_alive(pid):
+        return True
+    try:
+        status = Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return False
+    return status.rsplit(")", 1)[-1].split()[0] == "Z"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group lifecycle test")
+def test_runtime_close_reaps_engine_tree_when_supervisor_was_killed(tmp_path: Path) -> None:
+    """The engine runs in its own session that the Deqio parent cannot reach
+    through the supervisor's process group. If the supervisor dies from a
+    signal (OOM killer, external kill, forced escalation) the runtime must still
+    reap the engine tree using the PID the supervisor published."""
+    from deqio.process_lock import pid_alive
+    from deqio.systemone_runtime import _stop_supervisor
+
+    guard = Path("src/deqio/sidecar_guard.py").resolve()
+    engine_pid_file = tmp_path / "engine.pid"
+    child_pid_file = tmp_path / "child.pid"
+    engine_code = (
+        "import os,sys,time; from pathlib import Path; "
+        "Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(60)"
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(guard),
+            "--parent-pid",
+            str(os.getpid()),
+            "--control-stdin",
+            "--engine-pid-file",
+            str(engine_pid_file),
+            "--",
+            sys.executable,
+            "-c",
+            engine_code,
+            str(child_pid_file),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        start_new_session=True,
+    )
+    engine_pid = 0
+    try:
+        assert _wait_until(lambda: child_pid_file.is_file() and engine_pid_file.read_text().strip() != "")
+        engine_pid = int(child_pid_file.read_text())
+        assert int(engine_pid_file.read_text().strip()) == engine_pid
+        assert pid_alive(engine_pid)
+
+        # Supervisor dies without running its cleanup; the engine survives it.
+        os.kill(process.pid, signal.SIGKILL)
+        process.wait(timeout=5)
+        assert process.returncode < 0
+        time.sleep(0.3)
+        assert pid_alive(engine_pid), "precondition: engine outlives the killed supervisor"
+
+        _stop_supervisor(process, engine="test", engine_pid_file=engine_pid_file)
+
+        # The orphaned engine is re-parented to PID 1. In a container whose
+        # PID 1 does not reap orphans it stays a zombie, which os.kill(pid, 0)
+        # still reports as alive; a zombie holds no memory and counts as dead.
+        assert _wait_until(lambda: _dead_or_zombie(engine_pid), timeout=8.0)
+        assert not engine_pid_file.exists()
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if engine_pid and pid_alive(engine_pid):
+            try:
+                os.kill(engine_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process-group lifecycle test")
+def test_runtime_close_leaves_a_cleanly_stopped_supervisor_alone(tmp_path: Path) -> None:
+    """A supervisor that exited through its own cleanup (exit code >= 0) must not
+    trigger the last-resort group kill: the published PID may have been reused."""
+    from deqio.systemone_runtime import _stop_supervisor
+
+    guard = Path("src/deqio/sidecar_guard.py").resolve()
+    engine_pid_file = tmp_path / "engine.pid"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(guard),
+            "--parent-pid",
+            str(os.getpid()),
+            "--control-stdin",
+            "--engine-pid-file",
+            str(engine_pid_file),
+            "--",
+            sys.executable,
+            "-c",
+            "import time; time.sleep(60)",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        start_new_session=True,
+    )
+    killed: list[int] = []
+    import deqio.systemone_runtime as runtime_module
+
+    original_kill = runtime_module._kill_process_group
+    original_alive = runtime_module.pgid_alive
+    original_leader = runtime_module._is_engine_session_leader
+    runtime_module._kill_process_group = lambda pgid: killed.append(pgid)
+    # Pretend the published PID is alive and a session leader: only the
+    # supervisor's exit status may decide whether the last resort runs.
+    runtime_module.pgid_alive = lambda pgid: True
+    runtime_module._is_engine_session_leader = lambda pid: True
+    try:
+        assert _wait_until(lambda: engine_pid_file.is_file() and engine_pid_file.read_text().strip() != "")
+        _stop_supervisor(process, engine="test", engine_pid_file=engine_pid_file)
+    finally:
+        runtime_module._kill_process_group = original_kill
+        runtime_module.pgid_alive = original_alive
+        runtime_module._is_engine_session_leader = original_leader
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+    assert process.returncode == 0
+    assert killed == []
+    assert not engine_pid_file.exists()
+
+
+def test_systemone_load_stops_supervisor_when_setup_fails_after_spawn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Everything after Popen (log pump, runtime construction, readiness) must
+    end in the supervisor cleanup path, or a failed load leaks a live engine."""
+    import deqio.systemone_runtime as runtime_module
+    from deqio.config import settings_from_data
+
+    catalog_path = tmp_path / "models.json"
+    catalog_path.write_text(json.dumps({
+        "models": [{
+            "id": "demo",
+            "engine": "kev",
+            "backends": {"mlx": {"model": "owner/demo", "runtime_key": "kev", "wire_model": "demo"}},
+        }]
+    }))
+    python = tmp_path / ".model-runtimes" / "kev" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("")
+    settings = settings_from_data(
+        tmp_path / "config.json",
+        {
+            "engine": "kev",
+            "model_id": "demo",
+            "backend": "mlx",
+            "model": "owner/demo",
+            "model_revision": "demo",
+            "model_catalog": str(catalog_path),
+            "runtime_dir": str(tmp_path / ".model-runtimes"),
+            "max_tokens": 4096,
+            "mlx_cache_mib": 256,
+            "log": str(tmp_path / "requests.jsonl"),
+            "torch_dtype": "bfloat16",
+            "sidecar_startup_seconds": 5,
+        },
+        apply_environment=False,
+    )
+
+    class DummyPipe:
+        def __init__(self):
+            self.lines: list[str] = []
+            self.closed = False
+
+        def write(self, text):
+            self.lines.append(text)
+
+        def flush(self):
+            pass
+
+        def close(self):
+            self.closed = True
+
+    class DummyProcess:
+        pid = 4242
+        stdout = None
+
+        def __init__(self):
+            self.stdin = DummyPipe()
+            self.returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            # The supervisor honours the "stop" control line.
+            if "stop\n" in self.stdin.lines:
+                self.returncode = 0
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = -9
+
+    spawned: list[DummyProcess] = []
+    pid_files: list[Path] = []
+
+    def fake_popen(command, **kwargs):
+        pid_files.append(Path(command[command.index("--engine-pid-file") + 1]))
+        process = DummyProcess()
+        spawned.append(process)
+        return process
+
+    monkeypatch.setattr(runtime_module.SystemOneRuntime, "_validate_accelerator", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(runtime_module.SystemOneRuntime, "_command", staticmethod(lambda *a, **k: ["demo"]))
+    monkeypatch.setattr(runtime_module, "_free_port", lambda: 12345)
+    monkeypatch.setattr(runtime_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        runtime_module,
+        "start_sidecar_log_pump",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("can't start new thread")),
+    )
+
+    with pytest.raises(RuntimeError, match="can't start new thread"):
+        runtime_module.SystemOneRuntime.load(settings)
+
+    assert len(spawned) == 1
+    process = spawned[0]
+    assert process.stdin.lines == ["stop\n"]
+    assert process.stdin.closed is True
+    assert process.returncode == 0
+    assert pid_files and not pid_files[0].exists()
