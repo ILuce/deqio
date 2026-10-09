@@ -367,6 +367,7 @@ class WatchStore:
                 ).encode("utf-8")
 
             target = self.root / str(file_row["name"])
+            self._drop_unterminated_tail(target)
             descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
             with os.fdopen(descriptor, "ab") as stream:
                 stream.write(encoded)
@@ -396,6 +397,41 @@ class WatchStore:
             self._prune_storage_locked(session, files)
             self._write_json_atomic(self.session_path, session)
             return str(serialized_event["event_id"])
+
+    @staticmethod
+    def _drop_unterminated_tail(path: Path) -> None:
+        """Remove a torn final record before appending to *path* (lock held).
+
+        A crash or ENOSPC in the middle of a write leaves the last line without
+        its newline. That event was never acknowledged (the session metadata is
+        written only after a complete append), so it is not part of the session.
+        Appending after it would glue the next event onto it and make that event
+        unreadable (B14). Truncating back to the last newline keeps the physical
+        lines equal to the session's line count, which listing relies on.
+        """
+        try:
+            stream = path.open("r+b")
+        except FileNotFoundError:
+            return
+        with stream:
+            size = stream.seek(0, os.SEEK_END)
+            if size == 0:
+                return
+            stream.seek(size - 1)
+            if stream.read(1) == b"\n":
+                return
+            keep = 0
+            position = size
+            while position > 0:
+                start = max(0, position - 65536)
+                stream.seek(start)
+                chunk = stream.read(position - start)
+                newline = chunk.rfind(b"\n")
+                if newline >= 0:
+                    keep = start + newline + 1
+                    break
+                position = start
+            stream.truncate(keep)
 
     @staticmethod
     def _row(event: dict[str, Any]) -> dict[str, Any]:

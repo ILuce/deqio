@@ -95,3 +95,30 @@ def test_watch_store_manual_reset_deletes_all_rotated_history_files(
     replacement = store.reset(reason="manual-clear")
     assert replacement["requests"] == 0
     assert list(store.root.glob("events-*.jsonl")) == []
+
+
+def test_append_after_a_torn_write_keeps_the_next_event_readable(tmp_path: Path) -> None:
+    """B14: a crash or ENOSPC mid-write leaves an unterminated, unacknowledged line.
+
+    The next append must not be glued onto it (which made that event
+    unreadable and kept `total` and `returned` apart forever).
+    """
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}")
+    store = WatchStore(config_path)
+    first = [store.append(_event(index)) for index in range(3)]
+    session = json.loads(store.session_path.read_text(encoding="utf-8"))
+    events_file = store.root / session["files"][-1]["name"]
+    with events_file.open("ab") as stream:
+        stream.write(b'{"event_id":"000001-00004-torn","endpoint":"/v1/cho')
+
+    new_id = store.append(_event(99))
+
+    assert new_id is not None
+    event = store.get_event(new_id)
+    assert event is not None and event["request_id"] == "req-99"
+    listing = store.list_events(limit=50)
+    assert [row["event_id"] for row in listing["events"]] == [new_id, *reversed(first)]
+    assert listing["pagination"]["total"] == listing["pagination"]["returned"] == 4
+    for line in events_file.read_text(encoding="utf-8").splitlines():
+        json.loads(line)

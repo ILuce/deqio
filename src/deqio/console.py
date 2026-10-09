@@ -99,6 +99,16 @@ def server_ready(*, host: str = "127.0.0.1", port: int = 8787) -> None:
     info("  endpoints POST /v1/noul  /v1/choice  /v1/shared  /v1/score  /v1/multi  /v1/act  /v1/soam  /v1/systemone")
 
 
+def watch_token_notice(*, host: str, port: int, token: str | None) -> None:
+    """Explain Watch access on a non-loopback bind; never echo a configured token."""
+    base = f"http://{host}:{port}"
+    info("  Watch token required on this non-loopback bind (Watch keeps full request/response payloads)")
+    if token is None:
+        info("  token    the DEQIO_WATCH_TOKEN value: header X-Deqio-Watch-Token, or open /ui/watch?token=<value> once")
+    else:
+        info(f"  token    open {base}/ui/watch?token={token} once in a browser, or send X-Deqio-Watch-Token: {token}")
+
+
 def warmup_ok(step: int, total: int) -> None:
     info(f"Warmup {step}/{total} OK")
 

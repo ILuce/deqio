@@ -48,8 +48,26 @@ def host_backends() -> tuple[str, ...]:
     if system == "Darwin" and machine == "arm64":
         return ("mlx", "mps", "gguf")
     if system == "Linux":
-        return ("cuda", "gguf") if shutil.which("nvidia-smi") else ("gguf",)
+        return ("cuda", "gguf") if _nvidia_gpu_listed() else ("gguf",)
     return ()
+
+
+def _nvidia_gpu_listed() -> bool:
+    """Whether ``nvidia-smi -L`` exits 0 and lists at least one GPU.
+
+    An installed ``nvidia-smi`` is not a working CUDA device: WSL2 and GPU-less
+    cloud images ship the binary, and a driver/library mismatch makes it fail.
+    """
+    executable = shutil.which("nvidia-smi")
+    if not executable:
+        return False
+    try:
+        result = subprocess.run([executable, "-L"], check=False, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if result.returncode != 0:
+        return False
+    return any(line.strip().startswith("GPU ") for line in result.stdout.splitlines())
 
 
 def _system_memory_gib() -> float | None:

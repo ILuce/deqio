@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from uuid import uuid4
 
 from huggingface_hub import scan_cache_dir
@@ -16,6 +16,8 @@ from .process_lock import process_lock
 STATE_DIR_NAME = ".deqio"
 REGISTRY_NAME = "installed-models.json"
 REGISTRY_LOCK_NAME = "installed-models.lock"
+# Registry block written while a shared runtime is being updated (B1).
+UPDATE_PENDING_KEY = "update_pending"
 
 
 def profile_key(model_id: str, backend: str) -> str:
@@ -95,6 +97,9 @@ def mark_installed(
         )
         if verified:
             record["verified_at"] = now
+            # A real readiness probe passed: an interrupted runtime update no
+            # longer applies to this profile.
+            record.pop(UPDATE_PENDING_KEY, None)
         if artifacts is not None:
             record["artifacts"] = artifacts
         if max_input_tokens is not None:
@@ -127,6 +132,66 @@ def unmark_installed(config_path: Path, model_id: str, backend: str) -> dict[str
         _write_registry(config_path, data)
         return removed if isinstance(removed, dict) else None
 
+
+
+def begin_runtime_update(config_path: Path, runtime_key: str, keys: Iterable[str]) -> list[str]:
+    """Mark the registered profiles of a runtime that is about to be rebuilt.
+
+    ``verified_at`` stays the single source of truth for "verified". It moves,
+    with the previous ``source``, into an ``update_pending`` block, so a failed or
+    interrupted update leaves every profile of that runtime unverified (and its
+    provenance unresolved) instead of claiming a verification the rebuilt runtime
+    never passed. A record that is already pending keeps its saved state.
+    """
+    with process_lock(_registry_lock_path(config_path), timeout=10.0):
+        data = load_registry(config_path)
+        profiles = data.setdefault("profiles", {})
+        marked: list[str] = []
+        started_at = datetime.now(timezone.utc).isoformat()
+        for key in keys:
+            record = profiles.get(key) if isinstance(profiles, dict) else None
+            if not isinstance(record, dict):
+                continue
+            if not isinstance(record.get(UPDATE_PENDING_KEY), dict):
+                record[UPDATE_PENDING_KEY] = {
+                    "runtime_key": str(runtime_key),
+                    "started_at": started_at,
+                    "verified_at": record.get("verified_at"),
+                    "source": record.get("source"),
+                }
+            record.pop("verified_at", None)
+            record["source"] = "updating"
+            marked.append(str(key))
+        if marked:
+            _write_registry(config_path, data)
+        return marked
+
+
+def finish_runtime_update(config_path: Path, keys: Iterable[str]) -> None:
+    """Restore profiles marked by ``begin_runtime_update`` after a verified update.
+
+    The shared runtime passed a real readiness probe and the other profiles'
+    weights were not touched, so their previous verification is restored.
+    Profiles re-verified meanwhile keep their fresh record.
+    """
+    with process_lock(_registry_lock_path(config_path), timeout=10.0):
+        data = load_registry(config_path)
+        profiles = data.setdefault("profiles", {})
+        changed = False
+        for key in keys:
+            record = profiles.get(key) if isinstance(profiles, dict) else None
+            if not isinstance(record, dict):
+                continue
+            pending = record.pop(UPDATE_PENDING_KEY, None)
+            if not isinstance(pending, dict):
+                continue
+            changed = True
+            if not record.get("verified_at") and pending.get("verified_at"):
+                record["verified_at"] = pending["verified_at"]
+            if record.get("source") == "updating":
+                record["source"] = pending.get("source") or "install"
+        if changed:
+            _write_registry(config_path, data)
 
 
 def _runtime_python(env_dir: Path) -> Path:

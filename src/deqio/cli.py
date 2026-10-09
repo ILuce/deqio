@@ -10,7 +10,7 @@ from . import __version__
 from . import benchmark as benchmark_runner
 from . import model_manager
 from .config import read_config_data
-from .runtime_control import discover_server
+from .runtime_control import discover_server, ensure_model_management_idle
 
 
 def _serve(argv: list[str]) -> int:
@@ -34,6 +34,14 @@ def _serve(argv: list[str]) -> int:
             f"(pid={existing.get('pid')}, {existing.get('base_url')}).",
             file=sys.stderr,
         )
+        return 2
+    try:
+        # Fail fast with a clear message. The server repeats this check
+        # atomically when it registers, so an operation that starts in between
+        # is still refused.
+        ensure_model_management_idle(config_path)
+    except RuntimeError as error:
+        print(f"error: {error}", file=sys.stderr)
         return 2
 
     previous = {

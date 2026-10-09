@@ -106,7 +106,7 @@ class StubRuntime:
 BackendRuntime.load = classmethod(lambda cls, settings: StubRuntime())
 
 from deqio.cli import main
-sys.exit(main(["serve", "--port", os.environ["SMOKE_PORT"]]))
+sys.exit(main(["serve", "--host", os.environ.get("SMOKE_HOST", "127.0.0.1"), "--port", os.environ["SMOKE_PORT"]]))
 '''
 
 
@@ -254,4 +254,78 @@ def test_live_server_serves_every_decision_route_over_http(tmp_path: Path) -> No
 
     assert process.returncode == 0, (tmp_path / "server.log").read_text()
     assert not (workspace / ".deqio" / "server-control.json").exists()
+    assert "Traceback" not in (tmp_path / "server.log").read_text()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="deqio serve is validated on POSIX hosts only in 0.5")
+def test_live_server_on_a_non_loopback_bind_protects_watch_with_a_token(tmp_path: Path) -> None:
+    """D10: `deqio serve --host 0.0.0.0` keeps decisions open but puts Watch behind a token."""
+    import http.client
+
+    from deqio.workspace import ensure_workspace
+
+    workspace = tmp_path / "workspace"
+    config_path = ensure_workspace(workspace)
+    port = _free_port()
+    token = "smoke-watch-token-0123456789abcdef"
+    env = {
+        **os.environ, "DEQIO_CONFIG": str(config_path), "SMOKE_PORT": str(port),
+        "SMOKE_HOST": "0.0.0.0", "DEQIO_WATCH_TOKEN": token,
+    }
+    log = (tmp_path / "server.log").open("w", encoding="utf-8")
+    process = subprocess.Popen(
+        [sys.executable, "-c", STUB_SERVER], cwd=workspace, env=env,
+        stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+    )
+    base = f"http://127.0.0.1:{port}"
+    try:
+        deadline = time.time() + 30
+        health: dict = {}
+        while time.time() < deadline:
+            if process.poll() is not None:
+                raise AssertionError("server exited early:\n" + (tmp_path / "server.log").read_text())
+            try:
+                status, health = _call(base, "/health")
+                if status == 200 and health.get("status") == "ok":
+                    break
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                pass
+            time.sleep(0.2)
+        assert health.get("status") == "ok", health
+
+        status, _ = _call(base, "/v1/noul", {"state": "s", "question": "Is it?"})
+        assert status == 200
+        status, body = _call(base, "/v1/watch")
+        assert status == 401, body
+        status, body = _call(base, "/v1/watch", headers={"X-Deqio-Watch-Token": token})
+        assert status == 200 and body["pagination"]["total"] >= 1
+
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            connection.request("GET", f"/ui/watch?token={token}")
+            exchanged = connection.getresponse()
+            exchanged.read()
+            assert exchanged.status == 303
+            assert "HttpOnly" in (exchanged.getheader("set-cookie") or "")
+            connection.request("GET", "/ui/watch")
+            anonymous = connection.getresponse()
+            anonymous.read()
+            assert anonymous.status == 401
+        finally:
+            connection.close()
+
+        banner = (tmp_path / "server.log").read_text()
+        assert "Watch token required" in banner
+        assert token not in banner  # a configured token is never echoed
+    finally:
+        if process.poll() is None:
+            process.send_signal(signal.SIGINT)
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+        log.close()
+
+    assert process.returncode == 0, (tmp_path / "server.log").read_text()
     assert "Traceback" not in (tmp_path / "server.log").read_text()

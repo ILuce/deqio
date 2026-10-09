@@ -16,12 +16,17 @@ profile and the smallest request or command that reproduces the problem.
 ## Threat model
 
 Deqio is a local-first decision runtime. `deqio serve` binds to `127.0.0.1`
-by default and has no authentication of its own: anyone who can reach the
-port can call every `/v1/*` route, switch the active installed profile and
-read Watch. Watch (`/ui/watch`, `/v1/watch`, `.deqio/watch/`) stores the full
-request and response payloads of the current session, so binding to another
-interface (for example `--host 0.0.0.0`) without an authenticated reverse
-proxy in front exposes that data. The benchmark control channel is
+by default and has no authentication for decisions: anyone who can reach the
+port can call every decision route, switch the active installed profile and
+read `/v1/recent` (recent questions and decisions). Watch (`/ui/watch`,
+`/v1/watch*`, `.deqio/watch/`) stores the full request and response payloads
+of the current session. On a loopback bind it is open to local clients; on any
+other bind (for example `--host 0.0.0.0`) it requires a per-server Watch token
+(`DEQIO_WATCH_TOKEN` or one generated at startup), sent as
+`X-Deqio-Watch-Token`, `Authorization: Bearer`, or an HttpOnly, SameSite=Strict
+cookie set by `/ui/watch?token=...`. The token is not a substitute for an
+authenticated, TLS-terminating reverse proxy when the port is reachable from
+untrusted networks. The benchmark control channel is
 authenticated with a per-server token kept in the private workspace file
 `.deqio/server-control.json`.
 

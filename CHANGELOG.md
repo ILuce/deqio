@@ -8,6 +8,94 @@ production audit.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-09 (not tagged yet)
+
+One patch on top of 0.5.4: the model-management state machine (D9: audit
+items B1, B2, B3) and runtime guards (D10: B7, B8, B9, B11, B14, a Watch
+token for non-loopback binds and a native question limit). No public route or
+response field was added or removed, and loopback clients see no change. Tag
+`v0.5.5` only after `ci.yml` is green and the Apple Silicon acceptance
+protocol from the audit passes.
+
+### Added
+
+- Watch token for non-loopback binds. When `deqio serve --host` is not a
+  loopback address, Watch (`/v1/watch`, `/v1/watch/settings`,
+  `/v1/watch/{event_id}`, `/v1/watch/clear` and `/ui/watch`) answers `401`
+  without the per-server token: `DEQIO_WATCH_TOKEN`, or a token generated at
+  startup and printed once in the banner. Scripts send `X-Deqio-Watch-Token`
+  (or `Authorization: Bearer`); a browser opens `/ui/watch?token=...` (or
+  `/ui?token=...`) once and keeps an HttpOnly, SameSite=Strict cookie. A
+  configured token is never echoed. Loopback binds, decision routes, `/ui`
+  and `/health` are unchanged.
+- `MAX_QUESTIONS` = 64 for native `/v1/systemone` and `/v1/soam` requests:
+  more questions are rejected with `422` before inference, through the single
+  rejection path (`stats.errors` + 1, one console line, one Watch row).
+- Regression tests for every item above, most of them with real processes:
+  `tests/test_model_management.py`, `tests/test_workspace_ownership.py`, and
+  additions to the runtime-safety, server, Watch-store and live-server tests
+  (a real `deqio serve --host 0.0.0.0`).
+
+### Changed
+
+- Updating a shared runtime is a registry state transition (B1). Before
+  `deqio models update` rebuilds a runtime, every registered profile with the
+  same `runtime_key` (for example the ten `kev` or the six `decision2-cuda`
+  profiles) loses `verified_at`, which is kept in an `update_pending` block
+  together with its previous `source`. The other profiles are restored only
+  after the updated profile passes the readiness probe. A failed or
+  interrupted update leaves them `installed` but not `verified` (and their
+  response provenance `unresolved`) instead of claiming a verification the
+  rebuilt runtime never passed; a successful update, or a successful load of
+  that profile by `deqio serve`, verifies them again.
+- Server liveness for `deqio benchmark`, `deqio models` and a second
+  `deqio serve` (B7) is a kernel lock, `.deqio/.server-owner.lock`, that the
+  registered server holds for its lifetime (`"owner_lock": true` in
+  `server-control.json`). After a crash, a recycled PID no longer blocks the
+  workspace until the control file is removed by hand: the free lock proves
+  the file stale. The audit's suggested `/health` probe was not used: uvicorn
+  binds the port only after the lifespan, so a server that is still loading
+  its model (up to `sidecar_startup_seconds`) refuses connections and would
+  have been declared dead. Control files written by older servers keep
+  PID-based liveness.
+- `deqio serve` respects `model-management.lock` (B8): it exits with code 2
+  and a clear message while `deqio models setup/install/update/delete` or a
+  benchmark runs in the workspace. The server holds that lock while it
+  registers, so the check and the registration are one atomic step.
+- CUDA detection (B9): Linux offers the `cuda` backend only when
+  `nvidia-smi -L` exits 0 and lists a GPU (previously whenever the binary
+  existed, as on WSL2 or GPU-less cloud images). Every CUDA profile, not only
+  Decision 2.0, probes `torch.cuda.is_available()` in its own runtime before
+  it is loaded or verified, and fails closed with an explicit error instead of
+  silently running on the CPU.
+
+### Fixed
+
+- A runtime venv whose interpreter is gone (interrupted creation, uninstalled
+  uv-managed Python) is rebuilt with `uv venv --clear` instead of failing with
+  "already exists" until removed by hand (B2). A non-empty directory without
+  `pyvenv.cfg` is reported and never deleted on a guess (uv 0.12 refuses
+  `--clear` there, older uv deletes it). The generic installer now uses the
+  same path. A llama.cpp or Nimble source directory without `.git` is removed
+  and cloned again; previously the git commands failed or ran against an
+  enclosing repository.
+- `deqio models delete` unregisters a profile only after its artifacts are
+  gone (B3). A cleanup error (busy file, symlinked runtime directory) keeps the
+  profile registered and is reported as `error: ...` with exit code 2;
+  `deqio models` reports any other `OSError` (for example `uv` missing from
+  `PATH`) the same way instead of a traceback.
+- The JevK5 GGUF sidecar exits when its inner `llama-server` dies (B11), so
+  Deqio reports the runtime as unavailable (`503`) instead of turning the
+  sidecar's endless `500` into `502`.
+- Watch truncates a torn final line (crash or ENOSPC during a write) before
+  the next append instead of gluing the next event onto it, which made that
+  event unreadable and `total` disagree with the listing (B14).
+- `test_sidecar_guard_cleans_grandchild_after_engine_leader_exits` was flaky:
+  the grandchild's PID file could be read while still empty (11 of 400 trials
+  in a stress run). The PID is now published atomically, the guard path no
+  longer depends on the working directory and the deadlines tolerate loaded
+  CI runners.
+
 ## [0.5.4] — 2026-10-09 (not tagged yet)
 
 One patch on top of the frozen 0.5.3 tree: the freeze follow-up from the

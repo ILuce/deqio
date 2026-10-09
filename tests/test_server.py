@@ -1138,7 +1138,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.4"
+    assert __version__ == "0.5.5"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -6045,3 +6045,156 @@ def test_sidecars_omit_input_tokens_they_did_not_measure(tmp_path: Path, monkeyp
     assert response.status_code == 200
     assert response.json()["answers"]["q"]["noul"] == pytest.approx(0.9)
     assert "input_tokens" not in response.json().get("usage", {})
+
+
+# --- D10 / 0.5.5: Watch token on non-loopback binds, native question limit --
+
+
+_WATCH_TOKEN = "s3cret-watch-token"
+_PROTECTED_WATCH_ROUTES = [
+    ("GET", "/v1/watch"),
+    ("GET", "/v1/watch/settings"),
+    ("POST", "/v1/watch/settings"),
+    ("GET", "/v1/watch/000001-00001-abcdef123456"),
+    ("POST", "/v1/watch/clear"),
+    ("GET", "/ui/watch"),
+]
+
+
+class _AsgiClient:
+    """Minimal synchronous HTTP client over httpx.ASGITransport (no lifespan)."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    def request(self, method: str, path: str, **kwargs):
+        import httpx
+
+        async def send():
+            transport = httpx.ASGITransport(app=self.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.request(method, path, **kwargs)
+
+        return asyncio.run(send())
+
+    def get(self, path: str, **kwargs):
+        return self.request("GET", path, **kwargs)
+
+
+def _watch_client(monkeypatch: pytest.MonkeyPatch, token: str | None) -> _AsgiClient:
+    import deqio.server as server
+
+    monkeypatch.setattr(server, "watch_access_token", token, raising=False)
+    return _AsgiClient(server.app)
+
+
+def test_watch_routes_require_the_token_on_non_loopback_binds(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _watch_client(monkeypatch, _WATCH_TOKEN)
+    for method, path in _PROTECTED_WATCH_ROUTES:
+        body = {"auto_clear_minutes": 0} if method == "POST" else None
+        assert client.request(method, path, json=body).status_code == 401, (method, path)
+    assert client.get("/v1/watch", headers={"X-Deqio-Watch-Token": "wrong"}).status_code == 401
+    assert client.get("/v1/watch", headers={"X-Deqio-Watch-Token": _WATCH_TOKEN}).status_code == 200
+    assert client.get("/v1/watch/settings", headers={"Authorization": f"Bearer {_WATCH_TOKEN}"}).status_code == 200
+
+
+def test_watch_token_is_exchanged_for_an_httponly_cookie_in_the_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _watch_client(monkeypatch, _WATCH_TOKEN)
+    assert client.get("/ui/watch?token=wrong", follow_redirects=False).status_code == 401
+
+    exchanged = client.get(f"/ui/watch?token={_WATCH_TOKEN}", follow_redirects=False)
+    assert exchanged.status_code == 303
+    assert exchanged.headers["location"] == "/ui/watch"
+    cookie = exchanged.headers["set-cookie"].lower()
+    assert "deqio_watch_token=" in cookie and "httponly" in cookie and "samesite=strict" in cookie
+
+    browser_cookie = {"cookie": f"deqio_watch_token={_WATCH_TOKEN}"}
+    assert client.get("/ui/watch", headers=browser_cookie).status_code == 200
+    assert client.get("/v1/watch", headers=browser_cookie).status_code == 200
+    assert client.get("/ui/watch").status_code == 401
+    from_dashboard = client.get(f"/ui?token={_WATCH_TOKEN}", follow_redirects=False)
+    assert from_dashboard.status_code == 303 and from_dashboard.headers["location"] == "/ui"
+
+
+def test_loopback_binds_keep_watch_open_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _watch_client(monkeypatch, None)
+    assert client.get("/v1/watch").status_code == 200
+    assert client.get("/ui/watch").status_code == 200
+    assert client.get("/ui/watch?token=anything", follow_redirects=False).status_code == 200
+
+
+def test_decision_ui_and_health_stay_token_free_on_non_loopback_binds(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _watch_client(monkeypatch, _WATCH_TOKEN)
+    assert client.get("/health").status_code == 200
+    assert client.get("/ui").status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("host", "configured", "expected"),
+    [
+        ("127.0.0.1", "configured-token", None),
+        ("::1", None, None),
+        ("localhost", None, None),
+        ("0.0.0.0", "configured-token", "configured-token"),
+        ("192.168.1.20", "configured-token", "configured-token"),
+        ("::", None, "generated"),
+    ],
+)
+def test_watch_token_is_required_exactly_for_non_loopback_binds(
+    monkeypatch: pytest.MonkeyPatch, host: str, configured: str | None, expected: str | None
+) -> None:
+    import deqio.server as server
+
+    class _Runtime:
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setenv("DEQIO_SERVER_HOST", host)
+    monkeypatch.setenv("DEQIO_SERVER_PORT", "8787")
+    monkeypatch.delenv("DEQIO_SERVER_CONTROL", raising=False)
+    if configured is None:
+        monkeypatch.delenv("DEQIO_WATCH_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("DEQIO_WATCH_TOKEN", configured)
+    monkeypatch.setattr(server, "startup_header", lambda **kwargs: None)
+    monkeypatch.setattr(server, "server_ready", lambda **kwargs: None)
+    monkeypatch.setattr(server, "_reset_watch_session", lambda **kwargs: {})
+    monkeypatch.setattr(server, "_load_warmed_runtime", lambda *args, **kwargs: _Runtime())
+    monkeypatch.setattr(server, "_refresh_installed_registry", lambda *args, **kwargs: None)
+    monkeypatch.setattr(server, "runtime", None)
+    seen: dict[str, object] = {}
+
+    async def invoke() -> None:
+        async with server.lifespan(server.app):
+            seen["token"] = getattr(server, "watch_access_token", None)
+
+    asyncio.run(invoke())
+
+    if expected == "generated":
+        assert isinstance(seen["token"], str) and len(seen["token"]) >= 32
+    else:
+        assert seen["token"] == expected
+    assert getattr(server, "watch_access_token", None) is None
+
+
+def test_native_requests_reject_more_questions_than_the_limit_before_inference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import deqio.server as server
+
+    watch = _CountingWatch()
+    monkeypatch.setattr(server, "_watch_store", lambda: watch)
+    monkeypatch.setattr(server, "runtime", _NoInferenceRuntime())
+    monkeypatch.setattr(server, "log_request_error", lambda *args, **kwargs: None)
+    limit = getattr(server, "MAX_QUESTIONS", server.MAX_DECISIONS)
+    questions = {f"q{index}": {"type": "noul", "question": "Is it?"} for index in range(limit + 1)}
+
+    for path in ("/v1/systemone", "/v1/soam"):
+        errors_before = server.stats["errors"]
+        status, body = _asgi_post_json(
+            path, json.dumps({"state": "s", "questions": questions}), {"content-type": "application/json"}
+        )
+        assert status == 422, (path, body)
+        assert f"at most {limit}" in json.dumps(body)
+        assert server.stats["errors"] == errors_before + 1
+    assert len(watch.events) == 2

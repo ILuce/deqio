@@ -461,24 +461,31 @@ def test_process_lock_reaps_stale_ownerless_legacy_lock(tmp_path: Path) -> None:
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process-group cleanup test")
 def test_sidecar_guard_cleans_grandchild_after_engine_leader_exits(tmp_path: Path) -> None:
+    import deqio
     from deqio.process_lock import pid_alive
 
-    guard = Path("src/deqio/sidecar_guard.py").resolve()
+    # Locate the guard through the imported package, not the working directory.
+    guard = Path(deqio.__file__).with_name("sidecar_guard.py")
     grandchild_pid_file = tmp_path / "grandchild.pid"
+    # The grandchild publishes its PID atomically (write + rename): a reader
+    # that polls for the file must never observe it created but still empty.
     wrapper_code = r'''
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 pid_file = Path(sys.argv[1])
-child = subprocess.Popen([
+subprocess.Popen([
     sys.executable,
     "-c",
-    "import os,time,sys; from pathlib import Path; Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(60)",
+    "import os,sys,time; from pathlib import Path; p=Path(sys.argv[1]); "
+    "t=p.with_name(p.name+'.tmp'); t.write_text(str(os.getpid())); os.replace(t, p); time.sleep(60)",
     str(pid_file),
 ])
-while not pid_file.is_file():
-    pass
+deadline = time.monotonic() + 30
+while not pid_file.is_file() and time.monotonic() < deadline:
+    time.sleep(0.01)
 # Exit deliberately without waiting for the grandchild.
 '''
     guarded = subprocess.Popen(
@@ -498,11 +505,15 @@ while not pid_file.is_file():
     )
     grandchild_pid: int | None = None
     try:
-        assert _wait_until(grandchild_pid_file.is_file)
+        # Deadlines, not fixed sleeps: generous for loaded CI runners, instant
+        # on the happy path.
+        assert _wait_until(grandchild_pid_file.is_file, timeout=30.0)
         grandchild_pid = int(grandchild_pid_file.read_text())
         assert pid_alive(grandchild_pid)
-        assert guarded.wait(timeout=8) == 0
-        assert _wait_until(lambda: not pid_alive(grandchild_pid), timeout=3.0)
+        assert guarded.wait(timeout=30) == 0
+        # Without a reaping PID 1 (some containers) a killed orphan stays a
+        # zombie that os.kill(pid, 0) still reports; it holds no resources.
+        assert _wait_until(lambda: _dead_or_zombie(grandchild_pid), timeout=15.0)
     finally:
         if guarded.poll() is None:
             guarded.kill()
@@ -925,3 +936,218 @@ def test_systemone_load_stops_supervisor_when_setup_fails_after_spawn(
     assert process.stdin.closed is True
     assert process.returncode == 0
     assert pid_files and not pid_files[0].exists()
+
+
+# --- D10 / 0.5.5: CUDA detection (B9) and JevK5 sidecar self-exit (B11) -----
+
+
+def _write_executable(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX shell stubs")
+@pytest.mark.parametrize(
+    ("listing", "exit_code", "expected"),
+    [
+        ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver.", 9, ("gguf",)),
+        ("No devices were found", 6, ("gguf",)),
+        ("", 0, ("gguf",)),
+        ("GPU 0: NVIDIA L4 (UUID: GPU-00000000-0000-0000-0000-000000000000)", 0, ("cuda", "gguf")),
+    ],
+    ids=["driver-unreachable", "no-devices", "empty-listing", "one-gpu"],
+)
+def test_linux_offers_cuda_only_when_nvidia_smi_lists_a_gpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, listing: str, exit_code: int, expected: tuple[str, ...]
+) -> None:
+    """B9: an installed `nvidia-smi` is not a working CUDA device (WSL2, GPU-less images)."""
+    import shlex
+
+    import deqio.hardware as hardware
+
+    _write_executable(
+        tmp_path / "bin" / "nvidia-smi",
+        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(listing)}\nexit {exit_code}\n",
+    )
+    monkeypatch.setenv("PATH", str(tmp_path / "bin") + os.pathsep + os.environ.get("PATH", ""))
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(hardware.platform, "machine", lambda: "x86_64")
+
+    assert hardware.host_backends() == expected
+
+
+_TORCH_WITHOUT_CUDA = "class cuda:\n    @staticmethod\n    def is_available():\n        return False\n"
+_TORCH_WITH_CUDA = "class cuda:\n    @staticmethod\n    def is_available():\n        return True\n"
+
+
+def _runtime_python_with_torch(tmp_path: Path, torch_source: str | None) -> Path:
+    """A real interpreter whose `import torch` resolves to a stub, or fails."""
+    site = tmp_path / "stub-site"
+    site.mkdir()
+    if torch_source is not None:
+        (site / "torch").mkdir()
+        (site / "torch" / "__init__.py").write_text(torch_source, encoding="utf-8")
+    return _write_executable(
+        tmp_path / "runtime" / "bin" / "python",
+        f'#!/bin/sh\nPYTHONPATH="{site}" exec "{sys.executable}" "$@"\n',
+    )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX shell stubs")
+@pytest.mark.parametrize(
+    ("torch_source", "reason"),
+    [(_TORCH_WITHOUT_CUDA, "CUDA is not available to PyTorch"), (None, "no importable PyTorch")],
+    ids=["torch-without-cuda", "torch-missing"],
+)
+def test_cuda_profiles_fail_closed_when_the_runtime_cannot_reach_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, torch_source: str | None, reason: str
+) -> None:
+    """B9: every CUDA profile probes CUDA in its own runtime, not only Decision 2.0."""
+    from types import SimpleNamespace
+
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Linux")
+    python = _runtime_python_with_torch(tmp_path, torch_source)
+    settings = SimpleNamespace(engine="kev", backend="cuda", model_id="kev-4b")
+
+    with pytest.raises(RuntimeError, match=reason) as error:
+        SystemOneRuntime._validate_accelerator(settings, python)
+    assert "No CPU fallback will be used" in str(error.value)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX shell stubs")
+def test_cuda_profiles_load_when_torch_reaches_a_cuda_device(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Linux")
+    python = _runtime_python_with_torch(tmp_path, _TORCH_WITH_CUDA)
+
+    SystemOneRuntime._validate_accelerator(
+        SimpleNamespace(engine="kev", backend="cuda", model_id="kev-4b"), python
+    )
+
+
+_FAKE_LLAMA_SERVER = r'''#!{python}
+import http.server
+import os
+import sys
+
+port = int(sys.argv[sys.argv.index("--port") + 1])
+pid_file = os.environ["FAKE_LLAMA_PID_FILE"]
+with open(pid_file + ".tmp", "w", encoding="utf-8") as stream:
+    stream.write(str(os.getpid()))
+os.replace(pid_file + ".tmp", pid_file)
+
+
+class Health(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status":"ok"}')
+
+    def log_message(self, *args):
+        pass
+
+
+http.server.HTTPServer(("127.0.0.1", port), Health).serve_forever()
+'''
+
+_STUB_JEVK5 = '''
+class JevK5GGUF:
+    def __init__(self, url, temperature, knockout_temperature):
+        self.url = url
+
+    def decide(self, state, question):
+        return {"type": "noul", "noul": 0.5, "input_tokens": 3}
+'''
+
+
+def _start_jevk5_gguf_sidecar(tmp_path: Path):
+    import socket
+
+    fake = _write_executable(tmp_path / "llama-server", _FAKE_LLAMA_SERVER.replace("{python}", sys.executable))
+    site = tmp_path / "stub-site"
+    (site / "jevk5").mkdir(parents=True)
+    (site / "jevk5" / "__init__.py").write_text(_STUB_JEVK5, encoding="utf-8")
+    gguf = tmp_path / "model.gguf"
+    gguf.write_bytes(b"GGUF")
+    pid_file = tmp_path / "llama-server.pid"
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = int(sock.getsockname()[1])
+    env = {
+        **os.environ,
+        "FAKE_LLAMA_PID_FILE": str(pid_file),
+        "PYTHONPATH": os.pathsep.join(item for item in (str(site), os.environ.get("PYTHONPATH", "")) if item),
+    }
+    log_path = tmp_path / "sidecar.log"
+    log = log_path.open("w", encoding="utf-8")
+    process = subprocess.Popen(
+        [
+            sys.executable, "-m", "deqio.jevk5_gguf_sidecar",
+            "--llama-server", str(fake), "--gguf", str(gguf), "--max-tokens", "512",
+            "--temperature", "1.0", "--knockout-temperature", "1.0", "--port", str(port),
+        ],
+        env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+    )
+    return process, log, log_path, port, pid_file
+
+
+def _http_ok(url: str) -> bool:
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=1.0) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
+def _stop_process_group(process: subprocess.Popen) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    if process.poll() is None:
+        process.wait(timeout=10)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process semantics")
+def test_jevk5_gguf_sidecar_exits_when_its_llama_server_dies(tmp_path: Path) -> None:
+    """B11: a dead inner llama-server must not leave a sidecar answering HTTP 500.
+
+    Deqio maps a 500 from a reachable sidecar to 502 on every request; once the
+    sidecar exits, requests fail with the truthful 503 (runtime unavailable).
+    """
+    process, log, log_path, port, pid_file = _start_jevk5_gguf_sidecar(tmp_path)
+    try:
+        assert _wait_until(lambda: _http_ok(f"http://127.0.0.1:{port}/health"), timeout=30.0), log_path.read_text()
+        os.kill(int(pid_file.read_text()), signal.SIGKILL)
+        assert process.wait(timeout=15) != 0
+        assert "llama-server exited unexpectedly" in log_path.read_text()
+    finally:
+        _stop_process_group(process)
+        log.close()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process semantics")
+def test_jevk5_gguf_sidecar_stops_its_llama_server_on_shutdown(tmp_path: Path) -> None:
+    process, log, log_path, port, pid_file = _start_jevk5_gguf_sidecar(tmp_path)
+    try:
+        assert _wait_until(lambda: _http_ok(f"http://127.0.0.1:{port}/health"), timeout=30.0), log_path.read_text()
+        llama_pid = int(pid_file.read_text())
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=20)
+        assert _wait_until(lambda: _dead_or_zombie(llama_pid), timeout=10.0)
+        assert "llama-server exited unexpectedly" not in log_path.read_text()
+    finally:
+        _stop_process_group(process)
+        log.close()

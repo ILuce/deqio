@@ -140,6 +140,7 @@ DEQIO_MODEL_CATALOG
 DEQIO_SIDECAR_STARTUP_SECONDS
 DEQIO_SIDECAR_PROCESS_READY_SECONDS
 DEQIO_HF_OFFLINE_RUNTIME
+DEQIO_WATCH_TOKEN
 ```
 
 Keep project configuration under the `DEQIO_` namespace. `SemIf` remains the name of one upstream engine.
@@ -177,7 +178,7 @@ POST /v1/models/activate
 
 `/v1/decision` is a compatibility alias for `/v1/choice`.
 
-Decision handlers keep blocking work off the event loop with exactly one worker thread per request: the async handler only negotiates the input contract, then one `asyncio.to_thread` call does validation, inference, the request log and Watch. Every rejection that reaches a decision handler (validation, input contract, runtime/protocol error) goes through `server._reject`, which adds exactly one to `stats.errors`, writes one console line and one Watch row. Portable inputs are validated before inference: no blank questions or explicitly supplied IDs, unique IDs, at most `MAX_OPTIONS` options per decision and `MAX_DECISIONS` decisions per Shared request.
+Decision handlers keep blocking work off the event loop with exactly one worker thread per request: the async handler only negotiates the input contract, then one `asyncio.to_thread` call does validation, inference, the request log and Watch. Every rejection that reaches a decision handler (validation, input contract, runtime/protocol error) goes through `server._reject`, which adds exactly one to `stats.errors`, writes one console line and one Watch row. Portable inputs are validated before inference: no blank questions or explicitly supplied IDs, unique IDs, at most `MAX_OPTIONS` options per decision and `MAX_DECISIONS` decisions per Shared request. Native SystemOne requests (`/v1/systemone`, `/v1/soam`) accept at most `MAX_QUESTIONS` questions and are otherwise rejected with `422` through `server._reject`.
 
 External engines should be normalized to the same response shape. If an engine does not expose raw logits, return an empty `option_logits` object. Never fabricate logits from probabilities and label them as raw logits.
 
@@ -211,7 +212,7 @@ Do not silently fall back from an unsupported backend to CPU or another backend.
 
 Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
 
-Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata.
+Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata. Updating a shared runtime (`runtime_key`) is a registry state transition: every registered profile of that runtime loses `verified_at` (kept in an `update_pending` block) until the update passes the readiness probe, so a failed update never leaves profiles claiming a verification the rebuilt runtime did not pass. `deqio models delete` unregisters a profile only after its artifacts are removed.
 
 Each installed profile may also record `max_input_tokens`. `models setup` must present a bounded interactive token-budget list after model selection. Prefer the standard presets `4096`, `8192`, `12288`, `16384`, and `32768`, while honoring runtime-specific hard limits and conservative host-memory guardrails; values that fail those guards should be shown as unavailable rather than selectable. Direct install/update may accept `--max-input-tokens`, and selecting/activating an installed profile must restore its recorded token budget. The memory calculation is only a provisioning guardrail and may not be presented as proof of a backend's effective context capacity or completeness.
 
@@ -327,7 +328,7 @@ Changes to UI must verify:
 
 Full Watch payloads are temporary disk-backed session data under `.deqio/watch/`, not unbounded RAM state and not part of the normal persistent JSONL request log. Store one JSON event per line and rotate to a new `events-*.jsonl` file after 10,000 event lines. Listing must be paginated/lightweight and must not read an entire potentially large event file into memory just to render one page; detailed request/response bodies should be fetched by event ID.
 
-Delete Watch event files when the server starts, on explicit Watch clear, and when the configured automatic cleanup interval expires. Retention preferences may survive those resets. Model switches do not clear a running server's Watch history: each event must carry source, engine, model ID, backend, and runtime instance identity so UI filtering can separate models safely. If a reset/auto-clear replaces the session while a request is still in flight, reject that stale append instead of inserting it into the new session.
+Delete Watch event files when the server starts, on explicit Watch clear, and when the configured automatic cleanup interval expires. Retention preferences may survive those resets. Model switches do not clear a running server's Watch history: each event must carry source, engine, model ID, backend, and runtime instance identity so UI filtering can separate models safely. If a reset/auto-clear replaces the session while a request is still in flight, reject that stale append instead of inserting it into the new session. When `deqio serve` binds a non-loopback address, Watch (`/v1/watch*`, `/ui/watch`) requires the per-server Watch token (`DEQIO_WATCH_TOKEN` or generated at startup; a configured token is never echoed). Loopback binds keep Watch open, and the token never gates decision routes.
 
 The server and benchmark CLI can be separate processes writing the same workspace store. Keep appends/rotation/session metadata cross-process safe and keep file permissions private where the host supports it.
 
@@ -339,7 +340,7 @@ Benchmark suites are editable schema-version-1 JSON files under the workspace `b
 
 ### Benchmark runtime ownership
 
-A benchmark must have exclusive inference ownership for its workspace without killing the Deqio HTTP server. If `deqio serve` is running, the benchmark asks the server through the workspace-local authenticated control channel to close its active runtime; `/ui`, `/ui/watch`, health, history and administrative APIs remain alive. Inference requests must return a clear temporary `503` and model activation must return `409` while the benchmark owns inference. Load one benchmark profile at a time and always close it before loading the next. At benchmark completion restore the server's previous profile. If the benchmark owner process disappears, the server watchdog should restore automatically. Never implement this by broad `pkill`/process-name matching. A workspace benchmark lock prevents two benchmark CLIs from running model workloads concurrently.
+A benchmark must have exclusive inference ownership for its workspace without killing the Deqio HTTP server. If `deqio serve` is running, the benchmark asks the server through the workspace-local authenticated control channel to close its active runtime; `/ui`, `/ui/watch`, health, history and administrative APIs remain alive. Inference requests must return a clear temporary `503` and model activation must return `409` while the benchmark owns inference. Load one benchmark profile at a time and always close it before loading the next. At benchmark completion restore the server's previous profile. If the benchmark owner process disappears, the server watchdog should restore automatically. Never implement this by broad `pkill`/process-name matching. A workspace benchmark lock prevents two benchmark CLIs from running model workloads concurrently. Workspace ownership is decided by kernel locks, never by probing the HTTP port (uvicorn binds it only after the model has loaded): a registered server holds `.deqio/.server-owner.lock` for its lifetime and registers only while holding `model-management.lock`, so `deqio serve`, `deqio models` mutations and benchmarks exclude each other atomically.
 
 ### Benchmark comparison
 

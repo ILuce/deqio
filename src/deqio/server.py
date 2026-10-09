@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import ipaddress
+import secrets
 import json
 import os
 import threading
@@ -13,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import __version__
@@ -60,6 +62,7 @@ from .input_contract import (
 from .ui import DASHBOARD, WATCH_DASHBOARD
 from .watch_store import WATCH_AUTO_CLEAR_OPTIONS, WatchStore
 from .runtime_control import pid_alive, register_server, unregister_server
+from .console import watch_token_notice
 from .systemone_runtime import (
     SystemOneCapabilityError,
     SystemOneProtocolError,
@@ -227,6 +230,8 @@ def _validate_unique_ids(values: list[str], *, label: str) -> None:
 # applies inside the engine.
 MAX_OPTIONS = 128
 MAX_DECISIONS = 64
+# Native SystemOne requests (/v1/systemone, /v1/soam): questions per request.
+MAX_QUESTIONS = 64
 
 
 def _require_text(value: str, *, field: str) -> None:
@@ -535,6 +540,91 @@ def _require_runtime_control(request: Request) -> None:
     provided = request.headers.get("x-deqio-control-token")
     if not provided or not hmac.compare_digest(provided, runtime_control_token):
         raise HTTPException(status_code=403, detail="Invalid local runtime-control token")
+
+
+# ---------------------------------------------------------------------------
+# Watch access on non-loopback binds
+# ---------------------------------------------------------------------------
+
+WATCH_TOKEN_HEADER = "x-deqio-watch-token"
+WATCH_TOKEN_COOKIE = "deqio_watch_token"
+WATCH_TOKEN_REQUIRED = (
+    "Watch on a non-loopback bind requires the Watch token: send the X-Deqio-Watch-Token header "
+    "(or Authorization: Bearer), or open /ui/watch?token=<token> once in the browser."
+)
+WATCH_TOKEN_REQUIRED_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Deqio Watch: token required</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem;line-height:1.5">
+<h1>Watch token required</h1>
+<p>This Deqio server is bound to a non-loopback address, so Watch, which keeps the full request and
+response payloads of the current session, is protected.</p>
+<p>Open <code>/ui/watch?token=&lt;token&gt;</code> once, with the token printed when the server started or
+the value of <code>DEQIO_WATCH_TOKEN</code>. The browser then keeps it in an HttpOnly cookie for this
+server.</p>
+<p><a href="/ui">Back to Deqio</a></p>
+</body></html>
+"""
+
+# None on loopback binds (the default), where Watch behaves exactly as before.
+# The lifespan sets it for non-loopback binds, from DEQIO_WATCH_TOKEN or a
+# freshly generated per-server token.
+watch_access_token: str | None = None
+
+
+def _is_loopback_host(host: str) -> bool:
+    value = str(host or "").strip().strip("[]").lower()
+    if value == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    mapped = getattr(address, "ipv4_mapped", None)
+    return bool(address.is_loopback or (mapped is not None and mapped.is_loopback))
+
+
+def _watch_token_for_bind(host: str) -> str | None:
+    """Return the Watch token required on *host*, or None for loopback binds."""
+    if _is_loopback_host(host):
+        return None
+    configured = os.environ.get("DEQIO_WATCH_TOKEN", "").strip()
+    return configured or secrets.token_urlsafe(32)
+
+
+def _token_matches(presented: str | None, expected: str) -> bool:
+    return bool(presented) and hmac.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
+
+
+def _watch_token_valid(request: Request) -> bool:
+    expected = watch_access_token
+    if expected is None:
+        return True
+    presented = request.headers.get(WATCH_TOKEN_HEADER)
+    if not presented:
+        scheme, _, credentials = request.headers.get("authorization", "").partition(" ")
+        presented = credentials.strip() if scheme.lower() == "bearer" else None
+    if not presented:
+        presented = request.cookies.get(WATCH_TOKEN_COOKIE)
+    return _token_matches(presented, expected)
+
+
+def _require_watch_access(request: Request) -> None:
+    if not _watch_token_valid(request):
+        raise HTTPException(status_code=401, detail=WATCH_TOKEN_REQUIRED, headers={"WWW-Authenticate": "Bearer"})
+
+
+def _exchange_watch_token(request: Request) -> HTMLResponse | RedirectResponse | None:
+    """Turn ``?token=`` on a UI page into an HttpOnly cookie (protected binds only)."""
+    expected = watch_access_token
+    presented = request.query_params.get("token")
+    if expected is None or presented is None:
+        return None
+    if not _token_matches(presented, expected):
+        return HTMLResponse(WATCH_TOKEN_REQUIRED_PAGE, status_code=401)
+    # Redirect to the bare path so the token leaves the address bar and history.
+    response = RedirectResponse(url=request.url.path, status_code=303)
+    response.set_cookie(WATCH_TOKEN_COOKIE, expected, httponly=True, samesite="strict", path="/")
+    return response
 
 
 def _suspend_runtime_for_benchmark(*, lease_id: str, owner_pid: int, reason: str) -> dict[str, Any]:
@@ -1274,6 +1364,7 @@ async def lifespan(app: FastAPI):
     global runtime
     global started_at
     global runtime_control_token
+    global watch_access_token
 
     control_registration: dict[str, Any] | None = None
     watch_cleanup_task: asyncio.Task[Any] | None = None
@@ -1293,6 +1384,9 @@ async def lifespan(app: FastAPI):
         # Watch session as a side effect.
         host = os.environ.get("DEQIO_SERVER_HOST", "127.0.0.1")
         port = int(os.environ.get("DEQIO_SERVER_PORT", "8787"))
+        # Watch keeps full request/response payloads: on a non-loopback bind it
+        # is served only with the Watch token. Decision routes are unchanged.
+        watch_access_token = _watch_token_for_bind(host)
         if os.environ.get("DEQIO_SERVER_CONTROL") == "1":
             control_registration = register_server(SETTINGS.config_path, host=host, port=port)
             runtime_control_token = str(control_registration["token"])
@@ -1315,6 +1409,9 @@ async def lifespan(app: FastAPI):
         watch_cleanup_task = asyncio.create_task(_watch_auto_clear_loop())
         suspension_watchdog_task = asyncio.create_task(_runtime_suspension_watchdog())
         server_ready(host=host, port=port)
+        if watch_access_token is not None:
+            configured = bool(os.environ.get("DEQIO_WATCH_TOKEN", "").strip())
+            watch_token_notice(host=host, port=port, token=None if configured else watch_access_token)
         yield
     finally:
         tasks = [
@@ -1343,6 +1440,7 @@ async def lifespan(app: FastAPI):
             if control_registration is not None:
                 unregister_server(SETTINGS.config_path, pid=int(control_registration["pid"]))
             runtime_control_token = None
+            watch_access_token = None
 
 
 app = FastAPI(
@@ -1478,6 +1576,11 @@ def _execute_system_one(payload: SystemOneRequest, *, endpoint: str) -> dict[str
     try:
         if not payload.questions:
             raise HTTPException(status_code=422, detail="questions must be a non-empty object")
+        if len(payload.questions) > MAX_QUESTIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"questions contains {len(payload.questions)} questions; at most {MAX_QUESTIONS} are allowed",
+            )
         with inference_lock:
             settings_snapshot = SETTINGS
             runtime_snapshot = _runtime()
@@ -2179,7 +2282,7 @@ def get_recent():
         return list(recent_requests)
 
 
-@app.get("/v1/watch")
+@app.get("/v1/watch", dependencies=[Depends(_require_watch_access)])
 def get_watch(limit: int = 500, offset: int = 0):
     snapshot = _watch_store().list_events(limit=limit, offset=offset)
     snapshot["session"]["switching"] = switching_runtime
@@ -2187,13 +2290,13 @@ def get_watch(limit: int = 500, offset: int = 0):
     return snapshot
 
 
-@app.get("/v1/watch/settings")
+@app.get("/v1/watch/settings", dependencies=[Depends(_require_watch_access)])
 def get_watch_settings():
     settings = _watch_store().preferences()
     return {**settings, "allowed_auto_clear_minutes": list(WATCH_AUTO_CLEAR_OPTIONS)}
 
 
-@app.post("/v1/watch/settings")
+@app.post("/v1/watch/settings", dependencies=[Depends(_require_watch_access)])
 def update_watch_settings(payload: WatchSettingsRequest):
     try:
         settings = _watch_store().set_auto_clear_minutes(payload.auto_clear_minutes)
@@ -2206,7 +2309,7 @@ def update_watch_settings(payload: WatchSettingsRequest):
     }
 
 
-@app.get("/v1/watch/{event_id}")
+@app.get("/v1/watch/{event_id}", dependencies=[Depends(_require_watch_access)])
 def get_watch_event(event_id: str):
     event = _watch_store().get_event(event_id)
     if event is None:
@@ -2214,7 +2317,7 @@ def get_watch_event(event_id: str):
     return _watch_json_snapshot(event)
 
 
-@app.post("/v1/watch/clear")
+@app.post("/v1/watch/clear", dependencies=[Depends(_require_watch_access)])
 def clear_watch():
     session = _reset_watch_session(reason="manual-clear")
     return {"status": "ok", "session": session}
@@ -2262,10 +2365,16 @@ def get_benchmark_results(run_id: str):
 
 
 @app.get("/ui", response_class=HTMLResponse)
-def dashboard():
-    return DASHBOARD
+def dashboard(request: Request):
+    exchanged = _exchange_watch_token(request)
+    return DASHBOARD if exchanged is None else exchanged
 
 
 @app.get("/ui/watch", response_class=HTMLResponse)
-def watch_dashboard():
+def watch_dashboard(request: Request):
+    exchanged = _exchange_watch_token(request)
+    if exchanged is not None:
+        return exchanged
+    if not _watch_token_valid(request):
+        return HTMLResponse(WATCH_TOKEN_REQUIRED_PAGE, status_code=401)
     return WATCH_DASHBOARD

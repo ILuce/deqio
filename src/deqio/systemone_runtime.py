@@ -72,6 +72,19 @@ def _json_body(payload: dict[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
+# CUDA probe run with a profile's own runtime interpreter. Exit status 3: PyTorch
+# cannot be imported; 4: PyTorch sees no CUDA device.
+_TORCH_CUDA_PROBE_NO_TORCH = 3
+_TORCH_CUDA_PROBE = (
+    "import sys\n"
+    "try:\n"
+    "    import torch\n"
+    "except Exception:\n"
+    "    sys.exit(3)\n"
+    "sys.exit(0 if torch.cuda.is_available() else 4)\n"
+)
+
+
 class SystemOneUnavailableError(RuntimeError):
     """The isolated inference runtime could not be reached in time."""
 
@@ -632,6 +645,30 @@ class SystemOneRuntime:
             )
             if probe.returncode != 0:
                 raise RuntimeError("MPS backend was selected, but PyTorch MPS is not available in the model runtime")
+            return
+        if settings.backend == "cuda":
+            label = f"{settings.model_id}/cuda"
+            if platform.system() != "Linux":
+                raise RuntimeError(f"{label} requires a Linux host with an NVIDIA GPU. No CPU fallback will be used.")
+            # B9: every CUDA engine in the catalog runs on PyTorch. Probe CUDA in
+            # the profile's own runtime, so an engine that would silently run on
+            # CPU is never served or verified as a CUDA profile.
+            probe = subprocess.run(
+                [str(python), "-c", _TORCH_CUDA_PROBE],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if probe.returncode == _TORCH_CUDA_PROBE_NO_TORCH:
+                raise RuntimeError(
+                    f"{label} requires CUDA, but the model runtime has no importable PyTorch; reinstall it with: "
+                    f"deqio models update {settings.model_id} --backend cuda. No CPU fallback will be used."
+                )
+            if probe.returncode != 0:
+                raise RuntimeError(
+                    f"{label} requires CUDA, but CUDA is not available to PyTorch in the model runtime "
+                    "(no usable NVIDIA GPU or driver). No CPU fallback will be used."
+                )
 
     @staticmethod
     def _decision2_runtime_metadata(

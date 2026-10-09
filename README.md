@@ -284,9 +284,9 @@ http://127.0.0.1:8787/ui/watch
 http://127.0.0.1:8787/docs
 ```
 
-Deqio is local-first and binds to `127.0.0.1` by default. It does not provide a public-network authentication layer; if you deliberately expose it on another interface, put an appropriate authenticated network/reverse-proxy boundary in front of it. In particular, `deqio serve --host 0.0.0.0` makes `/ui/watch` and `/v1/watch` — the full request and response payloads of the current session — readable by anyone who can reach the port.
+Deqio is local-first and binds to `127.0.0.1` by default. It does not provide a public-network authentication layer; if you deliberately expose it on another interface, put an appropriate authenticated network/reverse-proxy boundary in front of it. Watch (`/ui/watch`, `/v1/watch*`) keeps the full request and response payloads of the current session, so on any non-loopback bind (for example `deqio serve --host 0.0.0.0`) it requires a per-server Watch token: set `DEQIO_WATCH_TOKEN`, or use the token printed in the startup banner. Scripts send it as `X-Deqio-Watch-Token` (or `Authorization: Bearer`); in a browser, open `/ui/watch?token=<token>` once and the token is kept in an HttpOnly, SameSite=Strict cookie. Decision routes, `/ui`, `/v1/recent` (recent questions and decisions) and `/health` stay unauthenticated, and without TLS the token travels in clear text, so the reverse-proxy advice above still applies.
 
-**Supported platforms:** macOS on Apple Silicon (MLX, MPS, GGUF) and Linux (CUDA with an NVIDIA driver, GGUF). Python 3.10 and 3.12 are tested in CI. Windows is not supported in Deqio 0.5: model setup reports it as unsupported instead of offering profiles that were never validated there.
+**Supported platforms:** macOS on Apple Silicon (MLX, MPS, GGUF) and Linux (CUDA when `nvidia-smi -L` lists an NVIDIA GPU, GGUF). Python 3.10 and 3.12 are tested in CI. Windows is not supported in Deqio 0.5: model setup reports it as unsupported instead of offering profiles that were never validated there.
 
 ### Development install
 
@@ -371,7 +371,7 @@ curl -s http://127.0.0.1:8787/v1/shared \
 
 `/v1/shared` is the stable Deqio multi-decision API. It is distinct from native SOAM: Shared uses Deqio's portable decision contract, while SOAM forwards one native SystemOne request to a capable runtime. One engine call scores the whole batch, so a per-decision `input_tokens` is `null` when the batch has more than one decision (negotiated receipts say `input_tokens_source: "engine_reported_batch"`); the batch count appears once in the negotiated `input_receipt` and in Watch.
 
-Portable requests are validated before inference with `400`: questions and explicitly supplied IDs must not be blank, option and decision IDs must be unique, a decision has at most 128 options and a Shared request at most 64 decisions.
+Portable requests are validated before inference with `400`: questions and explicitly supplied IDs must not be blank, option and decision IDs must be unique, a decision has at most 128 options and a Shared request at most 64 decisions. Native `/v1/systemone` and `/v1/soam` requests accept at most 64 questions and are rejected with `422` beyond that.
 
 ---
 

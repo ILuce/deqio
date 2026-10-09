@@ -17,9 +17,18 @@ from .catalog import SUPPORTED_BACKENDS, apply_selection, get_model, get_profile
 from .backends import BackendRuntime
 from .config import read_config_data, settings_from_data, write_config_data
 from .hardware import describe_host, detect_host, host_backends, profile_compatibility
-from .installations import installed_profiles, installation_record, load_registry, mark_installed, profile_key, unmark_installed
+from .installations import (
+    begin_runtime_update,
+    finish_runtime_update,
+    installation_record,
+    installed_profiles,
+    load_registry,
+    mark_installed,
+    profile_key,
+    unmark_installed,
+)
 from .process_lock import process_lock
-from .runtime_control import discover_server
+from .runtime_control import discover_server, model_management_lock_path
 from .workspace import ensure_workspace
 
 
@@ -264,19 +273,52 @@ def _validate_max_input_tokens(
 
 
 def _ensure_venv(env_dir: Path, python_version: str) -> Path:
+    """Create the isolated runtime venv, or repair one whose interpreter is gone.
+
+    ``uv venv`` refuses an existing directory. A directory with ``pyvenv.cfg`` is
+    a venv that lost its interpreter (interrupted creation, uninstalled
+    uv-managed Python): ``--clear`` rebuilds it, including everything stored in
+    it. Any other non-empty directory is not a venv and is never deleted on a
+    guess (uv 0.12 refuses ``--clear`` there, older uv deletes it).
+    """
     python_path = _runtime_python(env_dir)
-    if not python_path.is_file():
-        env_dir.parent.mkdir(parents=True, exist_ok=True)
-        _run(["uv", "python", "install", python_version])
-        _run(["uv", "venv", str(env_dir), "--python", python_version])
+    if python_path.is_file():
+        return python_path
+    command = ["uv", "venv", str(env_dir), "--python", python_version]
+    if env_dir.is_dir() and any(env_dir.iterdir()):
+        if not (env_dir / "pyvenv.cfg").is_file():
+            raise RuntimeError(
+                f"Runtime directory exists but is not a virtual environment: {env_dir}. "
+                "Move or remove it, then run the installation again."
+            )
+        print(f"Recreating runtime environment without a usable interpreter: {env_dir}")
+        command.append("--clear")
+    env_dir.parent.mkdir(parents=True, exist_ok=True)
+    _run(["uv", "python", "install", python_version])
+    _run(command)
     return python_path
+
+
+def _discard_partial_checkout(source_dir: Path) -> None:
+    """Remove a Deqio-managed source directory that is not a git checkout.
+
+    An interrupted clone or copy leaves such a directory behind. Without its own
+    ``.git``, every later ``git -C`` command would run against an enclosing
+    repository instead (for example a Deqio source checkout that contains
+    ``.model-runtimes/``).
+    """
+    if (source_dir / ".git").exists() or not (source_dir.exists() or source_dir.is_symlink()):
+        return
+    if source_dir.is_symlink() or not source_dir.is_dir():
+        raise RuntimeError(f"Runtime source path is not a directory: {source_dir}; remove it and retry")
+    print(f"Removing incomplete source checkout: {source_dir}")
+    shutil.rmtree(source_dir)
 
 
 def _checkout_nimble(runtime_root: Path, *, source_key: str, upgrade: bool) -> Path:
     source_dir = runtime_root / source_key
-    if not (source_dir / ".git").is_dir():
-        if source_dir.exists():
-            raise RuntimeError(f"Nimble source path exists but is not a git checkout: {source_dir}")
+    _discard_partial_checkout(source_dir)
+    if not (source_dir / ".git").exists():
         _run(["git", "clone", "--depth", "1", "https://github.com/bespokelabsai/nimble.git", str(source_dir)])
     elif upgrade:
         _run(["git", "-C", str(source_dir), "pull", "--ff-only"])
@@ -493,6 +535,7 @@ def _install_llama_cpp_runtime(
         raise RuntimeError("llama.cpp GGUF profile is missing llama_cpp_revision")
     source = env_dir / "llama.cpp"
     build = env_dir / "llama-build"
+    _discard_partial_checkout(source)
     if not source.is_dir():
         _run(["git", "clone", "--filter=blob:none", "https://github.com/ggml-org/llama.cpp.git", str(source)])
     # Fetch the immutable commit used by the catalog.  This is deliberately not
@@ -621,13 +664,7 @@ def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str,
         raise RuntimeError("This profile does not define an isolated runtime")
 
     env_dir = _runtime_root(config_path, data) / str(runtime_key)
-    python_version = str(profile.get("python", "3.12"))
-    python_path = _runtime_python(env_dir)
-
-    if not python_path.is_file():
-        env_dir.parent.mkdir(parents=True, exist_ok=True)
-        _run(["uv", "python", "install", python_version])
-        _run(["uv", "venv", str(env_dir), "--python", python_version])
+    python_path = _ensure_venv(env_dir, str(profile.get("python", "3.12")))
 
     command = ["uv", "pip", "install", "--python", str(python_path)]
     if upgrade:
@@ -957,6 +994,21 @@ def _install_profile(
         force=force,
     )
 
+    runtime_key = str(profile.get("runtime_key") or "")
+    pending: list[str] = []
+    if upgrade and runtime_key:
+        # B1: rebuilding a shared runtime changes every profile that uses it.
+        # None of them is verified until this update passes a real readiness
+        # probe; a failed or interrupted update leaves them unverified.
+        pending = begin_runtime_update(
+            config_path, runtime_key, _registered_keys_sharing_runtime(config_path, catalog, runtime_key)
+        )
+        if pending:
+            print(
+                f"Updating shared runtime {runtime_key!r}: {', '.join(pending)} "
+                "stay unverified until this update is verified."
+            )
+
     env_dir = _install_runtime(config_path, data, profile, upgrade=upgrade)
     print(f"Runtime ready: {env_dir}")
     if profile.get("installer") == "nimble":
@@ -977,6 +1029,8 @@ def _install_profile(
         artifacts=artifacts,
         max_input_tokens=chosen_max_input_tokens,
     )
+    if pending:
+        finish_runtime_update(config_path, pending)
     print(
         f"Installed and verified profile: {model_id} / {backend} "
         f"(max input tokens: {chosen_max_input_tokens})"
@@ -1192,6 +1246,15 @@ def _catalog_profile_for_key(catalog: dict[str, Any], key: str) -> tuple[dict[st
     return entry, profile, backend
 
 
+def _registered_keys_sharing_runtime(config_path: Path, catalog: dict[str, Any], runtime_key: str) -> list[str]:
+    keys: list[str] = []
+    for key in sorted(_registered_keys(config_path)):
+        resolved = _catalog_profile_for_key(catalog, key)
+        if resolved is not None and str(resolved[1].get("runtime_key") or "") == runtime_key:
+            keys.append(key)
+    return keys
+
+
 def _local_artifact_paths(config_path: Path, profile: dict[str, Any]) -> set[Path]:
     managed_root = (config_path.parent / "models").resolve()
     paths: set[Path] = set()
@@ -1369,18 +1432,28 @@ def cmd_delete(args: argparse.Namespace) -> int:
             return 0
 
     profile = get_profile(catalog, model_id, backend)
-    removed = unmark_installed(config_path, model_id, backend)
-    if removed is None:
+    key = profile_key(model_id, backend)
+    registered = _registered_keys(config_path)
+    if key not in registered:
         raise RuntimeError(f"Profile {model_id}/{backend} is not registered as installed")
-    remaining_keys = _registered_keys(config_path)
-    _cleanup_profile_artifacts(
-        config_path=config_path,
-        data=data,
-        catalog=catalog,
-        profile=profile,
-        remaining_keys=remaining_keys,
-        purge_cache=bool(args.purge_cache),
-    )
+    # B3: clean up first, unregister last. If cleanup fails the profile stays
+    # registered and visible to `deqio models delete` instead of leaving
+    # gigabytes on disk that the CLI no longer knows about.
+    try:
+        _cleanup_profile_artifacts(
+            config_path=config_path,
+            data=data,
+            catalog=catalog,
+            profile=profile,
+            remaining_keys=registered - {key},
+            purge_cache=bool(args.purge_cache),
+        )
+    except OSError as error:
+        raise RuntimeError(
+            f"Could not remove the artifacts of {model_id}/{backend}: {error}. The profile is still "
+            "registered; fix the problem and run deqio models delete again."
+        ) from error
+    unmark_installed(config_path, model_id, backend)
 
     if selected["active"]:
         remaining_rows = [
@@ -1617,7 +1690,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         if mutates_artifacts:
             config_path = _config_path(args.config)
-            lock_path = config_path.parent / ".deqio" / "model-management.lock"
+            lock_path = model_management_lock_path(config_path)
             with process_lock(
                 lock_path,
                 timeout=0.0,
@@ -1631,7 +1704,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 return int(args.func(args))
         return int(args.func(args))
-    except (RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+    except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

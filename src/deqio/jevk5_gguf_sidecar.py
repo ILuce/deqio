@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import atexit
 from contextlib import asynccontextmanager
+import os
 import socket
 import subprocess
+import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -44,6 +47,24 @@ def _terminate(process: subprocess.Popen[str]) -> None:
         process.wait(timeout=5)
 
 
+def _exit_when_llama_server_dies(process: subprocess.Popen[str], stopping: threading.Event) -> None:
+    """Stop this sidecar when its llama-server dies outside a deliberate shutdown.
+
+    Without its engine the sidecar would keep answering HTTP 500, which Deqio
+    maps to 502 on every request. Exiting lets the supervisor and Deqio report
+    the runtime as unavailable (503), as the CLM sidecar already does.
+    """
+    code = process.wait()
+    if stopping.is_set():
+        return
+    print(
+        f"llama-server exited unexpectedly (code {code}); stopping the JevK5 GGUF sidecar",
+        file=sys.stderr,
+        flush=True,
+    )
+    os._exit(code if 0 < code < 256 else 1)
+
+
 def _wait(url: str, process: subprocess.Popen[str], timeout: float = 120.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -68,9 +89,21 @@ def build_app(*, llama_server: Path, gguf: Path, max_tokens: int, temperature: f
         "--host", "127.0.0.1", "--port", str(inner_port), "--log-disable",
     ]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
-    atexit.register(_terminate, process)
+    stopping = threading.Event()
+
+    def stop_llama_server() -> None:
+        stopping.set()
+        _terminate(process)
+
+    atexit.register(stop_llama_server)
     url = f"http://127.0.0.1:{inner_port}"
     _wait(url, process)
+    threading.Thread(
+        target=_exit_when_llama_server_dies,
+        args=(process, stopping),
+        name="llama-server-watch",
+        daemon=True,
+    ).start()
     model = JevK5GGUF(url, temperature=temperature, knockout_temperature=knockout_temperature)
 
     @asynccontextmanager
@@ -78,7 +111,7 @@ def build_app(*, llama_server: Path, gguf: Path, max_tokens: int, temperature: f
         try:
             yield
         finally:
-            _terminate(process)
+            stop_llama_server()
 
     app = FastAPI(title="Deqio JevK5 GGUF transport", lifespan=lifespan)
 
