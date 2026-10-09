@@ -213,16 +213,32 @@ def test_benchmark_cli_deduplicates_identical_model_flags() -> None:
     ]
 
 
-def test_release_dependencies_have_compatible_bounds() -> None:
-    import tomllib
+def _toml_module():
+    """Return the TOML reader for this interpreter.
 
-    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
+    ``tomllib`` is stdlib from Python 3.11. The declared minimum is 3.10, where
+    the ``dev`` extra installs the API-compatible ``tomli`` backport. The branch
+    is an explicit version check, not an import fallback.
+    """
+    if sys.version_info >= (3, 11):
+        import tomllib
+
+        return tomllib
+    import tomli
+
+    return tomli
+
+
+def test_release_dependencies_have_compatible_bounds() -> None:
+    project = _toml_module().loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert "fastapi>=0.110,<1" in project["dependencies"]
     assert "uvicorn[standard]>=0.27,<1" in project["dependencies"]
     assert "huggingface-hub>=1,<2" in project["dependencies"]
     assert "pydantic>=2,<3" in project["dependencies"]
     assert "pytest>=8,<10" in project["optional-dependencies"]["dev"]
     assert "httpx>=0.27,<1" in project["optional-dependencies"]["dev"]
+    assert "ruff>=0.16,<0.17" in project["optional-dependencies"]["dev"]
+    assert "tomli>=2,<3; python_version < '3.11'" in project["optional-dependencies"]["dev"]
 
 @pytest.mark.skipif(os.name == "nt", reason="SIGKILL lock-release integration test is POSIX-specific")
 def test_process_lock_is_released_by_kernel_after_sigkill(tmp_path: Path) -> None:

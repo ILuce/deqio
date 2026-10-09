@@ -31,6 +31,22 @@ def _choice_row(state: Any, qid: str, question: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _batch_input_tokens(raw_results: list[dict[str, Any]]) -> int | None:
+    """Token count SemIf measured for this request, or None.
+
+    A single question has one measured prompt. A prefix-sharing batch reports
+    per-row counts that are neither a sum nor a maximum of the real engine
+    input, so no total is claimed for it. Missing or zero counts are "not
+    measured", never 0.
+    """
+    if len(raw_results) != 1:
+        return None
+    value = raw_results[0].get("input_tokens")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return None
+
+
 def _answer_from_raw(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
     option_ids = [str(value) for value in raw.get("option_ids", [])]
     probabilities = [float(value) for value in raw.get("probabilities", [])]
@@ -183,13 +199,15 @@ def build_app(
                 qid: _answer_from_raw(kinds[qid], raw)
                 for qid, raw in zip(qids, raw_results)
             }
-            input_tokens = max((int(raw.get("input_tokens", 0) or 0) for raw in raw_results), default=0)
-            return {
+            body = {
                 "model": model_id,
                 "answers": answers,
                 "latency_ms": (time.perf_counter() - started) * 1000.0,
-                "usage": {"input_tokens": input_tokens},
             }
+            input_tokens = _batch_input_tokens(raw_results)
+            if input_tokens is not None:
+                body["usage"] = {"input_tokens": input_tokens}
+            return body
         except Exception as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
 

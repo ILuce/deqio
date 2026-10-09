@@ -241,7 +241,9 @@ def _input_token_usage(response: dict[str, Any]) -> tuple[int | None, str]:
         parsed = int(value)
     except (TypeError, ValueError):
         return None, "unknown"
-    if parsed < 0:
+    if parsed < 1:
+        # Every prompt has at least one token: 0 is an engine's "not measured"
+        # placeholder, never a measurement, and must not be attested as one.
         return None, "unknown"
     return parsed, "engine_reported"
 
@@ -1294,6 +1296,19 @@ class SystemOneRuntime:
                     preserve_native=self.engine == "decision2",
                 )
             )
+        # One engine call measured the whole batch. Report that count once as
+        # batch usage; a per-decision count is unknown unless the batch is a
+        # single decision (AGENTS.md: never copy an aggregate per decision).
+        # ``engine_reported_batch`` says why: the engine measured the batch.
+        batch_tokens, batch_source = _input_token_usage(response)
+        for raw in raw_results:
+            raw["batch_input_tokens"] = batch_tokens
+            raw["batch_input_tokens_source"] = batch_source
+            if len(raw_results) > 1:
+                raw["input_tokens"] = None
+                raw["input_tokens_source"] = (
+                    "engine_reported_batch" if batch_source == "engine_reported" else "unknown"
+                )
         return raw_results, {
             "total_seconds": latency_ms / 1000.0,
             "batch_size": len(rows),

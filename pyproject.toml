@@ -1,6 +1,6 @@
 [project]
 name = "deqio"
-version = "0.5.3"
+version = "0.5.4"
 description = "Unified runtime for fast typed AI decisions across multiple decision engines"
 readme = "README.md"
 license = "MIT"
@@ -22,6 +22,8 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
@@ -33,6 +35,8 @@ Issues = "https://github.com/ILuce/deqio/issues"
 dev = [
     "pytest>=8,<10",
     "httpx>=0.27,<1",
+    "ruff>=0.16,<0.17",
+    "tomli>=2,<3; python_version < '3.11'",
 ]
 
 [project.scripts]
@@ -54,3 +58,12 @@ packages = ["src/deqio"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Correctness-only rule set (pyflakes + pycodestyle error classes). Style and
+# import ordering are deliberately not enforced in 0.5.x to keep patches small.
+select = ["E4", "E7", "E9", "F"]

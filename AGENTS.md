@@ -177,6 +177,8 @@ POST /v1/models/activate
 
 `/v1/decision` is a compatibility alias for `/v1/choice`.
 
+Decision handlers keep blocking work off the event loop with exactly one worker thread per request: the async handler only negotiates the input contract, then one `asyncio.to_thread` call does validation, inference, the request log and Watch. Every rejection that reaches a decision handler (validation, input contract, runtime/protocol error) goes through `server._reject`, which adds exactly one to `stats.errors`, writes one console line and one Watch row. Portable inputs are validated before inference: no blank questions or explicitly supplied IDs, unique IDs, at most `MAX_OPTIONS` options per decision and `MAX_DECISIONS` decisions per Shared request.
+
 External engines should be normalized to the same response shape. If an engine does not expose raw logits, return an empty `option_logits` object. Never fabricate logits from probabilities and label them as raw logits.
 
 Decision responses expose Decision Provenance / Attestation v1 under `provenance`. The model/runtime identity must be captured under the same inference lock as the score so a live model switch cannot pair a result with the wrong model identity. Provenance must include the loaded runtime instance ID, engine, model ID, backend, model source, recorded artifact revisions, and structured score provenance.
@@ -242,11 +244,14 @@ git status --short
 After changes:
 
 ```bash
+uv run ruff check src tests
 uv run python -m compileall -q src tests
 uv run pytest
 git diff --check
 git diff
 ```
+
+Record user-visible changes in `CHANGELOG.md` (Keep a Changelog). `.github/workflows/ci.yml` runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12; keep tests runnable on 3.10 (no stdlib-only-in-3.11 imports without an explicit version check).
 
 Produce a patch with:
 
@@ -270,6 +275,7 @@ Do not use destructive Git commands unless explicitly requested.
 Minimum validation after Python changes:
 
 ```bash
+uv run ruff check src tests
 uv run python -m compileall -q src tests
 uv run pytest
 ```

@@ -165,11 +165,12 @@ def create_app(*, source_root: Path, model_config: Path, backend: str):
         try:
             result = ensure_scorer().score(state, schema)
             answers = _answers_from_result(schema, kinds, result)
+            # The Nimble scorer does not expose token counts; omit usage rather
+            # than report a fabricated zero.
             return {
                 "model": config.get("model_id", "bespokelabs/Bespoke-Nimble-9B"),
                 "answers": answers,
                 "latency_ms": (time.perf_counter() - started) * 1000.0,
-                "usage": {"input_tokens": 0},
             }
         except Exception as error:
             raise HTTPException(status_code=500, detail=str(error)) from error

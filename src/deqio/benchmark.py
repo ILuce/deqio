@@ -324,13 +324,10 @@ def _run_case(
             "provenance": {"runtime": identity},
             "decision": f"{len(response_results)} decisions",
         }
-        token_values = [
-            int(item["input_tokens"])
-            for item in response_results
-            if isinstance(item.get("input_tokens"), int)
-        ]
-        if token_values:
-            response_payload["input_tokens"] = sum(token_values)
+        # One engine call measured the whole batch: record its usage once.
+        batch_tokens = raw_results[0].get("batch_input_tokens") if raw_results else None
+        if isinstance(batch_tokens, int) and not isinstance(batch_tokens, bool) and batch_tokens > 0:
+            response_payload["input_tokens"] = batch_tokens
         _append_benchmark_watch(
             watch, endpoint=endpoint, request_payload=request_payload,
             response_payload=response_payload, status_code=200, request_id=case_id,

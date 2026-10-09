@@ -9,6 +9,14 @@ from typing import Any
 
 _GIB = 1024 ** 3
 
+# Operating systems on which Deqio 0.5 is validated. Windows has code paths
+# (process probes, locks) but has never run the test suite, so it is reported
+# as unsupported instead of being offered CUDA/GGUF profiles that may fail late.
+SUPPORTED_SYSTEMS = ("Darwin", "Linux")
+UNSUPPORTED_SYSTEM_REASON = (
+    "{system} is not supported in Deqio 0.5; use macOS on Apple Silicon or Linux"
+)
+
 
 @dataclass(frozen=True)
 class HostCapabilities:
@@ -39,7 +47,7 @@ def host_backends() -> tuple[str, ...]:
     machine = platform.machine().lower()
     if system == "Darwin" and machine == "arm64":
         return ("mlx", "mps", "gguf")
-    if system in {"Linux", "Windows"}:
+    if system == "Linux":
         return ("cuda", "gguf") if shutil.which("nvidia-smi") else ("gguf",)
     return ()
 
@@ -137,6 +145,14 @@ def profile_compatibility(
     host: HostCapabilities | None = None,
 ) -> dict[str, Any]:
     host = host or detect_host()
+    if host.system not in SUPPORTED_SYSTEMS:
+        return {
+            "compatible": False,
+            "reason": UNSUPPORTED_SYSTEM_REASON.format(system=host.system or "This operating system"),
+            "available_memory_gib": host.memory_for_backend(backend),
+            "minimum_memory_gib": profile.get("min_memory_gib"),
+            "recommended_memory_gib": profile.get("recommended_memory_gib"),
+        }
     systems = profile.get("systems")
     if isinstance(systems, list) and systems and host.system not in {str(item) for item in systems}:
         supported = ", ".join(str(item) for item in systems)

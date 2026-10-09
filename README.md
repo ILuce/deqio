@@ -284,7 +284,9 @@ http://127.0.0.1:8787/ui/watch
 http://127.0.0.1:8787/docs
 ```
 
-Deqio is local-first and binds to `127.0.0.1` by default. It does not provide a public-network authentication layer; if you deliberately expose it on another interface, put an appropriate authenticated network/reverse-proxy boundary in front of it.
+Deqio is local-first and binds to `127.0.0.1` by default. It does not provide a public-network authentication layer; if you deliberately expose it on another interface, put an appropriate authenticated network/reverse-proxy boundary in front of it. In particular, `deqio serve --host 0.0.0.0` makes `/ui/watch` and `/v1/watch` — the full request and response payloads of the current session — readable by anyone who can reach the port.
+
+**Supported platforms:** macOS on Apple Silicon (MLX, MPS, GGUF) and Linux (CUDA with an NVIDIA driver, GGUF). Python 3.10 and 3.12 are tested in CI. Windows is not supported in Deqio 0.5: model setup reports it as unsupported instead of offering profiles that were never validated there.
 
 ### Development install
 
@@ -292,10 +294,13 @@ From a source checkout:
 
 ```bash
 uv sync --frozen --extra dev
+uv run ruff check src tests
 uv run pytest
 uv run deqio models setup
 uv run deqio serve
 ```
+
+CI (`.github/workflows/ci.yml`) runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12. Release notes live in [CHANGELOG.md](CHANGELOG.md); security reporting in [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -364,7 +369,9 @@ curl -s http://127.0.0.1:8787/v1/shared \
   }'
 ```
 
-`/v1/shared` is the stable Deqio multi-decision API. It is distinct from native SOAM: Shared uses Deqio's portable decision contract, while SOAM forwards one native SystemOne request to a capable runtime.
+`/v1/shared` is the stable Deqio multi-decision API. It is distinct from native SOAM: Shared uses Deqio's portable decision contract, while SOAM forwards one native SystemOne request to a capable runtime. One engine call scores the whole batch, so a per-decision `input_tokens` is `null` when the batch has more than one decision (negotiated receipts say `input_tokens_source: "engine_reported_batch"`); the batch count appears once in the negotiated `input_receipt` and in Watch.
+
+Portable requests are validated before inference with `400`: questions and explicitly supplied IDs must not be blank, option and decision IDs must be unique, a decision has at most 128 options and a Shared request at most 64 decisions.
 
 ---
 
@@ -596,35 +603,24 @@ Watch is intentionally observability-first: it stores the full request and respo
 
 ## Benchmarks
 
-Run a benchmark interactively:
+Run a benchmark interactively, or select everything up front:
 
 ```bash
-deqio benchmark
+deqio benchmark                                   # choose suite and profiles interactively
+deqio benchmark --suite benchmarks/pl.json        # one suite file (default: pick from ./benchmarks/*.json)
+deqio benchmark --model decider-2b:mps --model basal-1.5-mini:mlx   # repeatable MODEL_ID:BACKEND
+deqio benchmark --all                             # every installed, host-compatible profile
+deqio benchmark --all --output runs/today         # results directory (default: .deqio/benchmarks/<timestamp>)
 ```
 
-The benchmark gets exclusive inference ownership for the workspace. If `deqio serve` is running, the HTTP server and `/ui/watch` stay alive while its active model is temporarily unloaded. The previous server model is restored when the benchmark completes.
+`--all` and `--model` are mutually exclusive; `--config PATH` selects another workspace `config.json`. The benchmark gets exclusive inference ownership for the workspace. If `deqio serve` is running, the HTTP server and `/ui/watch` stay alive while its active model is temporarily unloaded. The previous server model is restored when the benchmark completes.
 
 Compare two completed runs:
 
 ```bash
-deqio benchmark compare
-```
-
-Non-interactive comparison:
-
-```bash
-deqio benchmark compare --left RUN_A --right RUN_B
-```
-
-JSON for agents/automation:
-
-```bash
-deqio benchmark compare --left RUN_A --right RUN_B --json
-```
-
-Save a comparison:
-
-```bash
+deqio benchmark compare                                       # interactive
+deqio benchmark compare --left RUN_A --right RUN_B            # non-interactive
+deqio benchmark compare --left RUN_A --right RUN_B --json     # JSON for agents/automation
 deqio benchmark compare --left RUN_A --right RUN_B --output comparison.json
 ```
 
@@ -649,34 +645,17 @@ This mode is fail-closed: when a runtime cannot prove the required model-boundar
 ## Useful commands
 
 ```bash
-# version
-deqio --version
-
-# interactive model installation
-deqio models setup
-
-# catalog
-deqio models list
-
-# installed profiles
-deqio models installed
-
-# active profile
-deqio models status
-
-# switch installed profile
-deqio models use MODEL_ID --backend BACKEND
-
-# install/update/delete
-deqio models install MODEL_ID --backend BACKEND
+deqio --version                                   # version
+deqio models setup                                # interactive model installation
+deqio models list                                 # catalog
+deqio models installed                            # installed profiles
+deqio models status                               # active profile
+deqio models use MODEL_ID --backend BACKEND       # switch installed profile
+deqio models install MODEL_ID --backend BACKEND   # install / update / delete
 deqio models update MODEL_ID --backend BACKEND
 deqio models delete MODEL_ID --backend BACKEND
-
-# server
-deqio serve
-
-# benchmark
-deqio benchmark
+deqio serve                                       # server (127.0.0.1:8787)
+deqio benchmark                                   # benchmark, see "Benchmarks" for flags
 deqio benchmark compare
 ```
 

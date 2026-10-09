@@ -210,7 +210,9 @@ def test_config_engine_validation_covers_every_catalog_engine() -> None:
     from deqio.catalog import SUPPORTED_ENGINES, apply_selection, load_catalog
     from deqio.config import settings_from_data
 
-    config_path = Path("config.json").resolve()
+    # The root config.json is a developer-local, git-ignored file; a clean
+    # checkout (CI) only has the packaged template.
+    config_path = Path("src/deqio/data/config.json").resolve()
     base_data = json.loads(config_path.read_text(encoding="utf-8"))
     catalog = load_catalog(Path("models.json"))
     catalog_engines = {str(entry["engine"]) for entry in catalog["models"]}
@@ -1124,14 +1126,19 @@ def test_live_model_activation_persists_selection_and_swaps_runtime(
     assert watch_rows == []
 
 def test_release_version_is_consistent() -> None:
-    import tomllib
+    import sys
 
     from deqio import __version__
     from deqio.server import app
 
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:  # Python 3.10: the dev extra installs the API-compatible backport.
+        import tomli as tomllib
+
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.3"
+    assert __version__ == "0.5.4"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1688,7 +1695,9 @@ def test_systemone_load_separates_process_ready_and_model_ready_and_uses_offline
         returncode = None
         def poll(self): return None
         def terminate(self): self.returncode = 0
-        def wait(self, timeout=None): self.returncode = 0; return 0
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
         def kill(self): self.returncode = -9
 
     observed: dict[str, object] = {}
@@ -2204,6 +2213,31 @@ def test_cuda_only_profiles_can_restrict_the_supported_operating_system() -> Non
 
     assert profile_compatibility("cuda", profile, host=windows)["compatible"] is False
     assert profile_compatibility("cuda", profile, host=linux)["compatible"] is True
+
+
+def test_windows_is_reported_as_unsupported_instead_of_offering_backends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deqio 0.5 is validated on macOS (Apple Silicon) and Linux only.
+
+    Windows must get an explicit reason from the install preflight rather than
+    CUDA/GGUF profiles that were never exercised on that platform.
+    """
+    import deqio.hardware as hardware
+
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(hardware.platform, "machine", lambda: "AMD64")
+    monkeypatch.setattr(hardware.shutil, "which", lambda name: "C:/nvidia-smi.exe")
+    assert hardware.host_backends() == ()
+
+    windows = hardware.HostCapabilities("Windows", "amd64", ("cuda", "gguf"), 64.0, 24.0)
+    for backend in ("cuda", "gguf"):
+        verdict = hardware.profile_compatibility(backend, {"min_memory_gib": 1}, host=windows)
+        assert verdict["compatible"] is False
+        assert "Windows is not supported in Deqio 0.5" in verdict["reason"]
+
+    linux = hardware.HostCapabilities("Linux", "x86_64", ("cuda", "gguf"), 64.0, 24.0)
+    assert hardware.profile_compatibility("cuda", {"min_memory_gib": 1}, host=linux)["compatible"] is True
 
 
 def test_cli_version_commands_report_release_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -2850,6 +2884,7 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
 
     catalog = load_catalog(Path("models.json"))
     ids = {str(entry["id"]) for entry in catalog["models"]}
+    assert {"clef-flash", "clef", "basal-1.5-main"} <= ids
 
     flash = get_profile(catalog, "clef-flash", "mlx")
     assert flash["model"] == "mlx-community/clef-flash-8bit"
@@ -5560,3 +5595,453 @@ def test_delete_active_profile_replacement_restores_recorded_token_budget(
     persisted = json.loads(config_path.read_text())
     assert persisted["model_id"] == "small"
     assert persisted["max_tokens"] == 4096
+
+
+# --- D8 / 0.5.4: one rejection path, one worker, honest token usage ----------
+
+
+class _CountingWatch:
+    """Watch spy: a fixed session plus every appended event."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    def session_token(self):
+        return "session-d8"
+
+    def append(self, event, *, expected_session_id=None):
+        self.events.append(event)
+        return f"000001-{len(self.events):05d}-abcdef"
+
+
+class _NoInferenceRuntime:
+    """Any inference call means validation let a bad request through."""
+
+    def _fail(self, *args, **kwargs):
+        raise AssertionError("inference must not run for a rejected request")
+
+    score = score_noul = score_shared = system_one = _fail
+
+
+def _choice_body(**overrides) -> dict:
+    body = {
+        "state": "state",
+        "question": "Choose",
+        "options": [{"id": "a", "description": "A"}, {"id": "b", "description": "B"}],
+    }
+    body.update(overrides)
+    return body
+
+
+def _shared_body(decisions: list[dict]) -> dict:
+    return {"state": "state", "decisions": decisions}
+
+
+def _shared_decision(decision_id: str | None = None, question: str = "Choose", options=None) -> dict:
+    decision = {
+        "question": question,
+        "options": options or [{"id": "a", "description": "A"}, {"id": "b", "description": "B"}],
+    }
+    if decision_id is not None:
+        decision["id"] = decision_id
+    return decision
+
+
+_D8_REJECTIONS = [
+    # (case id, path, body, headers, expected status, inference blocked?)
+    ("choice-no-options", "/v1/choice", _choice_body(options=[]), {}, 400),
+    ("decision-alias-duplicate-options", "/v1/decision",
+     _choice_body(options=[{"id": "x", "description": "A"}, {"id": "x", "description": "B"}]), {}, 400),
+    ("choice-blank-question", "/v1/choice", _choice_body(question="   "), {}, 400),
+    ("choice-blank-id", "/v1/choice", _choice_body(id="  "), {}, 400),
+    ("noul-blank-question", "/v1/noul", {"state": "s", "question": " \t "}, {}, 400),
+    ("noul-empty-id", "/v1/noul", {"state": "s", "question": "q", "id": ""}, {}, 400),
+    ("noul-contract-without-policy", "/v1/noul", {"state": "s", "question": "q", "id": "n1"},
+     {"deqio-contract": "input-completeness-v1"}, 422),
+    ("shared-empty", "/v1/shared", _shared_body([]), {}, 400),
+    ("shared-duplicate-decision-ids", "/v1/shared",
+     _shared_body([_shared_decision("same"), _shared_decision("same")]), {}, 400),
+    ("shared-duplicate-option-ids", "/v1/shared",
+     _shared_body([_shared_decision(options=[{"id": "x", "description": "A"}, {"id": "x", "description": "B"}])]),
+     {}, 400),
+    ("shared-blank-decision-id", "/v1/shared", _shared_body([_shared_decision(" ")]), {}, 400),
+    ("shared-blank-question", "/v1/shared", _shared_body([_shared_decision(question="")]), {}, 400),
+    ("shared-contract-missing-decision-id", "/v1/shared",
+     {**_shared_body([_shared_decision()]), "input_policy": {"require_complete": False}},
+     {"deqio-contract": "input-completeness-v1"}, 422),
+    ("score-empty-name", "/v1/score", {"state": "s", "name": " ", "question": {"instructions": "q"}}, {}, 422),
+    ("act-conflicting-type", "/v1/act", {"state": "s", "question": {"type": "score"}}, {}, 422),
+    ("multi-empty-question", "/v1/multi", {"state": "s", "question": {}}, {}, 422),
+    ("systemone-no-questions", "/v1/systemone", {"state": "s", "questions": {}}, {}, 422),
+    ("soam-no-questions", "/v1/soam", {"state": "s", "questions": {}}, {}, 422),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "headers", "expected_status"),
+    [case[1:] for case in _D8_REJECTIONS],
+    ids=[case[0] for case in _D8_REJECTIONS],
+)
+def test_every_rejection_reaching_a_decision_handler_is_accounted_exactly_once(
+    path: str, body: dict, headers: dict, expected_status: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B4: one accounting path for every rejection before or during inference.
+
+    Each failed call that reaches a decision handler adds exactly one to
+    ``stats.errors``, writes exactly one console error line and exactly one
+    Watch row, and never reaches the engine when the input is invalid.
+    """
+    import deqio.server as server
+
+    watch = _CountingWatch()
+    console: list[tuple] = []
+    monkeypatch.setattr(server, "_watch_store", lambda: watch)
+    monkeypatch.setattr(server, "runtime", _NoInferenceRuntime())
+    monkeypatch.setattr(server, "log_request_error", lambda *a, **k: console.append((a, k)))
+    before = server.stats["errors"]
+
+    status, payload = _asgi_post_json(path, json.dumps(body), {"content-type": "application/json", **headers})
+
+    assert status == expected_status, payload
+    assert server.stats["errors"] - before == 1
+    assert len(console) == 1
+    assert len(watch.events) == 1
+    assert watch.events[0]["endpoint"] == path
+    assert watch.events[0]["status_code"] == expected_status
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/v1/choice", "/v1/decision", "/v1/noul", "/v1/shared", "/v1/score", "/v1/multi", "/v1/act", "/v1/soam", "/v1/systemone"],
+)
+def test_runtime_failures_are_accounted_exactly_once(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    native_question = {"state": "s", "question": {"instructions": "q"}}
+    native_questions = {"state": "s", "questions": {"q": {"type": "noul", "instructions": "q"}}}
+    bodies = {
+        "/v1/choice": _choice_body(),
+        "/v1/decision": _choice_body(),
+        "/v1/noul": {"state": "s", "question": "q"},
+        "/v1/shared": _shared_body([_shared_decision("d1")]),
+        "/v1/score": native_question,
+        "/v1/multi": native_question,
+        "/v1/act": native_question,
+        "/v1/soam": native_questions,
+        "/v1/systemone": native_questions,
+    }
+    watch = _CountingWatch()
+    console: list[tuple] = []
+    monkeypatch.setattr(server, "_watch_store", lambda: watch)
+    monkeypatch.setattr(server, "runtime", None)
+    monkeypatch.setattr(server, "runtime_suspension", None)
+    monkeypatch.setattr(server, "log_request_error", lambda *a, **k: console.append((a, k)))
+    before = server.stats["errors"]
+
+    status, _ = _asgi_post_json(path, json.dumps(bodies[path]), {"content-type": "application/json"})
+
+    assert status == 503
+    assert server.stats["errors"] - before == 1
+    assert len(console) == 1
+    assert len(watch.events) == 1
+
+
+def test_portable_and_native_handlers_use_one_worker_thread_per_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B16: a portable request performs one executor hop, like the native path.
+
+    Several hops per request (Watch session, inference, request log, Watch
+    append) multiply the executor queueing a request can hit under fan-out.
+    """
+    import deqio.server as server
+
+    hops: list[str] = []
+    original_to_thread = asyncio.to_thread
+
+    async def counting_to_thread(func, /, *args, **kwargs):
+        hops.append(getattr(func, "__name__", repr(func)))
+        return await original_to_thread(func, *args, **kwargs)
+
+    identity = {"engine": "kev", "model_id": "demo", "backend": "mps", "runtime_instance_id": "rt"}
+    monkeypatch.setattr(server.asyncio, "to_thread", counting_to_thread)
+    monkeypatch.setattr(server, "_watch_store", lambda: _CountingWatch())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: None)
+    monkeypatch.setattr(
+        server, "run_decision",
+        lambda payload, *, endpoint, contract: server.format_result(_raw_decision(), runtime_identity=identity),
+    )
+    monkeypatch.setattr(
+        server, "_score_noul_inference",
+        lambda row, mode, contract, request_id: (server.SETTINGS, identity, _raw_decision(request_id)),
+    )
+    monkeypatch.setattr(
+        server, "_score_shared_inference",
+        lambda rows, contract, request_id: (
+            server.SETTINGS, identity, [_raw_decision(str(row["id"])) for row in rows], {"total_seconds": 0.004},
+        ),
+    )
+    headers = {"content-type": "application/json"}
+    requests = [
+        ("/v1/choice", _choice_body(), 200),
+        ("/v1/noul", {"state": "s", "question": "q"}, 200),
+        ("/v1/shared", _shared_body([_shared_decision("d1"), _shared_decision("d2")]), 200),
+        ("/v1/choice", _choice_body(options=[]), 400),
+        ("/v1/shared", _shared_body([]), 400),
+    ]
+    for path, body, expected in requests:
+        hops.clear()
+        status, _ = _asgi_post_json(path, json.dumps(body), headers)
+        assert status == expected
+        assert len(hops) == 1, (path, hops)
+
+
+def test_input_limits_and_text_fields_are_validated_before_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """B15: bounded option/decision counts and no whitespace-only questions or IDs."""
+    import deqio.server as server
+
+    monkeypatch.setattr(server, "_watch_store", lambda: _CountingWatch())
+    monkeypatch.setattr(server, "runtime", _NoInferenceRuntime())
+    headers = {"content-type": "application/json"}
+
+    too_many_options = [{"id": f"o{i}", "description": f"Option {i}"} for i in range(server.MAX_OPTIONS + 1)]
+    status, payload = _asgi_post_json("/v1/choice", json.dumps(_choice_body(options=too_many_options)), headers)
+    assert status == 400
+    assert f"at most {server.MAX_OPTIONS}" in payload["detail"]
+
+    too_many_decisions = [_shared_decision(f"d{i}") for i in range(server.MAX_DECISIONS + 1)]
+    status, payload = _asgi_post_json("/v1/shared", json.dumps(_shared_body(too_many_decisions)), headers)
+    assert status == 400
+    assert f"at most {server.MAX_DECISIONS}" in payload["detail"]
+
+    nested_options = _shared_body([_shared_decision("d1", options=too_many_options)])
+    status, payload = _asgi_post_json("/v1/shared", json.dumps(nested_options), headers)
+    assert status == 400
+    assert "decisions[0].options" in payload["detail"]
+
+    status, payload = _asgi_post_json("/v1/noul", json.dumps({"state": "s", "question": "   "}), headers)
+    assert status == 400
+    assert payload["detail"] == "question must not be empty or whitespace"
+
+    status, payload = _asgi_post_json(
+        "/v1/shared", json.dumps(_shared_body([_shared_decision("ok"), _shared_decision(" ")])), headers
+    )
+    assert status == 400
+    assert payload["detail"] == "decisions[1].id must not be empty or whitespace"
+
+    # Exactly at the limits is accepted (and therefore reaches inference).
+    at_limit = [{"id": f"o{i}", "description": f"Option {i}"} for i in range(server.MAX_OPTIONS)]
+    status, payload = _asgi_post_json("/v1/choice", json.dumps(_choice_body(options=at_limit)), headers)
+    assert status == 500
+    assert "inference must not run" in payload["detail"]
+
+
+def _shared_engine_response(question_ids: list[str], *, input_tokens) -> dict:
+    response = {
+        "answers": {
+            qid: {"type": "choice", "choice": "a", "probabilities": {"a": 0.75, "b": 0.25}}
+            for qid in question_ids
+        },
+        "latency_ms": 9.0,
+    }
+    if input_tokens is not None:
+        response["usage"] = {"input_tokens": input_tokens}
+    return response
+
+
+def _bare_systemone_runtime(response: dict):
+    from deqio.systemone_runtime import SystemOneRuntime
+
+    runtime_obj = SystemOneRuntime.__new__(SystemOneRuntime)
+    runtime_obj.engine = "demo"
+    runtime_obj._request = lambda state, questions, mode=None: ({"state": state, "questions": questions}, response, 9.0)
+    return runtime_obj
+
+
+def test_shared_runtime_reports_the_batch_token_count_once_not_per_decision() -> None:
+    """B5: one engine call over a shared state has one measured token count."""
+    rows = [
+        {"id": f"d{i}", "state": "s", "question": "q", "options": [{"id": "a", "description": "A"}, {"id": "b", "description": "B"}]}
+        for i in range(3)
+    ]
+    runtime_obj = _bare_systemone_runtime(_shared_engine_response(["q0", "q1", "q2"], input_tokens=120))
+
+    raw_results, timing = runtime_obj.score_shared(rows)
+
+    assert timing["batch_size"] == 3
+    for raw in raw_results:
+        assert raw["input_tokens"] is None
+        assert raw["input_tokens_source"] == "engine_reported_batch"
+        assert raw["batch_input_tokens"] == 120
+        assert raw["batch_input_tokens_source"] == "engine_reported"
+
+    # No usage from the engine: the batch is unknown and so is every decision.
+    silent = _bare_systemone_runtime(_shared_engine_response(["q0", "q1"], input_tokens=None))
+    silent_results, _ = silent.score_shared(rows[:2])
+    assert [(r["input_tokens"], r["input_tokens_source"]) for r in silent_results] == [(None, "unknown")] * 2
+    assert silent_results[0]["batch_input_tokens"] is None
+
+    # With a single decision the batch measurement is the decision measurement.
+    single = _bare_systemone_runtime(_shared_engine_response(["q0"], input_tokens=40))
+    (only,), _ = single.score_shared(rows[:1])
+    assert only["input_tokens"] == 40
+    assert only["input_tokens_source"] == "engine_reported"
+
+
+def test_shared_endpoint_records_batch_tokens_once_in_watch_log_and_receipt(monkeypatch: pytest.MonkeyPatch) -> None:
+    import deqio.server as server
+
+    rows_seen: list[list[dict]] = []
+
+    class BatchRuntime:
+        runtime_instance_id = "rt-batch"
+
+        def score_shared(self, rows):
+            rows_seen.append(rows)
+            return [
+                {
+                    **_raw_decision(str(row["id"])),
+                    "option_ids": ["a", "b"],
+                    "input_tokens": None,
+                    "input_tokens_source": "engine_reported_batch",
+                    "batch_input_tokens": 120,
+                    "batch_input_tokens_source": "engine_reported",
+                }
+                for row in rows
+            ], {"total_seconds": 0.009, "batch_size": len(rows)}
+
+    watch = _CountingWatch()
+    logged: list[dict] = []
+    monkeypatch.setattr(server, "_watch_store", lambda: watch)
+    monkeypatch.setattr(server, "runtime", BatchRuntime())
+    monkeypatch.setattr(server, "record_event", lambda **kwargs: logged.append(kwargs))
+
+    body = {
+        "state": "s",
+        "decisions": [_shared_decision(f"d{i}") for i in range(3)],
+        "input_policy": {"require_complete": False},
+    }
+    status, payload = _asgi_post_json(
+        "/v1/shared", json.dumps(body),
+        {"content-type": "application/json", "deqio-contract": "input-completeness-v1"},
+    )
+
+    assert status == 200, payload
+    assert [result["input_tokens"] for result in payload["results"]] == [None, None, None]
+    assert payload["input_receipt"]["usage"]["input_tokens"] == 120
+    assert payload["input_receipt"]["usage"]["input_tokens_source"] == "engine_reported"
+    for result in payload["results"]:
+        assert result["input_receipt"]["usage"]["input_tokens"] is None
+        assert result["input_receipt"]["usage"]["input_tokens_source"] == "engine_reported_batch"
+    assert watch.events[-1]["input_tokens"] == 120
+    assert logged[-1]["result"]["input_tokens"] == 120
+
+
+def test_benchmark_shared_watch_row_counts_batch_tokens_once(tmp_path: Path) -> None:
+    from deqio.benchmark import _run_case
+    from deqio.watch_store import WatchStore
+
+    class SharedRuntime:
+        def identity_snapshot(self):
+            return {"engine": "demo", "model_id": "demo-model", "backend": "mlx", "runtime_instance_id": "rt"}
+
+        def score_shared(self, rows):
+            return [
+                {
+                    **_raw_decision(str(row["id"])),
+                    "option_ids": ["a", "b"],
+                    "input_tokens": None,
+                    "input_tokens_source": "unknown",
+                    "batch_input_tokens": 90,
+                    "batch_input_tokens_source": "engine_reported",
+                }
+                for row in rows
+            ], {"total_seconds": 0.01, "batch_size": len(rows)}
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    store = WatchStore(config_path)
+    store.reset(reason="server-start")
+    case = {
+        "id": "shared-1",
+        "type": "shared",
+        "state": "s",
+        "decisions": [
+            {"id": f"d{i}", "question": "q", "options": [{"id": "a", "description": "A"}, {"id": "b", "description": "B"}], "expected": "a"}
+            for i in range(3)
+        ],
+    }
+
+    _run_case(SharedRuntime(), {"engine": "demo", "model_id": "demo-model", "backend": "mlx"}, case, watch=store)
+
+    event = store.list_events(limit=1)["events"][0]
+    assert event["input_tokens"] == 90
+
+
+def test_zero_or_missing_engine_token_counts_are_unknown_not_measured() -> None:
+    """B6: a prompt always has at least one token, so 0 means "not reported"."""
+    from deqio.systemone_runtime import _input_token_usage
+
+    assert _input_token_usage({"usage": {"input_tokens": 0}}) == (None, "unknown")
+    assert _input_token_usage({"usage": {}}) == (None, "unknown")
+    assert _input_token_usage({}) == (None, "unknown")
+    assert _input_token_usage({"usage": {"input_tokens": 37}}) == (37, "engine_reported")
+
+
+def test_sidecars_omit_input_tokens_they_did_not_measure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    from deqio.jevk5_gguf_sidecar import _reported_input_tokens
+    from deqio.semif_sidecar import _batch_input_tokens
+
+    assert _batch_input_tokens([{}, {}]) is None
+    assert _batch_input_tokens([{"input_tokens": 0}]) is None
+    assert _batch_input_tokens([{"input_tokens": 30}]) == 30
+    # Per-row counts of a prefix-sharing batch are not a batch measurement.
+    assert _batch_input_tokens([{"input_tokens": 30}, {"input_tokens": 41}]) is None
+
+    assert _reported_input_tokens([12, 30]) == 42
+    assert _reported_input_tokens([12, None]) is None  # a partial sum is not a measurement
+    assert _reported_input_tokens([0]) is None
+    assert _reported_input_tokens([]) is None
+
+    # Nimble does not expose token counts: its response must not invent one.
+    package = tmp_path / "nimble" / "scoring"
+    package.mkdir(parents=True)
+    (tmp_path / "nimble" / "__init__.py").write_text("", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "parallel_scorer.py").write_text(
+        "class ParallelScorer:\n"
+        "    def __init__(self, **config):\n"
+        "        pass\n"
+        "    def score(self, state, schema):\n"
+        "        return {'output': {'q': True}, 'fields': {'q': {'scores': {'true': 0.9, 'false': 0.1}}}}\n",
+        encoding="utf-8",
+    )
+    model_config = tmp_path / "model.json"
+    model_config.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    for name in [name for name in sys.modules if name == "nimble" or name.startswith("nimble.")]:
+        monkeypatch.delitem(sys.modules, name)
+
+    import httpx
+
+    from deqio.nimble_sidecar import create_app
+
+    app_under_test = create_app(source_root=tmp_path, model_config=model_config, backend="mlx")
+
+    async def call():
+        transport = httpx.ASGITransport(app=app_under_test)
+        async with httpx.AsyncClient(transport=transport, base_url="http://sidecar") as client:
+            return await client.post(
+                "/v1/systemone",
+                json={"state": "s", "questions": {"q": {"type": "noul", "instructions": "q"}}},
+            )
+
+    response = asyncio.run(call())
+    for name in [name for name in sys.modules if name == "nimble" or name.startswith("nimble.")]:
+        sys.modules.pop(name, None)
+
+    assert response.status_code == 200
+    assert response.json()["answers"]["q"]["noul"] == pytest.approx(0.9)
+    assert "input_tokens" not in response.json().get("usage", {})

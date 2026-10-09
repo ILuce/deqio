@@ -17,6 +17,22 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _reported_input_tokens(values: list[Any]) -> int | None:
+    """Total input tokens only when every question reported a positive count.
+
+    JevK5 decides each question separately, so the request total is a sum; a
+    partial sum (some questions unreported) is not a measurement.
+    """
+    if not values:
+        return None
+    counts = []
+    for value in values:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            return None
+        counts.append(value)
+    return sum(counts)
+
+
 def _terminate(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
@@ -82,18 +98,22 @@ def build_app(*, llama_server: Path, gguf: Path, max_tokens: int, temperature: f
                 raise HTTPException(status_code=422, detail=f"{qid}: question must be an object")
         started = time.perf_counter()
         answers: dict[str, Any] = {}
-        input_tokens = 0
+        reported: list[Any] = []
         try:
             for qid, question in questions.items():
                 answer = model.decide(body.get("state"), question)
-                input_tokens += int(answer.pop("input_tokens", 0) or 0)
+                reported.append(answer.pop("input_tokens", None))
                 answers[str(qid)] = answer
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
+        usage: dict[str, Any] = {"questions": len(questions), "output_tokens": 0}
+        input_tokens = _reported_input_tokens(reported)
+        if input_tokens is not None:
+            usage["input_tokens"] = input_tokens
         return {
             "model": gguf.name,
             "answers": answers,
-            "usage": {"input_tokens": input_tokens, "questions": len(questions), "output_tokens": 0},
+            "usage": usage,
             "latency_ms": round((time.perf_counter() - started) * 1000.0, 3),
         }
 

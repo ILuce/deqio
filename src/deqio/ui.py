@@ -760,7 +760,7 @@ function renderOneResult(result) {
     <div class="result-item">
       <div><strong>Decision: ${escapeHtml(result.decision)}</strong></div>
       ${bars}
-      <div class="meta">tokens=${escapeHtml(result.input_tokens)} · total=${escapeHtml(timing.total_ms ?? '-')} ms · cache=${escapeHtml(timing.cache_hit ?? '-')}</div>
+      <div class="meta">tokens=${escapeHtml(result.input_tokens ?? '-')} · total=${escapeHtml(timing.total_ms ?? '-')} ms · cache=${escapeHtml(timing.cache_hit ?? '-')}</div>
       <details><summary>Option logits</summary><pre>${escapeHtml(JSON.stringify(result.option_logits || {}, null, 2))}</pre></details>
     </div>`;
 }
