@@ -94,6 +94,12 @@ def _profile_record(model: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _load_failed_record(model: dict[str, Any]) -> dict[str, Any]:
+    record = _profile_record(model)
+    record["load_error"] = str(model.get("load_error"))
+    return record
+
+
 def compare_documents(
     left: dict[str, Any],
     right: dict[str, Any],
@@ -147,8 +153,20 @@ def compare_documents(
     common.sort(key=lambda row: (str(row.get("model_id")), str(row.get("backend")), str(row.get("canonical_id"))))
     only_left = [_profile_record(left_by_id[key]) for key in sorted(set(left_by_id) - set(right_by_id))]
     only_right = [_profile_record(right_by_id[key]) for key in sorted(set(right_by_id) - set(left_by_id))]
-    legacy_left = [_profile_record(row) for row in left_models if profile_identity_from_summary(row) is None]
-    legacy_right = [_profile_record(row) for row in right_models if profile_identity_from_summary(row) is None]
+    # B12: a profile whose runtime failed to load has no results and no runtime
+    # identity; it is reported as such, not as a legacy profile.
+    load_failed_left = [_load_failed_record(row) for row in left_models if row.get("load_error")]
+    load_failed_right = [_load_failed_record(row) for row in right_models if row.get("load_error")]
+    legacy_left = [
+        _profile_record(row)
+        for row in left_models
+        if not row.get("load_error") and profile_identity_from_summary(row) is None
+    ]
+    legacy_right = [
+        _profile_record(row)
+        for row in right_models
+        if not row.get("load_error") and profile_identity_from_summary(row) is None
+    ]
 
     left_suite = left.get("suite_name")
     right_suite = right.get("suite_name")
@@ -156,6 +174,10 @@ def compare_documents(
     if left_suite != right_suite:
         warnings.append(
             "Benchmark suites differ; metric deltas are factual differences between runs and are not interpreted as pure quality/language deltas."
+        )
+    if load_failed_left or load_failed_right:
+        warnings.append(
+            "One or both runs contain profiles whose runtime failed to load; they have no results and are not compared."
         )
     if legacy_left or legacy_right:
         warnings.append(
@@ -182,6 +204,8 @@ def compare_documents(
         "only_in_right": only_right,
         "legacy_unverified_left": legacy_left,
         "legacy_unverified_right": legacy_right,
+        "load_failed_left": load_failed_left,
+        "load_failed_right": load_failed_right,
         "warnings": warnings,
     }
 

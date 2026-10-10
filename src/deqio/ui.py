@@ -942,6 +942,10 @@ function setSelectOptions(select, rows, valueFor, labelFor, allLabel) {
 function flattenBenchmarkSummary(summary) {
   const rows = [];
   for (const model of summary?.models || []) {
+    if (model.load_error) {
+      rows.push({ model_id: model.model_id, backend: model.backend, engine: model.engine, load_ms: model.load_ms, type: 'overall', load_error: model.load_error });
+      continue;
+    }
     for (const type of ['overall', 'noul', 'choice', 'shared']) {
       const stats = model.summary?.[type];
       if (!stats) continue;
@@ -983,7 +987,14 @@ function renderBenchmarkSummary() {
   });
   byId('benchmarkSummaryStatus').className = 'status';
   byId('benchmarkSummaryStatus').textContent = `${rows.length} summary row${rows.length === 1 ? '' : 's'}.`;
-  byId('benchmarkSummaryRows').innerHTML = rows.map(row => `
+  byId('benchmarkSummaryRows').innerHTML = rows.map(row => row.load_error ? `
+    <tr>
+      <td>${escapeHtml(`${row.model_id}:${row.backend}`)}</td>
+      <td>${escapeHtml(row.engine ?? '-')}</td>
+      <td>all</td>
+      <td colspan="9">load error: ${escapeHtml(row.load_error)}</td>
+      <td>${escapeHtml(formatBenchmarkMs(row.load_ms))}</td>
+    </tr>` : `
     <tr>
       <td>${escapeHtml(`${row.model_id}:${row.backend}`)}</td>
       <td>${escapeHtml(row.engine ?? '-')}</td>
@@ -1227,7 +1238,9 @@ function renderBenchmarkComparison() {
   const onlyB = (benchmarkComparison.only_in_right || []).map(row => row.model_id || row.label).join(', ') || 'none';
   const legacyA = (benchmarkComparison.legacy_unverified_left || []).length;
   const legacyB = (benchmarkComparison.legacy_unverified_right || []).length;
-  byId('benchmarkCompareOnly').textContent = `Only in A: ${onlyA} · Only in B: ${onlyB}${legacyA || legacyB ? ` · Legacy profiles without canonical identity: A=${legacyA}, B=${legacyB}` : ''}`;
+  const failedA = (benchmarkComparison.load_failed_left || []).length;
+  const failedB = (benchmarkComparison.load_failed_right || []).length;
+  byId('benchmarkCompareOnly').textContent = `Only in A: ${onlyA} · Only in B: ${onlyB}${legacyA || legacyB ? ` · Legacy profiles without canonical identity: A=${legacyA}, B=${legacyB}` : ''}${failedA || failedB ? ` · Runtime failed to load: A=${failedA}, B=${failedB}` : ''}`;
 }
 
 
@@ -1605,15 +1618,29 @@ function renderRows() {
   byId('loadOlder').disabled = events.length >= totalEvents;
 }
 
-async function fetchWatch(offset=0) {
-  const response = await fetch(`/v1/watch?limit=${pageSize}&offset=${offset}`);
+let refreshInFlight = false;
+
+function showError(prefix, error) {
+  byId('healthBadge').textContent = `${prefix}: ${error && error.message ? error.message : error}`;
+}
+
+async function fetchWatch(offset = 0, limit = pageSize) {
+  const response = await fetch(`/v1/watch?limit=${limit}&offset=${offset}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 async function refresh() {
+  // The 2 s timer must not pile up requests behind a slow refresh.
+  if (refreshInFlight) return;
+  refreshInFlight = true;
   try {
-    const [watch, health] = await Promise.all([fetchWatch(0), fetch('/health').then(r => r.json())]);
+    // Re-read at least as many rows as are shown, so pages loaded with
+    // "Load older" survive the automatic refresh (the server caps the limit).
+    const [watch, health] = await Promise.all([
+      fetchWatch(0, Math.max(pageSize, events.length)),
+      fetch('/health').then(r => r.json()),
+    ]);
     events = watch.events || [];
     totalEvents = watch.pagination?.total ?? events.length;
     const session = watch.session || {};
@@ -1636,42 +1663,58 @@ async function refresh() {
     refreshModelFilter();
     renderRows();
   } catch (error) {
-    byId('healthBadge').textContent = `watch unavailable: ${error.message}`;
+    showError('watch unavailable', error);
+  } finally {
+    refreshInFlight = false;
   }
 }
 
 async function loadOlder() {
-  const watch = await fetchWatch(events.length);
-  events = events.concat(watch.events || []);
-  totalEvents = watch.pagination?.total ?? totalEvents;
-  refreshModelFilter();
-  renderRows();
+  try {
+    const watch = await fetchWatch(events.length);
+    events = events.concat(watch.events || []);
+    totalEvents = watch.pagination?.total ?? totalEvents;
+    refreshModelFilter();
+    renderRows();
+  } catch (error) {
+    showError('load older failed', error);
+  }
 }
 
 async function openDetail(eventId) {
-  const response = await fetch(`/v1/watch/${encodeURIComponent(eventId)}`);
-  const item = await response.json();
-  if (!response.ok) { alert(item.detail || JSON.stringify(item)); return; }
-  byId('detailTitle').textContent = `${item.endpoint} · ${item.status_code}`;
-  byId('detailSubtitle').textContent = `${new Date(item.timestamp).toLocaleString()} · ${item.request_id || '-'}`;
-  byId('detailSource').textContent = item.source || 'api';
-  byId('detailModel').textContent = `${item.engine} · ${item.model_id} · ${item.backend}`;
-  const runtimeInstance = item.runtime_instance_id || '-';
-  byId('detailRuntime').textContent = runtimeInstance;
-  byId('detailRuntime').dataset.copyValue = item.runtime_instance_id || '';
-  byId('detailRuntime').title = item.runtime_instance_id
-    ? `${item.runtime_instance_id}\nClick to copy`
-    : 'Runtime instance ID unavailable';
-  byId('detailLatency').textContent = fmtMs(item.latency_ms);
-  byId('detailTokens').textContent = item.input_tokens ?? '-';
-  byId('detailRequest').textContent = JSON.stringify(item.request, null, 2);
-  byId('detailResponse').textContent = JSON.stringify(item.response, null, 2);
-  byId('detailDialog').showModal();
+  try {
+    const response = await fetch(`/v1/watch/${encodeURIComponent(eventId)}`);
+    const item = await response.json();
+    if (!response.ok) { alert(item.detail || JSON.stringify(item)); return; }
+    byId('detailTitle').textContent = `${item.endpoint} · ${item.status_code}`;
+    byId('detailSubtitle').textContent = `${new Date(item.timestamp).toLocaleString()} · ${item.request_id || '-'}`;
+    byId('detailSource').textContent = item.source || 'api';
+    byId('detailModel').textContent = `${item.engine} · ${item.model_id} · ${item.backend}`;
+    const runtimeInstance = item.runtime_instance_id || '-';
+    byId('detailRuntime').textContent = runtimeInstance;
+    byId('detailRuntime').dataset.copyValue = item.runtime_instance_id || '';
+    byId('detailRuntime').title = item.runtime_instance_id
+      ? `${item.runtime_instance_id}\nClick to copy`
+      : 'Runtime instance ID unavailable';
+    byId('detailLatency').textContent = fmtMs(item.latency_ms);
+    byId('detailTokens').textContent = item.input_tokens ?? '-';
+    byId('detailRequest').textContent = JSON.stringify(item.request, null, 2);
+    byId('detailResponse').textContent = JSON.stringify(item.response, null, 2);
+    byId('detailDialog').showModal();
+  } catch (error) {
+    showError('detail unavailable', error);
+  }
 }
 
 async function clearSession() {
   if (!confirm('Delete all temporary Watch history files for this server session?')) return;
-  await fetch('/v1/watch/clear', {method:'POST'});
+  try {
+    const response = await fetch('/v1/watch/clear', {method:'POST'});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  } catch (error) {
+    showError('clear failed', error);
+    return;
+  }
   await refresh();
 }
 
@@ -1682,8 +1725,12 @@ byId('modelFilter').addEventListener('change', renderRows);
 byId('refresh').addEventListener('click', refresh);
 byId('loadOlder').addEventListener('click', loadOlder);
 byId('watchAutoClear').addEventListener('change', async () => {
-  const response = await fetch('/v1/watch/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({auto_clear_minutes:Number(byId('watchAutoClear').value)})});
-  if (!response.ok) { const data=await response.json(); alert(data.detail || JSON.stringify(data)); }
+  try {
+    const response = await fetch('/v1/watch/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({auto_clear_minutes:Number(byId('watchAutoClear').value)})});
+    if (!response.ok) { const data=await response.json(); alert(data.detail || JSON.stringify(data)); }
+  } catch (error) {
+    showError('settings update failed', error);
+  }
   await refresh();
 });
 byId('clearSession').addEventListener('click', clearSession);

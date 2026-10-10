@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 
 from . import __version__
 from .catalog import get_model, get_profile, load_catalog
-from .config import Settings
+from .config import Settings, _resolve_model_source
 from .installations import installation_record
 from .process_lock import pgid_alive
 from .console import (
@@ -405,6 +405,37 @@ class SystemOneCapabilityError(RuntimeError):
         self.capability = capability
 
 
+def _require_catalog_model(settings: Settings, catalog_profile: dict[str, Any], profile: dict[str, Any]) -> None:
+    """Reject a config.json / DEQIO_MODEL* selection that differs from the catalog profile (B10).
+
+    Launchers load the catalog profile and provenance reports it; the config
+    values are only a mirror written by `deqio models use/select`. A different
+    value would make the served weights disagree with the reported identity, so
+    it is an error, never a silent override. Pin-on-install profiles may run the
+    immutable revision recorded by the installer instead of the catalog's.
+    """
+    label = f"{settings.model_id}/{settings.backend}"
+    expected_model = _resolve_model_source(
+        str(profile["model"]), settings.config_path.parent, settings.backend, settings.engine
+    )
+    if str(settings.model) != expected_model:
+        raise RuntimeError(
+            f"config.json/DEQIO_MODEL selects model {settings.model!r}, but catalog profile {label} loads "
+            f"{expected_model!r}. Deqio serves catalog profiles only: select one with `deqio models use` "
+            "or fix config.json."
+        )
+    accepted = {
+        str(catalog_profile.get("model_revision", settings.model_id)),
+        str(profile.get("model_revision") or ""),
+    }
+    if str(settings.model_revision) not in accepted:
+        raise RuntimeError(
+            f"config.json/DEQIO_MODEL_REVISION selects revision {settings.model_revision!r}, but catalog "
+            f"profile {label} loads {profile.get('model_revision')!r}. Deqio serves catalog profiles only: "
+            "select one with `deqio models use` or fix config.json."
+        )
+
+
 def _profile_with_installed_pin(settings: Settings, profile: dict[str, Any]) -> dict[str, Any]:
     """Use the immutable Hub revision recorded when a pin-on-install profile was verified."""
     if not profile.get("pin_hf_revisions_at_install"):
@@ -483,8 +514,9 @@ class SystemOneRuntime:
     def load(cls, settings: Settings) -> "SystemOneRuntime":
         catalog = load_catalog(settings.model_catalog)
         entry = get_model(catalog, settings.model_id)
-        profile = deepcopy(get_profile(catalog, settings.model_id, settings.backend))
-        profile = _profile_with_installed_pin(settings, profile)
+        catalog_profile = deepcopy(get_profile(catalog, settings.model_id, settings.backend))
+        profile = _profile_with_installed_pin(settings, catalog_profile)
+        _require_catalog_model(settings, catalog_profile, profile)
         if str(entry.get("engine")) != settings.engine:
             raise RuntimeError(
                 f"config engine={settings.engine!r} does not match catalog engine={entry.get('engine')!r} "
@@ -846,8 +878,8 @@ class SystemOneRuntime:
             command = [
                 str(python), str(sidecar),
                 "--backend", settings.backend,
-                "--model", settings.model,
-                "--revision", settings.model_revision,
+                "--model", model,
+                "--revision", str(profile.get("model_revision") or settings.model_revision),
                 "--max-tokens", str(settings.max_tokens),
                 "--mlx-cache-mib", str(settings.mlx_cache_mib),
             ]
@@ -882,7 +914,7 @@ class SystemOneRuntime:
                 raise RuntimeError("Open-Jev's current Deqio profiles require CUDA")
             return [
                 str(python), "-m", "jev.server",
-                "--checkpoint", settings.model,
+                "--checkpoint", _resolve_model_source(model, settings.config_path.parent, settings.backend, engine),
                 "--device", "cuda:0",
                 "--max-length", str(getattr(settings, "max_tokens", profile.get("open_jev_max_length", 4096))),
                 "--batch-size", "1",

@@ -689,6 +689,10 @@ def run(args: argparse.Namespace) -> int:
     print("-" * 109)
     for item in all_summaries:
         model = f"{item['model_id']}:{item['backend']}"
+        if item.get("load_error"):
+            # B12: a profile that never loaded has no statistics, not "0 cases, 0.0 %".
+            print(f"{model:30} load error: {item['load_error']}")
+            continue
         for kind in ("overall", "noul", "choice", "shared"):
             stats = item["summary"].get(kind, {})
             cases = int(stats.get("cases", 0))

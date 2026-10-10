@@ -624,7 +624,7 @@ deqio benchmark compare --left RUN_A --right RUN_B --json     # JSON for agents/
 deqio benchmark compare --left RUN_A --right RUN_B --output comparison.json
 ```
 
-Deqio only compares profiles whose canonical runtime identity matches, including model, backend, precision/quantization, relevant runtime identity, and pinned artifact revisions.
+Deqio only compares profiles whose canonical runtime identity matches, including model, backend, precision/quantization, relevant runtime identity, and pinned artifact revisions. Profiles whose runtime failed to load in a run are listed separately (`load_failed_left` / `load_failed_right` in the JSON) and never compared.
 
 ---
 

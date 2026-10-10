@@ -8,6 +8,50 @@ production audit.
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-10-09 (not tagged yet)
+
+One patch on top of 0.5.5 closing the last P2 items of the 0.5.3 production
+audit (D10b: B10, B12, B13). No public route was added or removed; the only
+response change is additive (two new lists in `deqio benchmark compare` JSON and
+`GET /v1/benchmarks/compare`). Tag `v0.5.6` after `ci.yml` is green.
+
+### Added
+
+- `deqio benchmark compare` and `GET /v1/benchmarks/compare` report profiles
+  whose runtime failed to load in their own lists, `load_failed_left` and
+  `load_failed_right` (each record carries `load_error`), with a dedicated
+  warning (B12). Previously such profiles were filed as "legacy profiles
+  without canonical identity".
+- Regression tests: `tests/test_model_source_rule.py`,
+  `tests/test_benchmark_load_error.py` (a real `deqio benchmark` run whose
+  engine fails to load) and `tests/test_watch_ui_behavior.py`, which executes
+  the Watch page's JavaScript under Node with a DOM and `fetch` stub (skipped
+  when `node` is not installed; GitHub's runners have it).
+
+### Changed
+
+- One rule for the model an engine loads (B10). Launchers use the catalog
+  profile: the SemIf sidecar receives the profile's model and revision and the
+  Open-Jev sidecar the profile's checkpoint path, not `config.json` values.
+  `config.json` / `DEQIO_MODEL` / `DEQIO_MODEL_REVISION` are a mirror of the
+  selected profile: a value that differs from the catalog profile makes loading
+  fail with an explicit error before any sidecar is spawned, so response
+  provenance can never name different weights than the ones served. Pin-on-
+  install profiles (Basal 1.5) keep running the immutable revision recorded by
+  the installer.
+- Watch page (B13): the automatic 2 s refresh re-reads at least as many rows as
+  are currently shown, so pages loaded with "Load older" are no longer replaced
+  by the first 500; a refresh still in flight is not duplicated by the timer;
+  "Load older", event details, "Clear session" and the auto-clear setting
+  report failures in the health badge instead of leaving unhandled promise
+  rejections.
+
+### Fixed
+
+- The benchmark summary table prints `load error: <reason>` for a profile that
+  failed to load instead of a row of zeros (`0 cases, 0.0 %, 0 errors`), and
+  the `/ui` benchmark summary shows the same (B12).
+
 ## [0.5.5] — 2026-10-09 (not tagged yet)
 
 One patch on top of 0.5.4: the model-management state machine (D9: audit

@@ -916,7 +916,7 @@ def test_ui_contains_installed_model_selector_and_live_activate_endpoint() -> No
 
 def test_watch_ui_uses_disk_backed_session_endpoints() -> None:
     assert "Deqio Watch" in WATCH_DASHBOARD
-    assert "fetch(`/v1/watch?limit=${pageSize}&offset=${offset}`)" in WATCH_DASHBOARD
+    assert "/v1/watch?limit=" in WATCH_DASHBOARD
     assert "/v1/watch/${encodeURIComponent(eventId)}" in WATCH_DASHBOARD
     assert "/v1/watch/settings" in WATCH_DASHBOARD
     assert "/v1/watch/clear" in WATCH_DASHBOARD
@@ -1138,7 +1138,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.5"
+    assert __version__ == "0.5.6"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -2163,7 +2163,9 @@ def test_systemone_commands_for_new_native_sidecars(tmp_path: Path) -> None:
 
     open_model = tmp_path / "models" / "open-jev" / "package" / "checkpoint"
     open_model.mkdir(parents=True)
-    openjev = SimpleNamespace(engine="open-jev", backend="cuda", model=str(open_model))
+    openjev = SimpleNamespace(
+        engine="open-jev", backend="cuda", model=str(open_model), config_path=tmp_path / "config.json"
+    )
     command = SystemOneRuntime._command(
         openjev,
         {"model": "./models/open-jev/package/checkpoint", "open_jev_max_length": 4096},
