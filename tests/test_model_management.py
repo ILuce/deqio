@@ -279,7 +279,10 @@ def test_nimble_source_without_git_metadata_is_recloned(
     source.mkdir()
     (source / "README.md").write_text("partial", encoding="utf-8")
 
-    model_manager._checkout_nimble(tmp_path, source_key="nimble-src", upgrade=False)
+    pinned = "dcfdbd9a64f0d869f658d7a72f1beaee32737773"
+    # The recorded clone lands on the pinned commit (D12), so no fetch/checkout follows.
+    monkeypatch.setattr(model_manager, "_git_head", lambda source_dir: pinned)
+    model_manager._checkout_nimble(tmp_path, source_key="nimble-src", revision=pinned)
 
     assert [command[:2] for command in commands] == [["git", "clone"]]
     assert commands[0][-1] == str(source)

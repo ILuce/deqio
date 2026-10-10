@@ -210,6 +210,12 @@ When a runnable profile uses quantized weights, record the quantization contract
 
 Do not silently fall back from an unsupported backend to CPU or another backend.
 
+Every runtime package is pinned: catalog `packages`, every `*_package` field and every package an installer adds itself is an exact PyPI version (`name==version`) or a GitHub commit (`@<40-hex>` or `/archive/<40-hex>.tar.gz`), never a branch, tag, range or bare name. FastAPI/Uvicorn inside engine runtimes only carry Deqio's sidecars and use the core `uv.lock` versions. Source checkouts (llama.cpp, Nimble) are fetched at the catalog commit, never pulled. Moving a pin to a newer upstream release is its own change with a per-profile benchmark.
+
+Hugging Face artifacts carry a 40-hex commit revision. The remaining exceptions are listed in `tests/test_catalog_pinning.py::HF_REVISION_PENDING`, which may only shrink. Pin a revision only where the launcher makes the engine load it (an argument, `LAYA_REVISION`, a snapshot path); otherwise the offline cache, the loaded weights and provenance disagree.
+
+Every profile declares `source: official` (runtime and weights from the model's upstream, or its designated GGUF org) or `source: community` (a third-party port, which must also name `source_url`).
+
 Installed-profile state is local machine state under `.deqio/` and must not be committed. The registry key `model_id::backend` is authoritative: shared runtime directories or Hugging Face cache entries must never make a different backend appear installed.
 
 Successful install/update should also record model artifact provenance in the local registry. For Hugging Face artifacts, store the requested revision (if any) and best-effort resolved immutable commit SHA. Existing pre-provenance registry entries remain valid, but their response attestation is incomplete until an install/update refreshes the artifact metadata. Updating a shared runtime (`runtime_key`) is a registry state transition: every registered profile of that runtime loses `verified_at` (kept in an `update_pending` block) until the update passes the readiness probe, so a failed update never leaves profiles claiming a verification the rebuilt runtime did not pass. `deqio models delete` unregisters a profile only after its artifacts are removed.

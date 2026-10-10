@@ -1138,7 +1138,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.6"
+    assert __version__ == "0.5.7"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1415,7 +1415,7 @@ def test_kev_native_profiles_stay_pinned_and_official_q8_gguf_is_separate() -> N
             assert profile["model_revision"] == "v1.0"
             assert profile["download"]["revision"] == "v1.0"
             assert profile["packages"] == [
-                "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+                "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
             ]
 
     for model_id in ("kev-0.8b", "kev-4b", "kev-9b"):
@@ -1962,7 +1962,7 @@ def test_catalog_contains_current_decision_families_and_nimble() -> None:
     )
     assert get_profile(catalog, "clm-8b", "cuda")["clm_checkpoint"] == "models/clm-8b/CLM_v0.1-8B.pt"
     assert get_profile(catalog, "clm-8b", "cuda")["packages"] == [
-        "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git"
+        "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git@d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6"
     ]
     assert get_profile(catalog, "nimble-9b", "mlx")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
     assert get_profile(catalog, "nimble-9b", "cuda")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
@@ -2047,6 +2047,7 @@ def test_nimble_installer_passes_audited_revision_to_preparer(
             "runtime_key": "nimble-mlx",
             "model_config": "nimble-model.json",
             "nimble_backend": "mlx",
+            "nimble_source_revision": "dcfdbd9a64f0d869f658d7a72f1beaee32737773",
             "python": "3.12",
         },
         upgrade=False,

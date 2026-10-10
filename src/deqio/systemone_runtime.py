@@ -1033,13 +1033,24 @@ class SystemOneRuntime:
             launcher = str(profile.get("launcher", "laya"))
             if launcher == "laya_mlx":
                 sidecar = Path(__file__).with_name("laya_mlx_sidecar.py").resolve()
-                return [str(python), str(sidecar), "--model", model, "--port", str(port)]
+                command = [str(python), str(sidecar), "--model", model, "--port", str(port)]
+                if profile.get("model_revision"):
+                    # D12: laya_mlx.load(..., revision=) reads exactly the pinned snapshot.
+                    command.extend(["--revision", str(profile["model_revision"])])
+                return command
             env["LAYA_HOST"] = "127.0.0.1"
             env["LAYA_PORT"] = str(port)
             env["LAYA_DEVICE"] = settings.backend
             # Bind the HTTP process first; the Deqio readiness probe loads the selected model.
             env["LAYA_PRELOAD"] = "0"
             env["LAYA_MODELS"] = str(profile.get("laya_model", ""))
+            # D12: upstream Laya loads Hub `main` unless LAYA_REVISION names a revision.
+            # The catalog's pin wins over any inherited value; without a pin, drop an
+            # inherited one so the environment cannot silently replace the catalog.
+            if profile.get("model_revision"):
+                env["LAYA_REVISION"] = str(profile["model_revision"])
+            else:
+                env.pop("LAYA_REVISION", None)
             return [str(python), "-m", "laya.serve"]
 
         if engine == "nimble":

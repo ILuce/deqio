@@ -12,11 +12,12 @@
           "model": "Qwen/Qwen3.5-4B",
           "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           "runtime_key": "semif",
+          "source": "official",
           "python": "3.12",
           "packages": [
             "semif-phase1[mlx] @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 8,
           "recommended_memory_gib": 12,
@@ -44,11 +45,12 @@
           "model": "Qwen/Qwen3.5-4B",
           "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           "runtime_key": "semif",
+          "source": "official",
           "python": "3.12",
           "packages": [
             "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 11,
           "recommended_memory_gib": 16,
@@ -68,11 +70,12 @@
           "model": "Qwen/Qwen3.5-4B",
           "model_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           "runtime_key": "semif",
+          "source": "official",
           "python": "3.12",
           "packages": [
             "semif-phase1 @ git+https://github.com/TheoLeeCJ/SemIf-OpenJev.git@1f2dea3e25379f9dfc98cb83c324f00ab5deda37",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 11,
           "recommended_memory_gib": 16,
@@ -457,9 +460,10 @@
           "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
@@ -485,9 +489,10 @@
           "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
@@ -513,9 +518,10 @@
           "model": "jaredpalmer/kev-0.8b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
@@ -600,9 +606,10 @@
           "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 12,
           "recommended_memory_gib": 16,
@@ -628,9 +635,10 @@
           "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 14,
           "recommended_memory_gib": 32,
@@ -656,9 +664,10 @@
           "model": "jaredpalmer/kev-4b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 14,
           "recommended_memory_gib": 32,
@@ -743,9 +752,10 @@
           "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
@@ -771,9 +781,10 @@
           "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
@@ -799,9 +810,10 @@
           "model": "jaredpalmer/kev-9b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
@@ -886,9 +898,10 @@
           "model": "jaredpalmer/kev-27b@v1.0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@kev-1.0"
+            "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
           ],
           "systems": [
             "Linux"
@@ -927,9 +940,10 @@
           "model_revision": "upstream-latest",
           "wire_model": "alibiserikbay/JevK5",
           "runtime_key": "jevk5",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git"
+            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git@f944fe37ff1d5ed3830aa4c8d88b7189c8c1268a"
           ],
           "systems": [
             "Linux"
@@ -956,7 +970,7 @@
           "python": "3.12",
           "installer": "jevk5_gguf",
           "launcher": "jevk5_gguf",
-          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@v0.3.0",
+          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@6c6522fe5462a05fdb82bceeb0e8c624c11f1517",
           "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
           "jevk5_gguf_dir": "models/jevk5-GGUF",
           "jevk5_gguf_filename": "jevk5-4b-v0.3-Q8_0.gguf",
@@ -1015,9 +1029,10 @@
           "model_revision": "upstream-latest",
           "wire_model": "alibiserikbay/JevK5-9B",
           "runtime_key": "jevk5",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git"
+            "jevk5[fast] @ git+https://github.com/allebee/jevk5.git@f944fe37ff1d5ed3830aa4c8d88b7189c8c1268a"
           ],
           "systems": [
             "Linux"
@@ -1044,7 +1059,7 @@
           "python": "3.12",
           "installer": "jevk5_gguf",
           "launcher": "jevk5_gguf",
-          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@v0.3.0",
+          "jevk5_package": "jevk5 @ git+https://github.com/allebee/jevk5.git@6c6522fe5462a05fdb82bceeb0e8c624c11f1517",
           "llama_cpp_revision": "99b95488cac0f00ce3f05af113a8c1e287753f87",
           "jevk5_gguf_dir": "models/jevk5-GGUF",
           "jevk5_gguf_filename": "jevk5-9b-v0.3.3-Q8_0.gguf",
@@ -1103,9 +1118,10 @@
           "model_revision": "0c7aa498b1627be8da4acf34c863ff0ee0a92785",
           "wire_model": "ZefanCai/Open-Jev-2B",
           "runtime_key": "open-jev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git@bd4118882f733574a3250a4b65fe4d884130c08b"
           ],
           "downloads": [
             {
@@ -1152,9 +1168,10 @@
           "model_revision": "47e966881e489511c0c7f5633a9e1960a676a551",
           "wire_model": "ZefanCai/Open-Jev-9B",
           "runtime_key": "open-jev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git@bd4118882f733574a3250a4b65fe4d884130c08b"
           ],
           "downloads": [
             {
@@ -1201,9 +1218,10 @@
           "model_revision": "upstream-latest",
           "wire_model": "ZefanCai/Open-Jev-27B-v1.1",
           "runtime_key": "open-jev",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git"
+            "open-jev[train] @ git+https://github.com/Zefan-Cai/Open-Jev.git@bd4118882f733574a3250a4b65fe4d884130c08b"
           ],
           "downloads": [
             {
@@ -1249,9 +1267,10 @@
           "model_revision": "upstream-latest",
           "wire_model": "clm-latest",
           "runtime_key": "clm",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git"
+            "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git@d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6"
           ],
           "downloads": [
             {
@@ -1304,7 +1323,7 @@
           "installer": "basal",
           "basal_backend": "mlx",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1355,7 +1374,7 @@
           "installer": "basal",
           "basal_backend": "mps",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mps",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1399,7 +1418,7 @@
           "installer": "basal",
           "basal_backend": "gguf",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1469,7 +1488,7 @@
           "installer": "basal",
           "basal_backend": "cuda",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "fast-nocompile",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1522,7 +1541,7 @@
           "installer": "basal",
           "basal_backend": "mlx",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1573,7 +1592,7 @@
           "installer": "basal",
           "basal_backend": "mps",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mps",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1617,7 +1636,7 @@
           "installer": "basal",
           "basal_backend": "gguf",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1687,7 +1706,7 @@
           "installer": "basal",
           "basal_backend": "cuda",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "fast-nocompile",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1740,7 +1759,7 @@
           "installer": "basal",
           "basal_backend": "mlx",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1791,7 +1810,7 @@
           "installer": "basal",
           "basal_backend": "mps",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "mps",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1835,7 +1854,7 @@
           "installer": "basal",
           "basal_backend": "gguf",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1905,7 +1924,7 @@
           "installer": "basal",
           "basal_backend": "cuda",
           "basal_runtime_version": "1.5.0",
-          "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
+          "basal_package": "basal @ https://github.com/rkinas/basal/archive/cd63c083636f94ce492ec1e6cc1e02144723b9b5.tar.gz",
           "basal_mode": "fast-nocompile",
           "basal_soam": true,
           "pin_hf_revisions_at_install": true,
@@ -1954,12 +1973,14 @@
           "wire_model": "clef-flash",
           "model_revision": "dfa0993decb4f8507a0eae01afd1b2d33a4bb734",
           "runtime_key": "clef-mlx",
+          "source": "community",
+          "source_url": "https://huggingface.co/mlx-community/clef-flash-8bit",
           "python": "3.12",
           "packages": [
             "mlx==0.32.3",
             "mlx-lm==0.32.0",
             "mlx-vlm==0.7.4",
-            "huggingface-hub>=1,<2"
+            "huggingface-hub==1.31.0"
           ],
           "systems": [
             "Darwin"
@@ -2052,12 +2073,14 @@
           "wire_model": "clef",
           "model_revision": "ffcdb6132b3cc94e523860321dd9ed58bc1ee9a1",
           "runtime_key": "clef-mlx",
+          "source": "community",
+          "source_url": "https://huggingface.co/mlx-community/clef-8bit",
           "python": "3.12",
           "packages": [
             "mlx==0.32.3",
             "mlx-lm==0.32.0",
             "mlx-vlm==0.7.4",
-            "huggingface-hub>=1,<2"
+            "huggingface-hub==1.31.0"
           ],
           "systems": [
             "Darwin"
@@ -2149,9 +2172,10 @@
           "model": "Mapika/decider-0.8b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 3,
           "recommended_memory_gib": 8,
@@ -2171,9 +2195,10 @@
           "model": "Mapika/decider-0.8b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 3,
           "recommended_memory_gib": 8,
@@ -2202,9 +2227,10 @@
           "model": "Mapika/decider-2b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 6,
           "recommended_memory_gib": 12,
@@ -2224,9 +2250,10 @@
           "model": "Mapika/decider-2b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 6,
           "recommended_memory_gib": 12,
@@ -2250,7 +2277,7 @@
           "python": "3.12",
           "installer": "decider_gguf",
           "launcher": "decider_gguf",
-          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@v1.8.1",
+          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@50d0be0d7cb43d2066965ce5fa7f3fe4e489a60f",
           "decider_gguf_dir": "models/decider-2b-GGUF",
           "decider_gguf_pattern": "*Q8_0.gguf",
           "pin_hf_revisions_at_install": true,
@@ -2317,9 +2344,10 @@
           "model": "Mapika/decider-4b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 11,
           "recommended_memory_gib": 16,
@@ -2339,9 +2367,10 @@
           "model": "Mapika/decider-4b",
           "wire_model": "decider",
           "runtime_key": "decider",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git"
+            "decider-ai[serve,metal] @ git+https://github.com/Mapika/decider.git@f8c933af759a00c1afd7ddb736ab44a7b47dac3e"
           ],
           "min_memory_gib": 11,
           "recommended_memory_gib": 16,
@@ -2365,7 +2394,7 @@
           "python": "3.12",
           "installer": "decider_gguf",
           "launcher": "decider_gguf",
-          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@v1.8.1",
+          "decider_package": "decider-ai[gguf] @ git+https://github.com/Mapika/decider.git@50d0be0d7cb43d2066965ce5fa7f3fe4e489a60f",
           "decider_gguf_dir": "models/decider-4b-GGUF",
           "decider_gguf_pattern": "*Q8_0.gguf",
           "pin_hf_revisions_at_install": true,
@@ -2430,14 +2459,17 @@
       "backends": {
         "mlx": {
           "model": "aac6fef/laya-mlx",
+          "model_revision": "047678560251f28113ee8f5df4be82102c7bf336",
           "wire_model": "aac6fef/laya-mlx",
           "runtime_key": "laya-mlx",
+          "source": "community",
+          "source_url": "https://github.com/mizorewww/laya-mlx",
           "launcher": "laya_mlx",
           "python": "3.12",
           "packages": [
-            "laya-mlx",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "laya-mlx==0.3.0",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2455,15 +2487,17 @@
         },
         "cuda": {
           "model": "convaiinnovations/laya",
+          "model_revision": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
           "wire_model": "english",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "english",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2481,15 +2515,17 @@
         },
         "mps": {
           "model": "convaiinnovations/laya",
+          "model_revision": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
           "wire_model": "english",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "english",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2566,14 +2602,17 @@
       "backends": {
         "mlx": {
           "model": "aac6fef/laya-multilingual-mlx",
+          "model_revision": "ba40c87fcb357f1643d04d71323af9cdc3b9e591",
           "wire_model": "aac6fef/laya-multilingual-mlx",
           "runtime_key": "laya-mlx",
+          "source": "community",
+          "source_url": "https://github.com/mizorewww/laya-mlx",
           "launcher": "laya_mlx",
           "python": "3.12",
           "packages": [
-            "laya-mlx",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "laya-mlx==0.3.0",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2591,15 +2630,17 @@
         },
         "cuda": {
           "model": "convaiinnovations/laya-multilingual",
+          "model_revision": "e4e9ddf21a7b1903b7acffd8814ad4307bf63a67",
           "wire_model": "multilingual",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "multilingual",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2617,15 +2658,17 @@
         },
         "mps": {
           "model": "convaiinnovations/laya-multilingual",
+          "model_revision": "e4e9ddf21a7b1903b7acffd8814ad4307bf63a67",
           "wire_model": "multilingual",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "multilingual",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2652,14 +2695,17 @@
       "backends": {
         "mlx": {
           "model": "aac6fef/laya-typed-decisions-mlx",
+          "model_revision": "28416e78cb26a239a4eabaa2e084904ec5e6cacb",
           "wire_model": "aac6fef/laya-typed-decisions-mlx",
           "runtime_key": "laya-mlx",
+          "source": "community",
+          "source_url": "https://github.com/mizorewww/laya-mlx",
           "launcher": "laya_mlx",
           "python": "3.12",
           "packages": [
-            "laya-mlx",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.27"
+            "laya-mlx==0.3.0",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2677,15 +2723,17 @@
         },
         "cuda": {
           "model": "convaiinnovations/laya-typed-decisions",
+          "model_revision": "1a793eb568e6718f15941d08f85432581df534e3",
           "wire_model": "typed-decisions",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "typed-decisions",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2703,15 +2751,17 @@
         },
         "mps": {
           "model": "convaiinnovations/laya-typed-decisions",
+          "model_revision": "1a793eb568e6718f15941d08f85432581df534e3",
           "wire_model": "typed-decisions",
           "runtime_key": "laya-torch",
+          "source": "official",
           "launcher": "laya",
           "laya_model": "typed-decisions",
           "python": "3.12",
           "packages": [
-            "laya @ git+https://github.com/NandhaKishorM/laya.git",
-            "fastapi>=0.110",
-            "uvicorn[standard]>=0.28"
+            "laya @ git+https://github.com/NandhaKishorM/laya.git@a4a8921afebfd852bba0000475cfb6ab737a124c",
+            "fastapi==0.141.1",
+            "uvicorn[standard]==0.53.0"
           ],
           "min_memory_gib": 2,
           "recommended_memory_gib": 4,
@@ -2740,9 +2790,10 @@
           "model": "von",
           "wire_model": "von-1.2.0",
           "runtime_key": "von",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "von-sdk @ git+https://github.com/wfzyx/von.git"
+            "von-sdk @ git+https://github.com/wfzyx/von.git@587f1022293366b99dd97a0c8a86dd62e5ef8836"
           ],
           "download": {
             "type": "file",
@@ -2767,9 +2818,10 @@
           "model": "von",
           "wire_model": "von-1.2.0",
           "runtime_key": "von",
+          "source": "official",
           "python": "3.12",
           "packages": [
-            "von-sdk @ git+https://github.com/wfzyx/von.git"
+            "von-sdk @ git+https://github.com/wfzyx/von.git@587f1022293366b99dd97a0c8a86dd62e5ef8836"
           ],
           "download": {
             "type": "file",
@@ -2804,7 +2856,9 @@
           "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
           "wire_model": "nimble-latest",
           "runtime_key": "nimble-mlx",
+          "source": "official",
           "source_key": "nimble-src",
+          "nimble_source_revision": "dcfdbd9a64f0d869f658d7a72f1beaee32737773",
           "model_config": "nimble-model.json",
           "repo_id": "bespokelabs/Bespoke-Nimble-9B",
           "installer": "nimble",
@@ -2829,7 +2883,9 @@
           "model_revision": "bd792f44ec8e265be861bfcdf4e05967ffe0e858",
           "wire_model": "nimble-latest",
           "runtime_key": "nimble-cuda",
+          "source": "official",
           "source_key": "nimble-src",
+          "nimble_source_revision": "dcfdbd9a64f0d869f658d7a72f1beaee32737773",
           "model_config": "nimble-model.json",
           "repo_id": "bespokelabs/Bespoke-Nimble-9B",
           "installer": "nimble",

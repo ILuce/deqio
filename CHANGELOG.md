@@ -8,6 +8,58 @@ production audit.
 
 ## [Unreleased]
 
+## [0.5.7] — 2026-10-10 (not tagged yet)
+
+One patch on top of 0.5.6: catalog pinning (D12). Two installs of the same catalog now build the
+same engine code. No public route or response field was added, removed or renamed. The existing
+per-profile `source` field (already on 28 of 68 profiles, exported by `/v1/models` and provenance)
+is now present on every profile.
+
+### Changed
+
+- Every engine runtime package in `models.json` is an exact PyPI version or a GitHub commit (D12):
+  Kev `kev-1.0` → `6b719c3c`; Basal `refs/tags/v1.5.0` archive → archive of commit `cd63c083`;
+  Decider CUDA/MPS `main` → v1.9.0 `f8c933af` (1.8.1 returned NaN probabilities on MPS for
+  `temperature_by_type` models such as decider-2b v11; 1.9.0 changes nothing else on the
+  `decider.serve` path); Decider GGUF `v1.8.1` → `50d0be0d`; Laya `main` → v0.3.28 `a4a8921a`;
+  JevK5 `main` → v0.3.3 `f944fe37`; JevK5 GGUF `v0.3.0` → `6c6522fe`; Von `main` → v1.3.7 `587f1022`;
+  Open-Jev `main` → `bd411888`; CLM `main` → `d5f9ef0f`; `laya-mlx` → `==0.3.0`; `fastapi`/`uvicorn`
+  → the core lock versions `0.141.1`/`0.53.0`; `huggingface-hub>=1,<2` → `==1.31.0`.
+- Installers pin what they add themselves: sidecar transport (`SIDECAR_TRANSPORT_PACKAGES`),
+  llama.cpp build tools (`cmake==4.4.4`, `ninja==1.13.2`), the Nimble preparation Hub client.
+- Nimble: install and update check out the catalog commit `nimble_source_revision` (`dcfdbd9a`,
+  includes upstream #11 for the 2026-09-24 checkpoint) instead of cloning or pulling `main`; a
+  checkout that cannot reach the pinned commit is an error.
+- Every profile declares `source: official|community`; the five community ports (Laya MLX ×3,
+  Clef MLX ×2) also name `source_url`.
+- Laya loads the revision the catalog pins: CUDA/MPS through `LAYA_REVISION` (the upstream reviewed
+  pins of laya v0.3.28), MLX through the sidecar's new `--revision` (the revisions the laya-mlx 0.3.0
+  publisher recorded for its weights).
+
+### Added
+
+- `tests/test_catalog_pinning.py`: pinned specs in the catalog and in every installer command,
+  sidecar transport equal to `uv.lock`, a Hugging Face revision ratchet (`HF_REVISION_PENDING`, may
+  only shrink), source labels, shared-runtime consistency, the Nimble checkout against a real git
+  upstream, the Laya launchers and the Laya MLX sidecar.
+
+### Not changed on purpose
+
+- llama.cpp stays at `99b95488`; the bump to `a657f7e9` waits for the GGUF regression on
+  basic-150/pl-60 across the six shared-runtime GGUF profiles.
+- Upgrades past the verified releases (Decider beyond 1.9.0, Laya 0.3.29/0.4.x with its new router
+  default, laya-mlx 0.4.0) are separate benchmarked changes.
+- Hugging Face revisions that need huggingface.co or launcher support stay in `HF_REVISION_PENDING`.
+
+### Upgrade notes
+
+- Pins apply when a runtime is (re)built: run `deqio models update MODEL_ID --backend BACKEND` for
+  every installed profile.
+- Laya profiles now carry `model_revision`; a `config.json` written before 0.5.7 is rejected by the
+  B10 rule until `deqio models use` re-selects the profile.
+- The 40 profiles that gained `source` get a new benchmark `canonical_id`: compare their pre/post
+  0.5.7 runs by the per-profile numbers, not by the common set of `deqio benchmark compare`.
+
 ## [0.5.6] — 2026-10-09 (not tagged yet)
 
 One patch on top of 0.5.5 closing the last P2 items of the 0.5.3 production

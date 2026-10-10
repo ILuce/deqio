@@ -666,7 +666,8 @@ deqio benchmark compare
 Deqio 0.5 prefers correctness over pretending that every backend supports every feature:
 
 - official/authoritative model and runtime paths;
-- pinned revisions where appropriate;
+- every engine runtime pinned to an exact version or commit, Hub artifacts to commit revisions (remaining exceptions are tracked in tests);
+- every profile labeled `official` or `community`;
 - no silent CPU/backend fallback;
 - no silent capability degradation;
 - native decision probabilities and semantics are preserved;

@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 
-def build_app(model_id: str):
+def build_app(model_id: str, revision: str | None = None):
     import laya_mlx as laya
     from fastapi import FastAPI, HTTPException
 
@@ -20,7 +20,8 @@ def build_app(model_id: str):
             return agent
         with load_lock:
             if agent is None:
-                agent = laya.load(model_id)
+                # D12: the launcher passes the catalog's pinned Hub revision.
+                agent = laya.load(model_id, revision=revision) if revision else laya.load(model_id)
         return agent
 
     @app.get("/health")
@@ -50,13 +51,14 @@ def build_app(model_id: str):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
+    parser.add_argument("--revision")
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
     import uvicorn
 
     uvicorn.run(
-        build_app(args.model),
+        build_app(args.model, args.revision),
         host="127.0.0.1",
         port=args.port,
         access_log=False,

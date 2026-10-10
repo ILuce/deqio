@@ -38,6 +38,17 @@ ROOT = Path.cwd()
 TOKEN_BUDGET_PRESETS = (4096, 8192, 12288, 16384, 32768)
 
 
+# D12: every package Deqio adds to an engine runtime is pinned, like the catalog's own.
+# FastAPI/Uvicorn only carry Deqio's localhost sidecars, so they use the versions that
+# uv.lock and CI test (tests/test_catalog_pinning.py keeps them equal).
+SIDECAR_TRANSPORT_PACKAGES = ("fastapi==0.141.1", "uvicorn[standard]==0.53.0")
+# Isolated build tools for the pinned llama.cpp runtime.
+LLAMA_CPP_BUILD_TOOLS = ("cmake==4.4.4", "ninja==1.13.2")
+# Hub client of the Nimble preparation environment (the core lock's version).
+NIMBLE_PREP_HUB_PACKAGE = "huggingface-hub==1.31.0"
+NIMBLE_SOURCE_URL = "https://github.com/bespokelabsai/nimble.git"
+
+
 def _prompt_index(label: str, count: int) -> int | None:
     value = input(f"{label} [1-{count}, q]: ").strip().lower()
     if value in {"q", "quit", "exit"}:
@@ -315,13 +326,30 @@ def _discard_partial_checkout(source_dir: Path) -> None:
     shutil.rmtree(source_dir)
 
 
-def _checkout_nimble(runtime_root: Path, *, source_key: str, upgrade: bool) -> Path:
+def _git_head(source_dir: Path) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(source_dir), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _checkout_nimble(runtime_root: Path, *, source_key: str, revision: str) -> Path:
+    """Check out the Nimble source at the commit the catalog pins (D12).
+
+    A fresh clone lands on upstream ``main`` and an older checkout stays where it
+    was cloned; install and update both move it to the pinned commit, so two
+    installs build the same source. Fetching one commit mirrors the llama.cpp path.
+    """
     source_dir = runtime_root / source_key
     _discard_partial_checkout(source_dir)
     if not (source_dir / ".git").exists():
-        _run(["git", "clone", "--depth", "1", "https://github.com/bespokelabsai/nimble.git", str(source_dir)])
-    elif upgrade:
-        _run(["git", "-C", str(source_dir), "pull", "--ff-only"])
+        _run(["git", "clone", "--depth", "1", NIMBLE_SOURCE_URL, str(source_dir)])
+    if _git_head(source_dir) != revision:
+        _run(["git", "-C", str(source_dir), "fetch", "--depth", "1", "origin", revision])
+        _run(["git", "-C", str(source_dir), "checkout", "--detach", "FETCH_HEAD"])
+    head = _git_head(source_dir)
+    if head != revision:
+        raise RuntimeError(f"Nimble source checkout is at {head or 'no commit'}, expected the pinned {revision}")
     return source_dir
 
 
@@ -348,7 +376,10 @@ def _install_nimble(
 
     runtime_root.mkdir(parents=True, exist_ok=True)
     source_key = str(profile.get("source_key", "nimble-src"))
-    source_dir = _checkout_nimble(runtime_root, source_key=source_key, upgrade=upgrade)
+    revision = str(profile.get("nimble_source_revision", "")).strip()
+    if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+        raise RuntimeError("Nimble profile must pin nimble_source_revision to a 40-character commit SHA")
+    source_dir = _checkout_nimble(runtime_root, source_key=source_key, revision=revision)
     backend = str(profile.get("nimble_backend") or data.get("backend") or "")
     if backend not in {"mlx", "cuda"}:
         raise RuntimeError("Nimble supports mlx and cuda profiles in Deqio")
@@ -361,7 +392,7 @@ def _install_nimble(
         _run([
             "uv", "pip", "install", "--python", str(python_path),
             "-r", str(source_dir / "requirements" / "mlx.txt"),
-            "fastapi>=0.110", "uvicorn[standard]>=0.27",
+            *SIDECAR_TRANSPORT_PACKAGES,
         ])
     else:
         _run([
@@ -371,7 +402,7 @@ def _install_nimble(
         _run([
             "uv", "pip", "install", "--python", str(python_path),
             "-r", str(source_dir / "requirements" / "training.txt"),
-            "fastapi>=0.110", "uvicorn[standard]>=0.27",
+            *SIDECAR_TRANSPORT_PACKAGES,
         ])
 
     prep_dir = runtime_root / "nimble-prep"
@@ -382,7 +413,7 @@ def _install_nimble(
     prep_command.extend([
         "torch==2.8.0",
         "-r", str(source_dir / "requirements" / "training.txt"),
-        "huggingface-hub",
+        NIMBLE_PREP_HUB_PACKAGE,
     ])
     _run(prep_command)
 
@@ -494,7 +525,7 @@ def _install_decision2(
     command.extend(str(package) for package in packages)
     # FastAPI/Uvicorn are Deqio's localhost transport only; the model and all
     # scoring/runtime logic remain the verified package shipped by upstream.
-    command.extend(["fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    command.extend(SIDECAR_TRANSPORT_PACKAGES)
     _run(command)
     return env_dir
 
@@ -517,7 +548,7 @@ def _install_llama_cpp_runtime(
     tool_command = ["uv", "pip", "install", "--python", str(python)]
     if upgrade:
         tool_command.append("--upgrade")
-    tool_command.extend(["cmake>=3.20,<5", "ninja>=1.11,<2"])
+    tool_command.extend(LLAMA_CPP_BUILD_TOOLS)
     _run(tool_command)
     bin_dir = env_dir / ("Scripts" if os.name == "nt" else "bin")
     cmake_exe = bin_dir / ("cmake.exe" if os.name == "nt" else "cmake")
@@ -618,7 +649,7 @@ def _install_jevk5_gguf(
     command = ["uv", "pip", "install", "--python", str(python)]
     if upgrade:
         command.append("--upgrade")
-    command.extend([package, "fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    command.extend([package, *SIDECAR_TRANSPORT_PACKAGES])
     _run(command)
     return env_dir
 
@@ -635,7 +666,7 @@ def _install_decider_gguf(
     command = ["uv", "pip", "install", "--python", str(python)]
     if upgrade:
         command.append("--upgrade")
-    command.extend([package, "fastapi>=0.110,<1", "uvicorn[standard]>=0.27,<1"])
+    command.extend([package, *SIDECAR_TRANSPORT_PACKAGES])
     env = os.environ.copy()
     if sys.platform == "darwin":
         env["CMAKE_ARGS"] = "-DGGML_METAL=on"
