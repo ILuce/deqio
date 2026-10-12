@@ -1138,7 +1138,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.7"
+    assert __version__ == "0.5.8"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1962,7 +1962,7 @@ def test_catalog_contains_current_decision_families_and_nimble() -> None:
     )
     assert get_profile(catalog, "clm-8b", "cuda")["clm_checkpoint"] == "models/clm-8b/CLM_v0.1-8B.pt"
     assert get_profile(catalog, "clm-8b", "cuda")["packages"] == [
-        "clm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git@d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6"
+        "contrastive-lm[serve,hf,vllm] @ git+https://github.com/Contrastive-LM/CLM.git@d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6"
     ]
     assert get_profile(catalog, "nimble-9b", "mlx")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
     assert get_profile(catalog, "nimble-9b", "cuda")["repo_id"] == "bespokelabs/Bespoke-Nimble-9B"
@@ -2045,6 +2045,7 @@ def test_nimble_installer_passes_audited_revision_to_preparer(
             "repo_id": "bespokelabs/Bespoke-Nimble-9B",
             "model_revision": revision,
             "runtime_key": "nimble-mlx",
+            "exclude_newer": "2026-10-10T00:00:00Z",
             "model_config": "nimble-model.json",
             "nimble_backend": "mlx",
             "nimble_source_revision": "dcfdbd9a64f0d869f658d7a72f1beaee32737773",
@@ -2843,6 +2844,7 @@ def test_basal15_installer_uses_official_backend_specific_packages(
             {"backend": backend, "runtime_dir": ".model-runtimes"},
             {
                 "runtime_key": "basal15",
+                "exclude_newer": "2026-10-10T00:00:00Z",
                 "python": "3.12",
                 "basal_backend": backend,
                 "basal_runtime_version": "1.5.0",
@@ -3026,6 +3028,7 @@ def test_basal15_cuda_installer_leaves_torch_resolution_to_official_runtime(
         {"backend": "cuda", "runtime_dir": ".model-runtimes"},
         {
             "runtime_key": "basal15-main-cuda",
+            "exclude_newer": "2026-10-10T00:00:00Z",
             "python": "3.12",
             "basal_backend": "cuda",
             "basal_runtime_version": "1.5.0",
@@ -3205,6 +3208,7 @@ def test_patch1_decision2_installer_pins_official_runtime_dependencies(
         {"runtime_dir": ".model-runtimes"},
         {
             "runtime_key": "decision2-cuda",
+            "exclude_newer": "2026-10-10T00:00:00Z",
             "python": "3.12.13",
             "platform": "cuda",
             "packages": [
@@ -3513,6 +3517,7 @@ def test_patch2_basal15_installer_uses_official_v150_extras(
         {"backend": "mlx", "runtime_dir": ".model-runtimes"},
         {
             "runtime_key": "basal15",
+            "exclude_newer": "2026-10-10T00:00:00Z",
             "basal_backend": "mlx",
             "basal_runtime_version": "1.5.0",
             "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
@@ -3528,6 +3533,7 @@ def test_patch2_basal15_installer_uses_official_v150_extras(
         {"backend": "gguf", "runtime_dir": ".model-runtimes"},
         {
             "runtime_key": "basal15",
+            "exclude_newer": "2026-10-10T00:00:00Z",
             "basal_backend": "gguf",
             "basal_runtime_version": "1.5.0",
             "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
@@ -4352,6 +4358,7 @@ def test_fix02_llama_cpp_build_exposes_isolated_ninja_to_cmake(
     monkeypatch.setattr(manager, "_run", fake_run)
     profile = {
         "runtime_key": "llama-cpp-systemone",
+        "exclude_newer": "2026-10-10T00:00:00Z",
         "python": "3.12",
         "llama_cpp_revision": "1" * 40,
     }

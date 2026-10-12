@@ -147,7 +147,7 @@ def _install_specs(command: list[str]) -> list[str]:
         if skip:
             skip = False
             continue
-        if token in {"--python", "--index-url", "-r", "--extra-index-url"}:
+        if token in {"--python", "--index-url", "-r", "--extra-index-url", "--exclude-newer"}:
             skip = True
             continue
         if token.startswith("-"):

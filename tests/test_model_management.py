@@ -230,7 +230,7 @@ def test_default_runtime_installer_uses_the_same_venv_repair(
     model_manager._install_runtime(
         config,
         {"runtime_dir": ".model-runtimes"},
-        {"runtime_key": "demo", "packages": ["demo-engine==1.0"], "python": "3.12"},
+        {"exclude_newer": "2026-10-10T00:00:00Z", "runtime_key": "demo", "packages": ["demo-engine==1.0"], "python": "3.12"},
         upgrade=False,
     )
 
@@ -259,7 +259,7 @@ def test_llama_cpp_source_without_git_metadata_is_recloned(
         model_manager._install_llama_cpp_runtime(
             config,
             {"runtime_dir": ".model-runtimes"},
-            {"runtime_key": "llama-cpp-systemone", "python": "3.12", "llama_cpp_revision": "a" * 40},
+            {"exclude_newer": "2026-10-10T00:00:00Z", "runtime_key": "llama-cpp-systemone", "python": "3.12", "llama_cpp_revision": "a" * 40},
             upgrade=False,
         )
 

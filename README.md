@@ -668,6 +668,7 @@ Deqio 0.5 prefers correctness over pretending that every backend supports every 
 - official/authoritative model and runtime paths;
 - every engine runtime pinned to an exact version or commit, Hub artifacts to commit revisions (remaining exceptions are tracked in tests);
 - every profile labeled `official` or `community`;
+- transitive dependencies resolved as of a fixed instant per profile (`exclude_newer`);
 - no silent CPU/backend fallback;
 - no silent capability degradation;
 - native decision probabilities and semantics are preserved;

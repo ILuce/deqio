@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,28 @@ LLAMA_CPP_BUILD_TOOLS = ("cmake==4.4.4", "ninja==1.13.2")
 # Hub client of the Nimble preparation environment (the core lock's version).
 NIMBLE_PREP_HUB_PACKAGE = "huggingface-hub==1.31.0"
 NIMBLE_SOURCE_URL = "https://github.com/bespokelabsai/nimble.git"
+# D12b: every PyPI resolution of an engine runtime is bounded by the profile's
+# `exclude_newer` instant (uv ignores releases uploaded later), so transitive
+# dependencies resolve the same way on every install. Once a cutoff is set, uv
+# drops every file of an index that publishes no upload times, so the commands
+# that install one exact torch pin from the PyTorch index run without it.
+_EXCLUDE_NEWER = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+def _pip_install(python: Path, profile: dict[str, Any], *, upgrade: bool) -> list[str]:
+    """Start a `uv pip install` that resolves from PyPI as of the profile's cutoff."""
+    cutoff = str(profile.get("exclude_newer", "")).strip()
+    if not _EXCLUDE_NEWER.match(cutoff):
+        raise RuntimeError(
+            "The catalog profile does not declare exclude_newer (an RFC 3339 UTC instant such as "
+            "2026-10-10T00:00:00Z), so its runtime cannot be installed reproducibly. Deqio never "
+            "overwrites a workspace models.json: replace one created by an older version with the "
+            "catalog shipped in this version (deqio/data/models.json), keeping your own edits."
+        )
+    command = ["uv", "pip", "install", "--python", str(python), "--exclude-newer", cutoff]
+    if upgrade:
+        command.append("--upgrade")
+    return command
 
 
 def _prompt_index(label: str, count: int) -> int | None:
@@ -390,26 +413,25 @@ def _install_nimble(
 
     if backend == "mlx":
         _run([
-            "uv", "pip", "install", "--python", str(python_path),
+            *_pip_install(python_path, profile, upgrade=False),
             "-r", str(source_dir / "requirements" / "mlx.txt"),
             *SIDECAR_TRANSPORT_PACKAGES,
         ])
     else:
+        # PyTorch index: one exact pin and no cutoff (see _pip_install).
         _run([
             "uv", "pip", "install", "--python", str(python_path),
             "torch==2.8.0", "--index-url", "https://download.pytorch.org/whl/cu128",
         ])
         _run([
-            "uv", "pip", "install", "--python", str(python_path),
+            *_pip_install(python_path, profile, upgrade=False),
             "-r", str(source_dir / "requirements" / "training.txt"),
             *SIDECAR_TRANSPORT_PACKAGES,
         ])
 
     prep_dir = runtime_root / "nimble-prep"
     prep_python = _ensure_venv(prep_dir, python_version)
-    prep_command = ["uv", "pip", "install", "--python", str(prep_python)]
-    if upgrade:
-        prep_command.append("--upgrade")
+    prep_command = _pip_install(prep_python, profile, upgrade=upgrade)
     prep_command.extend([
         "torch==2.8.0",
         "-r", str(source_dir / "requirements" / "training.txt"),
@@ -459,6 +481,7 @@ def _install_basal(
         # wheel first so the generic Basal dependency cannot resolve a CPU wheel.
         # Historical vLLM profiles still let vLLM own their torch resolution.
         if str(profile.get("basal_mode", "")) != "vllm":
+            # PyTorch index: one exact pin and no cutoff (see _pip_install).
             torch_command = [
                 "uv", "pip", "install", "--python", str(python_path),
             ]
@@ -472,9 +495,7 @@ def _install_basal(
     package = str(profile.get("basal_package", "")).strip()
     if not package:
         raise RuntimeError("Basal profile is missing basal_package")
-    command = ["uv", "pip", "install", "--python", str(python_path)]
-    if upgrade:
-        command.append("--upgrade")
+    command = _pip_install(python_path, profile, upgrade=upgrade)
     command.append(package)
     _run(command)
     return env_dir
@@ -507,11 +528,7 @@ def _install_decision2(
     # versions below.  PyTorch is installed first because the hybrid Qwen
     # runtime dependencies import/build against it.  We intentionally do not
     # install any MLX/MPS/CPU-specific Decision implementation.
-    torch_command = [
-        "uv", "pip", "install", "--python", str(python_path),
-    ]
-    if upgrade:
-        torch_command.append("--upgrade")
+    torch_command = _pip_install(python_path, profile, upgrade=upgrade)
     torch_command.append("torch==2.12.0")
     _run(torch_command)
 
@@ -519,9 +536,7 @@ def _install_decision2(
     if not isinstance(packages, list) or not packages:
         raise RuntimeError("Decision 2.0 profile does not declare its pinned runtime packages")
 
-    command = ["uv", "pip", "install", "--python", str(python_path)]
-    if upgrade:
-        command.append("--upgrade")
+    command = _pip_install(python_path, profile, upgrade=upgrade)
     command.extend(str(package) for package in packages)
     # FastAPI/Uvicorn are Deqio's localhost transport only; the model and all
     # scoring/runtime logic remain the verified package shipped by upstream.
@@ -545,9 +560,7 @@ def _install_llama_cpp_runtime(
     python = _ensure_venv(env_dir, python_version)
     # Keep the GGUF provisioning path self-contained: cmake/ninja are installed
     # into the isolated runtime instead of assuming a global CMake install.
-    tool_command = ["uv", "pip", "install", "--python", str(python)]
-    if upgrade:
-        tool_command.append("--upgrade")
+    tool_command = _pip_install(python, profile, upgrade=upgrade)
     tool_command.extend(LLAMA_CPP_BUILD_TOOLS)
     _run(tool_command)
     bin_dir = env_dir / ("Scripts" if os.name == "nt" else "bin")
@@ -646,9 +659,7 @@ def _install_jevk5_gguf(
     package = str(profile.get("jevk5_package", "")).strip()
     if not package:
         raise RuntimeError("JevK5 GGUF profile is missing jevk5_package")
-    command = ["uv", "pip", "install", "--python", str(python)]
-    if upgrade:
-        command.append("--upgrade")
+    command = _pip_install(python, profile, upgrade=upgrade)
     command.extend([package, *SIDECAR_TRANSPORT_PACKAGES])
     _run(command)
     return env_dir
@@ -663,9 +674,7 @@ def _install_decider_gguf(
     package = str(profile.get("decider_package", "")).strip()
     if not package:
         raise RuntimeError("Decider GGUF profile is missing decider_package")
-    command = ["uv", "pip", "install", "--python", str(python)]
-    if upgrade:
-        command.append("--upgrade")
+    command = _pip_install(python, profile, upgrade=upgrade)
     command.extend([package, *SIDECAR_TRANSPORT_PACKAGES])
     env = os.environ.copy()
     if sys.platform == "darwin":
@@ -697,9 +706,7 @@ def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str,
     env_dir = _runtime_root(config_path, data) / str(runtime_key)
     python_path = _ensure_venv(env_dir, str(profile.get("python", "3.12")))
 
-    command = ["uv", "pip", "install", "--python", str(python_path)]
-    if upgrade:
-        command.append("--upgrade")
+    command = _pip_install(python_path, profile, upgrade=upgrade)
     command.extend(str(package) for package in packages)
     _run(command)
     return env_dir

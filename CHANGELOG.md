@@ -8,6 +8,44 @@ production audit.
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-10-10 (not tagged yet)
+
+One patch on top of 0.5.7: reproducible engine runtimes (D12b). No public route, response field or CLI
+command was added, removed or renamed; `python -m deqio.pin_audit` is a new read-only maintenance module.
+
+### Added
+
+- `exclude_newer` on every catalog profile (`2026-10-10T00:00:00Z`). Installers pass it to every
+  `uv pip install` that resolves from PyPI, so transitive dependencies resolve as of that instant on every
+  install. Profiles sharing a runtime use one instant, and a profile without it is refused at install with
+  an explicit error. The two commands that install one exact `torch==` pin from the PyTorch index run
+  without it: once a cutoff is set, uv drops every file of an index that publishes no upload times.
+- `python -m deqio.pin_audit` (read-only): installed runtime packages and the Nimble checkout against the
+  catalog pins, the Hugging Face artifacts not yet pinned to a commit with the locally recorded and the
+  current Hub revision, and the Nimble Hub commits; exit status 1 on a difference or a failed lookup. It
+  replaces the shell snippets of the 0.5.7 handoff, whose heredoc broke when copied with its list indentation.
+- `tests/test_reproducible_installs.py`.
+
+### Fixed
+
+- CLM profile: the catalog named the distribution `clm`, but upstream publishes it as `contrastive-lm`
+  since 2026-09-24 (fe9b720) and uv refuses a direct URL whose metadata name differs, so the profile could
+  not be installed. Same pinned commit, extras and `clm-serve` executable.
+
+### Not changed on purpose
+
+- `HF_REVISION_PENDING` keeps its 48 entries until the owner's `pin_audit` output is available; each
+  replacement ships with launcher support where the engine takes no revision.
+- llama.cpp stays at `99b95488`: no GGUF regression with `a657f7e9` has been reported.
+
+### Upgrade notes
+
+- `deqio models update MODEL_ID --backend BACKEND` re-resolves a runtime as of the cutoff; a package
+  uploaded after 2026-10-10T00:00:00Z is replaced by its newest earlier release.
+- Deqio never overwrites a workspace `models.json`. A workspace created by an older installed `deqio` keeps
+  its first catalog: replace it with the packaged one to get the D12/D12b pins (installs refuse a profile
+  without `exclude_newer`). Repository checkouts get the new catalog with the patch.
+
 ## [0.5.7] — 2026-10-10 (not tagged yet)
 
 One patch on top of 0.5.6: catalog pinning (D12). Two installs of the same catalog now build the
