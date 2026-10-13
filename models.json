@@ -105,8 +105,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Kai-0.6B",
-          "wire_model": "vllm-sr/Decision-2.0-Kai-0.6B",
           "model_revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+          "wire_model": "vllm-sr/Decision-2.0-Kai-0.6B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -161,8 +161,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Eos-0.8B",
-          "wire_model": "vllm-sr/Decision-2.0-Eos-0.8B",
           "model_revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+          "wire_model": "vllm-sr/Decision-2.0-Eos-0.8B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -204,7 +204,7 @@
             "transformers==5.17.0",
             "safetensors==0.8.0",
             "tokenizers==0.23.2",
-            "triton==3.7.1",
+            "triton==3.7.0",
             "causal-conv1d==1.7.0",
             "flash-linear-attention==0.5.2"
           ]
@@ -220,8 +220,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Sol-2B",
-          "wire_model": "vllm-sr/Decision-2.0-Sol-2B",
           "model_revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
+          "wire_model": "vllm-sr/Decision-2.0-Sol-2B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -263,7 +263,7 @@
             "transformers==5.17.0",
             "safetensors==0.8.0",
             "tokenizers==0.23.2",
-            "triton==3.7.1",
+            "triton==3.7.0",
             "causal-conv1d==1.7.0",
             "flash-linear-attention==0.5.2"
           ]
@@ -279,8 +279,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Nox-4B",
-          "wire_model": "vllm-sr/Decision-2.0-Nox-4B",
           "model_revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+          "wire_model": "vllm-sr/Decision-2.0-Nox-4B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -322,7 +322,7 @@
             "transformers==5.17.0",
             "safetensors==0.8.0",
             "tokenizers==0.23.2",
-            "triton==3.7.1",
+            "triton==3.7.0",
             "causal-conv1d==1.7.0",
             "flash-linear-attention==0.5.2"
           ]
@@ -338,8 +338,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Lux-9B",
-          "wire_model": "vllm-sr/Decision-2.0-Lux-9B",
           "model_revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+          "wire_model": "vllm-sr/Decision-2.0-Lux-9B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -381,7 +381,7 @@
             "transformers==5.17.0",
             "safetensors==0.8.0",
             "tokenizers==0.23.2",
-            "triton==3.7.1",
+            "triton==3.7.0",
             "causal-conv1d==1.7.0",
             "flash-linear-attention==0.5.2"
           ]
@@ -397,8 +397,8 @@
       "backends": {
         "cuda": {
           "model": "vllm-sr/Decision-2.0-Vega-27B",
-          "wire_model": "vllm-sr/Decision-2.0-Vega-27B",
           "model_revision": "7aec49ae11a18741706da549ab626b9052795fe7",
+          "wire_model": "vllm-sr/Decision-2.0-Vega-27B",
           "family": "decision2",
           "runtime": "decision2-native",
           "platform": "cuda",
@@ -449,7 +449,7 @@
             "transformers==5.17.0",
             "safetensors==0.8.0",
             "tokenizers==0.23.2",
-            "triton==3.7.1",
+            "triton==3.7.0",
             "causal-conv1d==1.7.0",
             "flash-linear-attention==0.5.2",
             "huggingface-hub==1.31.0",
@@ -466,7 +466,8 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-0.8b@v1.0",
+          "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+          "model_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -477,11 +478,10 @@
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
-            "revision": "v1.0"
+            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
           },
           "capabilities": {
             "systemone": true,
@@ -496,7 +496,8 @@
           }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-0.8b@v1.0",
+          "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+          "model_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -507,11 +508,10 @@
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
-            "revision": "v1.0"
+            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
           },
           "capabilities": {
             "systemone": true,
@@ -526,7 +526,8 @@
           }
         },
         "mps": {
-          "model": "jaredpalmer/kev-0.8b@v1.0",
+          "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+          "model_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -537,11 +538,10 @@
           ],
           "min_memory_gib": 4,
           "recommended_memory_gib": 8,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-0.8b",
-            "revision": "v1.0"
+            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
           },
           "capabilities": {
             "systemone": true,
@@ -557,8 +557,8 @@
         },
         "gguf": {
           "model": "ggml-org/Kev-0.8B-GGUF",
+          "model_revision": "e551e319d483ff57e1ff208924b349d397cffc1c",
           "wire_model": "ggml-org/Kev-0.8B-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -600,7 +600,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Kev-0.8B-GGUF",
-            "revision": "main",
+            "revision": "e551e319d483ff57e1ff208924b349d397cffc1c",
             "local_dir": "models/kev-0.8b-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"
@@ -616,7 +616,8 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-4b@v1.0",
+          "model": "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+          "model_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -627,11 +628,10 @@
           ],
           "min_memory_gib": 12,
           "recommended_memory_gib": 16,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
-            "revision": "v1.0"
+            "revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
           },
           "capabilities": {
             "systemone": true,
@@ -646,7 +646,8 @@
           }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-4b@v1.0",
+          "model": "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+          "model_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -657,11 +658,10 @@
           ],
           "min_memory_gib": 14,
           "recommended_memory_gib": 32,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
-            "revision": "v1.0"
+            "revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
           },
           "capabilities": {
             "systemone": true,
@@ -676,7 +676,8 @@
           }
         },
         "mps": {
-          "model": "jaredpalmer/kev-4b@v1.0",
+          "model": "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+          "model_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -687,11 +688,10 @@
           ],
           "min_memory_gib": 14,
           "recommended_memory_gib": 32,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-4b",
-            "revision": "v1.0"
+            "revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
           },
           "capabilities": {
             "systemone": true,
@@ -707,8 +707,8 @@
         },
         "gguf": {
           "model": "ggml-org/Kev-4B-GGUF",
+          "model_revision": "d924f2e2c3872da8b8aaf3eb4453b4126deceb79",
           "wire_model": "ggml-org/Kev-4B-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -750,7 +750,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Kev-4B-GGUF",
-            "revision": "main",
+            "revision": "d924f2e2c3872da8b8aaf3eb4453b4126deceb79",
             "local_dir": "models/kev-4b-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"
@@ -766,7 +766,8 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "mlx": {
-          "model": "jaredpalmer/kev-9b@v1.0",
+          "model": "jaredpalmer/kev-9b@db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
+          "model_revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -777,11 +778,10 @@
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
-            "revision": "v1.0"
+            "revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0"
           },
           "capabilities": {
             "systemone": true,
@@ -796,7 +796,8 @@
           }
         },
         "cuda": {
-          "model": "jaredpalmer/kev-9b@v1.0",
+          "model": "jaredpalmer/kev-9b@db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
+          "model_revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -807,11 +808,10 @@
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
-            "revision": "v1.0"
+            "revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0"
           },
           "capabilities": {
             "systemone": true,
@@ -826,7 +826,8 @@
           }
         },
         "mps": {
-          "model": "jaredpalmer/kev-9b@v1.0",
+          "model": "jaredpalmer/kev-9b@db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
+          "model_revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -837,11 +838,10 @@
           ],
           "min_memory_gib": 22,
           "recommended_memory_gib": 32,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-9b",
-            "revision": "v1.0"
+            "revision": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0"
           },
           "capabilities": {
             "systemone": true,
@@ -857,8 +857,8 @@
         },
         "gguf": {
           "model": "ggml-org/Kev-9B-GGUF",
+          "model_revision": "ec2bbfe6620218aee2e01cc93bb78dee2a96ed58",
           "wire_model": "ggml-org/Kev-9B-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -900,7 +900,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Kev-9B-GGUF",
-            "revision": "main",
+            "revision": "ec2bbfe6620218aee2e01cc93bb78dee2a96ed58",
             "local_dir": "models/kev-9b-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"
@@ -916,7 +916,8 @@
       "source": "https://github.com/jaredpalmer/kev",
       "backends": {
         "cuda": {
-          "model": "jaredpalmer/kev-27b@v1.0",
+          "model": "jaredpalmer/kev-27b@af0e6d551bdc2cc724f3e9d7a8bee1cd4fb8f7bf",
+          "model_revision": "af0e6d551bdc2cc724f3e9d7a8bee1cd4fb8f7bf",
           "wire_model": "kev-latest",
           "runtime_key": "kev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -930,11 +931,10 @@
           ],
           "min_memory_gib": 66,
           "recommended_memory_gib": 80,
-          "model_revision": "v1.0",
           "download": {
             "type": "snapshot",
             "repo_id": "jaredpalmer/kev-27b",
-            "revision": "v1.0"
+            "revision": "af0e6d551bdc2cc724f3e9d7a8bee1cd4fb8f7bf"
           },
           "capabilities": {
             "systemone": true,
@@ -959,7 +959,7 @@
       "backends": {
         "cuda": {
           "model": "alibiserikbay/JevK5",
-          "model_revision": "upstream-latest",
+          "model_revision": "c4f7fdb3aeab5582336406e78d3bef11bf98833d",
           "wire_model": "alibiserikbay/JevK5",
           "runtime_key": "jevk5",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -987,8 +987,8 @@
         },
         "gguf": {
           "model": "alibiserikbay/JevK5-GGUF",
+          "model_revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
           "wire_model": "alibiserikbay/JevK5-GGUF",
-          "model_revision": "main",
           "runtime_key": "jevk5-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1033,7 +1033,7 @@
           "download": {
             "type": "file",
             "repo_id": "alibiserikbay/JevK5-GGUF",
-            "revision": "main",
+            "revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
             "local_dir": "models/jevk5-GGUF",
             "role": "jevk5-gguf-q8_0",
             "filename": "jevk5-4b-v0.3-Q8_0.gguf"
@@ -1050,7 +1050,7 @@
       "backends": {
         "cuda": {
           "model": "alibiserikbay/JevK5-9B",
-          "model_revision": "upstream-latest",
+          "model_revision": "d6521a18a86999190e9d775c915af3d6d6772fc4",
           "wire_model": "alibiserikbay/JevK5-9B",
           "runtime_key": "jevk5",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -1078,8 +1078,8 @@
         },
         "gguf": {
           "model": "alibiserikbay/JevK5-GGUF",
+          "model_revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
           "wire_model": "alibiserikbay/JevK5-GGUF",
-          "model_revision": "main",
           "runtime_key": "jevk5-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1124,7 +1124,7 @@
           "download": {
             "type": "file",
             "repo_id": "alibiserikbay/JevK5-GGUF",
-            "revision": "main",
+            "revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
             "local_dir": "models/jevk5-GGUF",
             "role": "jevk5-gguf-q8_0",
             "filename": "jevk5-9b-v0.3.3-Q8_0.gguf"
@@ -1243,7 +1243,7 @@
       "backends": {
         "cuda": {
           "model": "./models/open-jev-27b-v1.1/package/checkpoint",
-          "model_revision": "upstream-latest",
+          "model_revision": "28cf73067d5b337860bbef3c85b8b82ba8730956",
           "wire_model": "ZefanCai/Open-Jev-27B-v1.1",
           "runtime_key": "open-jev",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -1256,6 +1256,7 @@
             {
               "type": "snapshot",
               "repo_id": "ZefanCai/Open-Jev-27B-v1.1",
+              "revision": "28cf73067d5b337860bbef3c85b8b82ba8730956",
               "local_dir": "models/open-jev-27b-v1.1"
             },
             {
@@ -1293,7 +1294,7 @@
       "backends": {
         "cuda": {
           "model": "Qwen/Qwen3-8B",
-          "model_revision": "upstream-latest",
+          "model_revision": "b968826d9c46dd6066d109eabc6255188de91218",
           "wire_model": "clm-latest",
           "runtime_key": "clm",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -1305,11 +1306,13 @@
           "downloads": [
             {
               "type": "snapshot",
-              "repo_id": "Qwen/Qwen3-8B"
+              "repo_id": "Qwen/Qwen3-8B",
+              "revision": "b968826d9c46dd6066d109eabc6255188de91218"
             },
             {
               "type": "file",
               "repo_id": "Contrastive-LM/CLM-v0.1-8B",
+              "revision": "e939398d4556fcd9400c76fa8c5a513202f42b0a",
               "filename": "CLM_v0.1-8B.pt",
               "local_dir": "models/clm-8b"
             }
@@ -1346,8 +1349,8 @@
       "backends": {
         "mlx": {
           "model": "Remek/basal-1.5-mini-MLX-8bit",
+          "model_revision": "6ea29c486e39e1a217932ab56b222c0d1bc4ba82",
           "wire_model": "Remek/basal-1.5-mini-MLX-8bit",
-          "model_revision": "main",
           "runtime_key": "basal15-mini-mlx",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1392,14 +1395,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-mini-MLX-8bit",
-            "revision": "main",
+            "revision": "6ea29c486e39e1a217932ab56b222c0d1bc4ba82",
             "role": "basal-model"
           }
         },
         "mps": {
           "model": "Remek/basal-1.5-mini",
+          "model_revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
           "wire_model": "Remek/basal-1.5-mini",
-          "model_revision": "main",
           "runtime_key": "basal15-mini-mps",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1437,14 +1440,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-mini",
-            "revision": "main",
+            "revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
             "role": "basal-model"
           }
         },
         "gguf": {
           "model": "Remek/basal-1.5-mini",
+          "model_revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
           "wire_model": "Remek/basal-1.5-mini",
-          "model_revision": "main",
           "runtime_key": "basal15-mini-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1491,7 +1494,7 @@
             {
               "type": "snapshot",
               "repo_id": "Remek/basal-1.5-mini",
-              "revision": "main",
+              "revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
               "role": "basal-metadata",
               "ignore_patterns": [
                 "*.safetensors",
@@ -1502,7 +1505,7 @@
             {
               "type": "file",
               "repo_id": "Remek/basal-1.5-mini-GGUF",
-              "revision": "main",
+              "revision": "9671696b53ccf4adbb30adc24f4ae8372e02dffc",
               "local_dir": "models/basal-1.5-mini-GGUF",
               "role": "basal-gguf-q8_0",
               "filename_pattern": "*Q8_0.gguf"
@@ -1514,8 +1517,8 @@
         },
         "cuda": {
           "model": "Remek/basal-1.5-mini",
+          "model_revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
           "wire_model": "Remek/basal-1.5-mini",
-          "model_revision": "main",
           "runtime_key": "basal15-mini-cuda",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1553,7 +1556,7 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-mini",
-            "revision": "main",
+            "revision": "1978d0705ce09cd2d7d8d3e87b304468121e7255",
             "role": "basal-model"
           }
         }
@@ -1568,8 +1571,8 @@
       "backends": {
         "mlx": {
           "model": "Remek/basal-1.5-4.5B-MLX-8bit",
+          "model_revision": "79f5a7cbbd028758c506f9aca5fec1ef431ee893",
           "wire_model": "Remek/basal-1.5-4.5B-MLX-8bit",
-          "model_revision": "main",
           "runtime_key": "basal15-main-mlx",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1614,14 +1617,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-4.5B-MLX-8bit",
-            "revision": "main",
+            "revision": "79f5a7cbbd028758c506f9aca5fec1ef431ee893",
             "role": "basal-model"
           }
         },
         "mps": {
           "model": "Remek/basal-1.5-4.5B",
+          "model_revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
           "wire_model": "Remek/basal-1.5-4.5B",
-          "model_revision": "main",
           "runtime_key": "basal15-main-mps",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1659,14 +1662,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-4.5B",
-            "revision": "main",
+            "revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
             "role": "basal-model"
           }
         },
         "gguf": {
           "model": "Remek/basal-1.5-4.5B",
+          "model_revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
           "wire_model": "Remek/basal-1.5-4.5B",
-          "model_revision": "main",
           "runtime_key": "basal15-main-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1713,7 +1716,7 @@
             {
               "type": "snapshot",
               "repo_id": "Remek/basal-1.5-4.5B",
-              "revision": "main",
+              "revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
               "role": "basal-metadata",
               "ignore_patterns": [
                 "*.safetensors",
@@ -1724,7 +1727,7 @@
             {
               "type": "file",
               "repo_id": "Remek/basal-1.5-4.5B-GGUF",
-              "revision": "main",
+              "revision": "6943511d883b0cd7029d94abd0e837482d7a7f86",
               "local_dir": "models/basal-1.5-4.5B-GGUF",
               "role": "basal-gguf-q8_0",
               "filename_pattern": "*Q8_0.gguf"
@@ -1736,8 +1739,8 @@
         },
         "cuda": {
           "model": "Remek/basal-1.5-4.5B",
+          "model_revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
           "wire_model": "Remek/basal-1.5-4.5B",
-          "model_revision": "main",
           "runtime_key": "basal15-main-cuda",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1775,7 +1778,7 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-4.5B",
-            "revision": "main",
+            "revision": "784a683bfadcc8865238fc0fc74a83b4000269bc",
             "role": "basal-model"
           }
         }
@@ -1790,8 +1793,8 @@
       "backends": {
         "mlx": {
           "model": "Remek/basal-1.5-max-MLX-8bit",
+          "model_revision": "fafde24a328b3ea092b12ee12c17024b6a467468",
           "wire_model": "Remek/basal-1.5-max-MLX-8bit",
-          "model_revision": "main",
           "runtime_key": "basal15-max-mlx",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1836,14 +1839,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-max-MLX-8bit",
-            "revision": "main",
+            "revision": "fafde24a328b3ea092b12ee12c17024b6a467468",
             "role": "basal-model"
           }
         },
         "mps": {
           "model": "Remek/basal-1.5-max",
+          "model_revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
           "wire_model": "Remek/basal-1.5-max",
-          "model_revision": "main",
           "runtime_key": "basal15-max-mps",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1881,14 +1884,14 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-max",
-            "revision": "main",
+            "revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
             "role": "basal-model"
           }
         },
         "gguf": {
           "model": "Remek/basal-1.5-max",
+          "model_revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
           "wire_model": "Remek/basal-1.5-max",
-          "model_revision": "main",
           "runtime_key": "basal15-max-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1935,7 +1938,7 @@
             {
               "type": "snapshot",
               "repo_id": "Remek/basal-1.5-max",
-              "revision": "main",
+              "revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
               "role": "basal-metadata",
               "ignore_patterns": [
                 "*.safetensors",
@@ -1946,7 +1949,7 @@
             {
               "type": "file",
               "repo_id": "Remek/basal-1.5-max-GGUF",
-              "revision": "main",
+              "revision": "88dafb2b58fe82ec3751c81c2431acf442e9038c",
               "local_dir": "models/basal-1.5-max-GGUF",
               "role": "basal-gguf-q8_0",
               "filename_pattern": "*Q8_0.gguf"
@@ -1958,8 +1961,8 @@
         },
         "cuda": {
           "model": "Remek/basal-1.5-max",
+          "model_revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
           "wire_model": "Remek/basal-1.5-max",
-          "model_revision": "main",
           "runtime_key": "basal15-max-cuda",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -1997,7 +2000,7 @@
           "download": {
             "type": "snapshot",
             "repo_id": "Remek/basal-1.5-max",
-            "revision": "main",
+            "revision": "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
             "role": "basal-model"
           }
         }
@@ -2012,8 +2015,8 @@
       "backends": {
         "mlx": {
           "model": "mlx-community/clef-flash-8bit",
-          "wire_model": "clef-flash",
           "model_revision": "dfa0993decb4f8507a0eae01afd1b2d33a4bb734",
+          "wire_model": "clef-flash",
           "runtime_key": "clef-mlx",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "source": "community",
@@ -2054,8 +2057,8 @@
         },
         "gguf": {
           "model": "ggml-org/Clef-Flash-GGUF",
+          "model_revision": "6b4fe4c59098479652d94f0fe11a40facbebd1ec",
           "wire_model": "ggml-org/Clef-Flash-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -2097,7 +2100,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Clef-Flash-GGUF",
-            "revision": "main",
+            "revision": "6b4fe4c59098479652d94f0fe11a40facbebd1ec",
             "local_dir": "models/clef-flash-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"
@@ -2114,8 +2117,8 @@
       "backends": {
         "mlx": {
           "model": "mlx-community/clef-8bit",
-          "wire_model": "clef",
           "model_revision": "ffcdb6132b3cc94e523860321dd9ed58bc1ee9a1",
+          "wire_model": "clef",
           "runtime_key": "clef-mlx",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "source": "community",
@@ -2156,8 +2159,8 @@
         },
         "gguf": {
           "model": "ggml-org/Clef-GGUF",
+          "model_revision": "d2aa75cb425ae922b5c3c15ef3157d417b7f7641",
           "wire_model": "ggml-org/Clef-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -2199,7 +2202,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Clef-GGUF",
-            "revision": "main",
+            "revision": "d2aa75cb425ae922b5c3c15ef3157d417b7f7641",
             "local_dir": "models/clef-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"
@@ -2216,6 +2219,7 @@
       "backends": {
         "cuda": {
           "model": "Mapika/decider-0.8b",
+          "model_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2240,6 +2244,7 @@
         },
         "mps": {
           "model": "Mapika/decider-0.8b",
+          "model_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2273,6 +2278,7 @@
       "backends": {
         "cuda": {
           "model": "Mapika/decider-2b",
+          "model_revision": "ff99089b6810691bd79134ec6febb5d9afa6e619",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2297,6 +2303,7 @@
         },
         "mps": {
           "model": "Mapika/decider-2b",
+          "model_revision": "ff99089b6810691bd79134ec6febb5d9afa6e619",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2321,8 +2328,8 @@
         },
         "gguf": {
           "model": "Mapika/decider-2b-GGUF",
+          "model_revision": "ff2e5e687327eda9ac34e9a3ca84d3f400672c87",
           "wire_model": "Mapika/decider-2b-GGUF",
-          "model_revision": "main",
           "runtime_key": "decider-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -2365,7 +2372,7 @@
             {
               "type": "snapshot",
               "repo_id": "Mapika/decider-2b-GGUF",
-              "revision": "main",
+              "revision": "ff2e5e687327eda9ac34e9a3ca84d3f400672c87",
               "local_dir": "models/decider-2b-GGUF",
               "role": "decider-gguf-metadata",
               "ignore_patterns": [
@@ -2375,7 +2382,7 @@
             {
               "type": "file",
               "repo_id": "Mapika/decider-2b-GGUF",
-              "revision": "main",
+              "revision": "ff2e5e687327eda9ac34e9a3ca84d3f400672c87",
               "local_dir": "models/decider-2b-GGUF",
               "role": "decider-gguf-q8_0",
               "filename_pattern": "*Q8_0.gguf"
@@ -2393,6 +2400,7 @@
       "backends": {
         "cuda": {
           "model": "Mapika/decider-4b",
+          "model_revision": "99d7fd5bfcc4d11ba37239dafe0ed653803819d3",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2417,6 +2425,7 @@
         },
         "mps": {
           "model": "Mapika/decider-4b",
+          "model_revision": "99d7fd5bfcc4d11ba37239dafe0ed653803819d3",
           "wire_model": "decider",
           "runtime_key": "decider",
           "exclude_newer": "2026-10-10T00:00:00Z",
@@ -2441,8 +2450,8 @@
         },
         "gguf": {
           "model": "Mapika/decider-4b-GGUF",
+          "model_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
           "wire_model": "Mapika/decider-4b-GGUF",
-          "model_revision": "main",
           "runtime_key": "decider-gguf",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -2485,7 +2494,7 @@
             {
               "type": "snapshot",
               "repo_id": "Mapika/decider-4b-GGUF",
-              "revision": "main",
+              "revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
               "local_dir": "models/decider-4b-GGUF",
               "role": "decider-gguf-metadata",
               "ignore_patterns": [
@@ -2495,7 +2504,7 @@
             {
               "type": "file",
               "repo_id": "Mapika/decider-4b-GGUF",
-              "revision": "main",
+              "revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
               "local_dir": "models/decider-4b-GGUF",
               "role": "decider-gguf-q8_0",
               "filename_pattern": "*Q8_0.gguf"
@@ -2600,8 +2609,8 @@
         },
         "gguf": {
           "model": "ggml-org/Laya-GGUF",
+          "model_revision": "22265007700297ba9e128297e82540cf28c5d7d4",
           "wire_model": "ggml-org/Laya-GGUF",
-          "model_revision": "main",
           "runtime_key": "llama-cpp-systemone",
           "exclude_newer": "2026-10-10T00:00:00Z",
           "python": "3.12",
@@ -2643,7 +2652,7 @@
           "download": {
             "type": "file",
             "repo_id": "ggml-org/Laya-GGUF",
-            "revision": "main",
+            "revision": "22265007700297ba9e128297e82540cf28c5d7d4",
             "local_dir": "models/laya-english-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "*Q8_0.gguf"

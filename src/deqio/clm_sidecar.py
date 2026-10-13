@@ -50,6 +50,23 @@ def _terminate(process: subprocess.Popen[Any] | None) -> None:
         process.wait(timeout=5)
 
 
+def _encoder_command(args: argparse.Namespace, vllm: Path, port: int) -> list[str]:
+    """`vllm serve` for the encoder; `--revision` makes vLLM load the catalog's pinned commit (D12c)."""
+    command = [
+        str(vllm), "serve", args.encoder_model,
+        "--served-model-name", args.embedding_model,
+        "--runner", "pooling",
+        "--enable-prefix-caching",
+        "--max-model-len", str(args.max_tokens),
+        "--gpu-memory-utilization", str(args.gpu_memory_utilization),
+    ]
+    revision = getattr(args, "revision", None)
+    if revision and str(revision) != "upstream-latest":
+        command.extend(["--revision", str(revision)])
+    command.extend(["--host", "127.0.0.1", "--port", str(port)])
+    return command
+
+
 def run(args: argparse.Namespace) -> int:
     vllm = _runtime_executable("vllm")
     clm_serve = _runtime_executable("clm-serve")
@@ -78,19 +95,7 @@ def run(args: argparse.Namespace) -> int:
     env = os.environ.copy()
     env.setdefault("VLLM_NO_USAGE_STATS", "1")
     try:
-        encoder = subprocess.Popen(
-            [
-                str(vllm), "serve", args.encoder_model,
-                "--served-model-name", args.embedding_model,
-                "--runner", "pooling",
-                "--enable-prefix-caching",
-                "--max-model-len", str(args.max_tokens),
-                "--gpu-memory-utilization", str(args.gpu_memory_utilization),
-                "--host", "127.0.0.1",
-                "--port", str(encoder_port),
-            ],
-            env=env,
-        )
+        encoder = subprocess.Popen(_encoder_command(args, vllm, encoder_port), env=env)
         _wait_for_http(encoder_port, encoder, timeout=float(args.encoder_startup_timeout))
 
         api = subprocess.Popen(
@@ -124,6 +129,7 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the two-process CLM runtime as one Deqio sidecar.")
     parser.add_argument("--encoder-model", required=True)
+    parser.add_argument("--revision", default=None, help="Hub commit of --encoder-model (vllm serve --revision)")
     parser.add_argument("--embedding-model", default="qwen3-8b")
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--max-tokens", type=int, default=2048)

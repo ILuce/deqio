@@ -189,19 +189,22 @@ def test_pin_audit_reports_hub_revisions_for_pending_artifacts(
     installed = "1234567890abcdef1234567890abcdef12345678"
     monkeypatch.setattr(audit, "HfApi", _FakeHub)
     monkeypatch.setattr(audit, "installation_record", lambda config_path, model_id, backend: (
-        {"artifacts": [{"source": "huggingface", "repo_id": "ggml-org/Kev-0.8B-GGUF", "resolved_revision": installed}]}
-        if (model_id, backend) == ("kev-0.8b", "gguf") else None
+        {"artifacts": [{"source": "huggingface", "repo_id": "wfzyx/von", "resolved_revision": installed}]}
+        if (model_id, backend) == ("von", "cuda") else None
     ))
 
     code = audit.main(["--config", str(config)])
 
     out = capsys.readouterr().out
     rows = {tuple(line.split("\t")[:2]): line.split("\t") for line in out.splitlines() if not line.startswith("#")}
-    kev = rows[("kev-0.8b::gguf", "ggml-org/Kev-0.8B-GGUF")]
-    assert kev[2:4] == ["main", installed] and re.match(r"^[0-9a-f]{40}$", kev[4])
-    assert rows[("decider-2b::mps", "Mapika/decider-2b")][2:4] == ["-", "-"]
+    # D12c: Von is the only artifact still loaded without a catalog commit (HF_REVISION_PENDING).
+    von = rows[("von::cuda", "wfzyx/von")]
+    assert von[2:4] == ["-", installed] and re.match(r"^[0-9a-f]{40}$", von[4])
+    assert rows[("von::mps", "wfzyx/von")][2:4] == ["-", "-"]
+    assert ("kev-0.8b::gguf", "ggml-org/Kev-0.8B-GGUF") not in rows  # pinned to a commit since 0.5.9
+    assert ("decider-2b::mps", "Mapika/decider-2b") not in rows
     assert ("laya-english::mps", "convaiinnovations/laya") not in rows  # already pinned to a commit
-    assert ("Mapika/decider-2b", None) in _FakeHub.calls and ("jaredpalmer/kev-0.8b", "v1.0") in _FakeHub.calls
+    assert ("wfzyx/von", None) in _FakeHub.calls and ("jaredpalmer/kev-0.8b", "v1.0") not in _FakeHub.calls
     assert "bd792f44ec8e265be861bfcdf4e05967ffe0e858\t2026-09-24T12:00:00+00:00\tUpload latest checkpoint" in out
     assert code == 0
 

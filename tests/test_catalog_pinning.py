@@ -58,44 +58,10 @@ COMMUNITY_PROFILES = {
 # engines that take no revision input, launcher support. The list may only
 # shrink: a new unpinned artifact fails, and so does a pinned one left here.
 HF_REVISION_PENDING = {
-    # Kev: catalog uses the upstream HF release tag v1.0 (kev.serve --run repo@v1.0).
-    **{
-        f"kev-{size}::{backend}::jaredpalmer/kev-{size}": "v1.0"
-        for size in ("0.8b", "4b", "9b")
-        for backend in ("mlx", "cuda", "mps")
-    },
-    "kev-27b::cuda::jaredpalmer/kev-27b": "v1.0",
-    # Pin-on-install profiles: `main` resolved to a commit at install/update time.
-    "kev-0.8b::gguf::ggml-org/Kev-0.8B-GGUF": "main",
-    "kev-4b::gguf::ggml-org/Kev-4B-GGUF": "main",
-    "kev-9b::gguf::ggml-org/Kev-9B-GGUF": "main",
-    "jevk5-4b::gguf::alibiserikbay/JevK5-GGUF": "main",
-    "jevk5-9b::gguf::alibiserikbay/JevK5-GGUF": "main",
-    "clef-flash::gguf::ggml-org/Clef-Flash-GGUF": "main",
-    "clef::gguf::ggml-org/Clef-GGUF": "main",
-    "laya-english::gguf::ggml-org/Laya-GGUF": "main",
-    "decider-2b::gguf::Mapika/decider-2b-GGUF": "main",
-    "decider-4b::gguf::Mapika/decider-4b-GGUF": "main",
-    **{
-        f"basal-1.5-{tier}::{backend}::Remek/basal-1.5-{repo}{suffix}": "main"
-        for tier, repo in (("mini", "mini"), ("main", "4.5B"), ("max", "max"))
-        for backend, suffix in (("mlx", "-MLX-8bit"), ("mps", ""), ("gguf", ""), ("cuda", ""))
-    },
-    **{
-        f"basal-1.5-{tier}::gguf::Remek/basal-1.5-{repo}-GGUF": "main"
-        for tier, repo in (("mini", "mini"), ("main", "4.5B"), ("max", "max"))
-    },
-    # Floating upstream weights; the engine CLI takes a repo id without a revision.
-    "jevk5-4b::cuda::alibiserikbay/JevK5": "upstream-latest",
-    "jevk5-9b::cuda::alibiserikbay/JevK5-9B": "upstream-latest",
-    "open-jev-27b-v1.1::cuda::ZefanCai/Open-Jev-27B-v1.1": "upstream-latest",
-    "clm-8b::cuda::Qwen/Qwen3-8B": "upstream-latest",
-    "clm-8b::cuda::Contrastive-LM/CLM-v0.1-8B": "upstream-latest",
-    **{
-        f"decider-{size}::{backend}::Mapika/decider-{size}": None
-        for size in ("0.8b", "2b", "4b")
-        for backend in ("cuda", "mps")
-    },
+    # Von: `von serve` loads wfzyx/von through hf_hub_download/from_pretrained without a revision argument;
+    # pinning the download alone would leave the offline cache without the `main` ref the engine resolves.
+    # The only pinning path is VON_CHECKPOINT_DIR on a full snapshot of the repo, which needs the repo's
+    # file list and a Von verification run (D12c: kept pending with this reason).
     "von::cuda::wfzyx/von": None,
     "von::mps::wfzyx/von": None,
 }

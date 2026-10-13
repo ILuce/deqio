@@ -436,9 +436,59 @@ def _require_catalog_model(settings: Settings, catalog_profile: dict[str, Any], 
         )
 
 
+def _is_commit(value: Any) -> bool:
+    text = str(value or "").lower()
+    return len(text) == 40 and all(ch in "0123456789abcdef" for ch in text)
+
+
+def _pinned_snapshot_path(repo_id: str, revision: Any, *, model_id: str, backend: str) -> str:
+    """Local path of the cached Hub snapshot at the catalog commit (D12c).
+
+    Decider (``DECIDER_MODEL``) and JevK5 (``--model``) take a repo id or a path but no
+    revision, so the only way to make them load the pinned commit is the path of that
+    commit's snapshot.  The install prefetch cached it; this resolves offline and refuses
+    to start when the cache lacks it instead of handing the engine the floating repo id.
+    """
+    if not _is_commit(revision):
+        raise RuntimeError(
+            f"Catalog profile {model_id}/{backend} must pin model_revision to a 40-character commit "
+            f"SHA for {repo_id}"
+        )
+    from huggingface_hub import snapshot_download
+
+    try:
+        path = snapshot_download(repo_id=repo_id, revision=str(revision), local_files_only=True)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Pinned snapshot {repo_id}@{revision} for {model_id}/{backend} is not in the local Hugging "
+            "Face cache; run deqio models setup (or deqio models update) for this profile"
+        ) from exc
+    return str(path)
+
+
 def _profile_with_installed_pin(settings: Settings, profile: dict[str, Any]) -> dict[str, Any]:
     """Use the immutable Hub revision recorded when a pin-on-install profile was verified."""
     if not profile.get("pin_hf_revisions_at_install"):
+        return profile
+    catalog_revision = str(profile.get("model_revision") or "").lower()
+    if _is_commit(catalog_revision):
+        # D12c: the catalog names the commit itself.  The installer's record can only confirm
+        # it; an installation made at another commit is refused with the repair command rather
+        # than loading files the catalog no longer describes.
+        record = installation_record(settings.config_path, settings.model_id, settings.backend) or {}
+        artifacts = record.get("artifacts") if isinstance(record.get("artifacts"), list) else []
+        model_repo = str(profile.get("model", ""))
+        for artifact in artifacts:
+            if not isinstance(artifact, dict) or artifact.get("source") != "huggingface":
+                continue
+            if str(artifact.get("repo_id", "")) != model_repo:
+                continue
+            resolved = str(artifact.get("resolved_revision") or "").lower()
+            if resolved and resolved != catalog_revision:
+                raise RuntimeError(
+                    f"Installed profile {settings.model_id}/{settings.backend} was verified at {model_repo}@"
+                    f"{resolved}, but the catalog pins {catalog_revision}; run deqio models update for this profile"
+                )
         return profile
     selected_revision = str(settings.model_revision or "")
     if len(selected_revision) == 40 and all(ch in "0123456789abcdefABCDEF" for ch in selected_revision):
@@ -902,9 +952,13 @@ class SystemOneRuntime:
         if engine == "jevk5":
             if settings.backend != "cuda":
                 raise RuntimeError("JevK5's native Deqio profile requires CUDA")
+            # D12c: jevk5.server --model goes straight to transformers from_pretrained (a local
+            # folder or a repo id, never a revision), so the pinned commit is loaded by path.
             return [
                 str(python), "-m", "jevk5.server",
-                "--model", model,
+                "--model", _pinned_snapshot_path(
+                    model, profile.get("model_revision"), model_id=settings.model_id, backend=settings.backend
+                ),
                 "--host", "127.0.0.1",
                 "--port", str(port),
             ]
@@ -935,15 +989,20 @@ class SystemOneRuntime:
                     f"CLM checkpoint is missing: {checkpoint}. "
                     f"Run: deqio models setup"
                 )
-            return [
+            command = [
                 str(python), str(sidecar),
                 "--encoder-model", model,
                 "--embedding-model", str(profile.get("clm_embedding_model", "qwen3-8b")),
                 "--checkpoint", str(checkpoint),
                 "--max-tokens", str(getattr(settings, "max_tokens", profile.get("clm_max_tokens", 2048))),
                 "--gpu-memory-utilization", str(profile.get("clm_gpu_memory_utilization", 0.35)),
-                "--port", str(port),
             ]
+            revision = profile.get("model_revision")
+            if revision and str(revision) != "upstream-latest":
+                # D12c: the sidecar hands the catalog's pinned commit to `vllm serve --revision`.
+                command.extend(["--revision", str(revision)])
+            command.extend(["--port", str(port)])
+            return command
 
         if engine == "decision2":
             if settings.backend != "cuda":
@@ -1022,7 +1081,11 @@ class SystemOneRuntime:
             ]
 
         if engine == "decider":
-            env["DECIDER_MODEL"] = model
+            # D12c: DECIDER_MODEL takes a repo id or a path; the path of the pinned snapshot is the
+            # only form that names the commit.
+            env["DECIDER_MODEL"] = _pinned_snapshot_path(
+                model, profile.get("model_revision"), model_id=settings.model_id, backend=settings.backend
+            )
             env["DECIDER_DEVICE"] = "cuda" if settings.backend == "cuda" else "mps"
             return [
                 str(python), "-m", "uvicorn", "decider.serve:app",

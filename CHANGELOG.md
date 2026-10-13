@@ -8,6 +8,44 @@ production audit.
 
 ## [Unreleased]
 
+## [0.5.9] — 2026-10-12 (not tagged yet)
+
+One patch on top of 0.5.8: Hub revisions pinned from the owner's `pin_audit` (D12c). No public route, response
+field or CLI command was added, removed or renamed; `python -m deqio.clm_sidecar` gains an optional `--revision`.
+
+### Changed
+
+- 46 of the 48 `HF_REVISION_PENDING` artifacts now carry the commit `pin_audit` resolved on 2026-10-12 for the
+  catalog's own reference (`v1.0` for Kev, `main` elsewhere): Kev ×10 (`kev.serve --run repo@<commit>`; the
+  upstream resolver partitions on `@`), the pin-on-install GGUF profiles ×10 and Basal ×12 (+3 GGUF repos),
+  Open-Jev 27B, CLM (`Qwen/Qwen3-8B` and the `CLM-v0.1-8B.pt` checkpoint), JevK5 CUDA ×2 and Decider ×6.
+  Von stays pending with its reason in the test (`von serve` resolves `main` itself).
+- Decider and JevK5 launchers: `DECIDER_MODEL` / `jevk5.server --model` receive the path of the pinned commit's
+  cached snapshot (`snapshot_download(..., local_files_only=True)`); a missing snapshot refuses the start with the
+  `deqio models setup` / `update` hint instead of passing the floating repo id.
+- CLM launcher passes `--revision` to the sidecar, which adds `vllm serve --revision <commit>`.
+- Pin-on-install profiles whose catalog now names the commit: the catalog wins; an installation verified at
+  another commit is refused with `run deqio models update` (previously its recorded commit was loaded).
+- Decision 2.0 Eos/Sol/Nox/Lux/Vega: `triton==3.7.1` → `triton==3.7.0`, the version `torch==2.12.0` (the
+  installer's PyTorch-index pin) requires on Linux; 3.7.1 belongs to torch 2.12.1. Kai pins no triton.
+- `tests/test_hf_revision_pins.py` (51 node IDs); `HF_REVISION_PENDING` shrinks to the two Von entries.
+
+### Not changed on purpose
+
+- llama.cpp stays at `99b95488`: no GGUF regression with `a657f7e9` was supplied.
+- Nimble stays at Hub `bd792f44` (the newest Hub commit, "Release latest Bespoke Nimble 9B") and source
+  `dcfdbd9a` (merge of #13, after #11 "Support latest Nimble 9B release and checkpoint defaults").
+- Decision 3.0 (`vllm-sr/decision-30`) and its GGUF/MLX variants are not added here: a new engine is its own patch
+  (scheduled for 0.7), and the Hub was not reachable from this session to pin or license-check it. Benchmarks of a
+  new model run after it is integrated and gate its verification, not its integration.
+
+### Upgrade notes
+
+- `deqio models use` again for a selected Kev, Decider, JevK5, CLM, Open-Jev 27B or pin-on-install profile: the
+  mirror in `config.json` must name the new commit (B10 refuses the old `v1.0` / `main` / empty value).
+- Decider and JevK5 profiles installed before 0.5.9 need `deqio models update` once so the pinned snapshot is in
+  the cache; the launcher refuses to start until it is.
+
 ## [0.5.8] — 2026-10-10 (not tagged yet)
 
 One patch on top of 0.5.7: reproducible engine runtimes (D12b). No public route, response field or CLI

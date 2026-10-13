@@ -194,8 +194,9 @@ def test_model_catalog_contains_multi_engine_profiles() -> None:
 
     assert {"semif", "kev", "decider", "laya", "von"}.issubset(engines)
     assert get_profile(catalog, "semif-qwen3.5-4b", "mps")["model"] == "Qwen/Qwen3.5-4B"
-    assert get_profile(catalog, "kev-4b", "mlx")["model"] == "jaredpalmer/kev-4b@v1.0"
-    assert get_profile(catalog, "kev-4b", "mps")["model"] == "jaredpalmer/kev-4b@v1.0"
+    # D12c: the Kev run id names the commit pin_audit resolved for the v1.0 release tag.
+    assert get_profile(catalog, "kev-4b", "mlx")["model"] == "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
+    assert get_profile(catalog, "kev-4b", "mps")["model"] == "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
     assert get_profile(catalog, "decider-2b", "mps")["model"] == "Mapika/decider-2b"
     assert get_profile(catalog, "decider-2b", "cuda")["model"] == "Mapika/decider-2b"
     with pytest.raises(RuntimeError, match="does not support backend"):
@@ -1138,7 +1139,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.8"
+    assert __version__ == "0.5.9"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1411,9 +1412,11 @@ def test_kev_native_profiles_stay_pinned_and_official_q8_gguf_is_separate() -> N
         for backend, profile in entry["backends"].items():
             if backend == "gguf":
                 continue
-            assert profile["model"].endswith("@v1.0")
-            assert profile["model_revision"] == "v1.0"
-            assert profile["download"]["revision"] == "v1.0"
+            # D12c: pinned to the commit of the v1.0 release tag; the run id carries the same commit.
+            revision = profile["model_revision"]
+            assert len(revision) == 40 and all(ch in "0123456789abcdef" for ch in revision)
+            assert profile["model"].endswith(f"@{revision}")
+            assert profile["download"]["revision"] == revision
             assert profile["packages"] == [
                 "kev[serve] @ git+https://github.com/jaredpalmer/kev.git@6b719c3c3f367295f6ef336f4f751cf5ff970abc"
             ]
@@ -1952,7 +1955,7 @@ def test_catalog_contains_current_decision_families_and_nimble() -> None:
 
     catalog = load_catalog(Path("models.json"))
 
-    assert get_profile(catalog, "kev-27b", "cuda")["model"] == "jaredpalmer/kev-27b@v1.0"
+    assert get_profile(catalog, "kev-27b", "cuda")["model"] == "jaredpalmer/kev-27b@af0e6d551bdc2cc724f3e9d7a8bee1cd4fb8f7bf"
     assert get_profile(catalog, "jevk5-4b", "cuda")["model"] == "alibiserikbay/JevK5"
     assert get_profile(catalog, "jevk5-9b", "cuda")["model"] == "alibiserikbay/JevK5-9B"
     assert get_profile(catalog, "open-jev-2b", "cuda")["model"].endswith("open-jev-2b/package/checkpoint")
@@ -2148,7 +2151,7 @@ def test_nimble_preparation_requires_pinned_revision(
     assert row["status"] == "weights-missing"
 
 
-def test_systemone_commands_for_new_native_sidecars(tmp_path: Path) -> None:
+def test_systemone_commands_for_new_native_sidecars(tmp_path: Path, monkeypatch) -> None:
     from types import SimpleNamespace
     from deqio.systemone_runtime import SystemOneRuntime
 
@@ -2156,12 +2159,18 @@ def test_systemone_commands_for_new_native_sidecars(tmp_path: Path) -> None:
     env_dir = tmp_path / "runtime"
     env: dict[str, str] = {}
 
-    jevk5 = SimpleNamespace(engine="jevk5", backend="cuda")
+    # D12c: JevK5 loads the pinned commit by the path of its cached snapshot.
+    snapshot = tmp_path / "jevk5-snapshot"
+    snapshot.mkdir()
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **kwargs: str(snapshot))
+    jevk5 = SimpleNamespace(engine="jevk5", backend="cuda", model_id="jevk5-4b")
     command = SystemOneRuntime._command(
-        jevk5, {"model": "alibiserikbay/JevK5"}, env_dir, python, 9010, env
+        jevk5, {"model": "alibiserikbay/JevK5", "model_revision": "c4f7fdb3aeab5582336406e78d3bef11bf98833d"},
+        env_dir, python, 9010, env,
     )
     assert command[-4:] == ["--host", "127.0.0.1", "--port", "9010"]
     assert "jevk5.server" in command
+    assert command[command.index("--model") + 1] == str(snapshot)
 
     open_model = tmp_path / "models" / "open-jev" / "package" / "checkpoint"
     open_model.mkdir(parents=True)

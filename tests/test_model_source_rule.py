@@ -114,7 +114,8 @@ def test_load_accepts_the_selected_catalog_profile(tmp_path: Path, monkeypatch: 
 def test_load_accepts_a_pin_on_install_revision_recorded_by_the_installer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Pin-on-install profiles legitimately run the recorded immutable SHA, not the catalog's `main`."""
+    """Pin-on-install profiles run the installer's recorded commit; since D12c the catalog names that commit
+    itself, so the record must agree with it (a different record is refused: tests/test_hf_revision_pins.py)."""
     from deqio.installations import mark_installed
 
     config = ensure_workspace(tmp_path / "ws")
@@ -124,7 +125,7 @@ def test_load_accepts_a_pin_on_install_revision_recorded_by_the_installer(
     mark_installed(
         config, "basal-1.5-mini", "mlx", verified=True, source="install",
         artifacts=[{"source": "huggingface", "repo_id": profile["model"], "role": "basal-model",
-                    "requested_revision": profile.get("model_revision"), "resolved_revision": "a" * 40}],
+                    "requested_revision": profile.get("model_revision"), "resolved_revision": profile["model_revision"]}],
         max_input_tokens=4096,
     )
 
