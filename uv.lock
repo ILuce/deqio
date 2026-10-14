@@ -68,7 +68,7 @@ wheels = [
 
 [[package]]
 name = "deqio"
-version = "0.5.9"
+version = "0.6.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

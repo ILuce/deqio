@@ -383,6 +383,7 @@ def _runtime_identity(
         "artifact_verification_status": "verified" if record.get("verified_at") and resolved else "unresolved",
         "max_input_tokens": int(record.get("max_input_tokens", settings.max_tokens)),
     }
+    identity["provider"] = {"name": "local", "kind": "local", "engine": settings.engine}
     for key in ("family", "runtime", "platform", "source", "capabilities", "precision"):
         if profile.get(key) is not None:
             identity[key] = deepcopy(profile[key])
@@ -1373,7 +1374,7 @@ class SystemOneRuntime:
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
             raise SystemOneProtocolError("External engine response is missing answers.decision")
-        return _choice_raw(
+        raw = _choice_raw(
             row=row,
             answer=answers[question_id],
             response=response,
@@ -1381,6 +1382,14 @@ class SystemOneRuntime:
             latency_ms=latency_ms,
             preserve_native=self.engine == "decision2",
         )
+        return self._annotate_provider(raw)
+
+    def _annotate_provider(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """D11: every raw result names its provider; a sidecar has no remote id and no price."""
+        raw["provider"] = {"name": "local", "kind": "local", "engine": self.engine}
+        raw["remote_request_id"] = None
+        raw["cost_estimate"] = None
+        return raw
 
     def score_noul(self, row: dict[str, Any], mode: str) -> dict[str, Any]:
         question_id = "decision"
@@ -1394,7 +1403,7 @@ class SystemOneRuntime:
         answers = response.get("answers")
         if not isinstance(answers, dict) or not isinstance(answers.get(question_id), dict):
             raise SystemOneProtocolError("External engine response is missing answers.decision")
-        return _noul_raw(
+        raw = _noul_raw(
             row=row,
             answer=answers[question_id],
             response=response,
@@ -1402,6 +1411,7 @@ class SystemOneRuntime:
             latency_ms=latency_ms,
             preserve_native=self.engine == "decision2",
         )
+        return self._annotate_provider(raw)
 
     def score_shared(self, rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         if not rows:
@@ -1445,6 +1455,7 @@ class SystemOneRuntime:
         # ``engine_reported_batch`` says why: the engine measured the batch.
         batch_tokens, batch_source = _input_token_usage(response)
         for raw in raw_results:
+            self._annotate_provider(raw)
             raw["batch_input_tokens"] = batch_tokens
             raw["batch_input_tokens_source"] = batch_source
             if len(raw_results) > 1:

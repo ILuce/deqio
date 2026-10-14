@@ -385,3 +385,13 @@ Avoid changes that:
 - put UI rendering or model-selection work in the normal decision request path.
 
 External engines should remain resident in a localhost-only child process for the lifetime of the main server.
+
+## Decision providers (D11)
+
+A decision provider answers a System One request and names itself in provenance (`provider`, `remote_request_id`,
+`cost_estimate`). `local` is the catalog sidecar; remote providers (`deqio.providers`) are selected explicitly, sit
+behind their own flag, read keys from the environment only, and never serve as a fallback for a failed sidecar or for
+each other: a missing flag, key or endpoint and any non-decision answer is an explicit error. Cost is an estimate from
+the API's reported input tokens and the published input price, never a bill; `amount` stays `null` when usage is not
+reported. Remote wire mappings live in `deqio.providers` only, and the contract tests replay the cassettes under
+`tests/fixtures/providers/` (synthetic until `python -m deqio.provider_record` replaces them).

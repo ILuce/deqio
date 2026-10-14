@@ -8,6 +8,41 @@ production audit.
 
 ## [Unreleased]
 
+## [0.6.0.dev0] — 2026-10-13 (0.6.0-dev; not tagged)
+
+One patch on top of 0.5.9: the decision-provider abstraction (D11). No public route, response field or CLI command was
+removed or renamed. Additive fields: `provenance.provider`, `provenance.remote_request_id`, `provenance.cost_estimate`
+on `/v1/noul`, `/v1/choice` and `/v1/shared` (batch-level on `/v1/shared`), and `deqio.provider`,
+`deqio.remote_request_id`, `deqio.cost_estimate` on `/v1/systemone`; `provider` inside `provenance.runtime`;
+`provider_name`, `remote_request_id`, `cost_estimate` per row in benchmark `results.jsonl`.
+
+### Added
+
+- `deqio.providers`: `DecisionProvider` registry — `local` (the catalog sidecar, unchanged) and the remote providers
+  `openai-decisions` (`POST https://api.openai.com/v1/decisions`, default model `gpt-6-luna`, `OPENAI_API_KEY`) and
+  `typesafe-jev` (`TYPESAFE_JEV_BASE_URL` + `TYPESAFE_JEV_API_KEY`), each behind its own flag
+  (`DEQIO_PROVIDER_OPENAI_DECISIONS=1`, `DEQIO_PROVIDER_TYPESAFE_JEV=1`). A remote provider is selected explicitly
+  (`config.json` `provider`, `provider_model`, `provider_base_url` or `DEQIO_PROVIDER*`) and is never a fallback;
+  a missing flag, key or endpoint, and any non-200 or non-decision answer, is an explicit error.
+- `deqio.remote_runtime.RemoteProviderRuntime`: the server/benchmark runtime surface without a sidecar; results carry
+  `provider`, `remote_request_id` and a USD `cost_estimate` from the API's reported `usage.input_tokens` and the
+  provider's published input price (amount `null` when usage is not reported; batch-scoped on `/v1/shared`).
+- `deqio benchmark --provider openai-decisions|typesafe-jev [--provider-model M] [--provider-base-url URL]`: runs a
+  suite through a remote provider (no live-server suspension); `summary.json` identity is
+  `engine=<provider>`, `model_id=<remote model>`, `backend=remote`.
+- `python -m deqio.provider_record --provider NAME --out FILE`: records one real exchange as a cassette (no secrets);
+  the shipped cassettes in `tests/fixtures/providers/` are synthetic examples of the provider wire v1 and are meant
+  to be replaced by recordings.
+- `tests/test_providers.py` (15 node IDs): registry, flags/keys, cassette contract, HTTP round trip through a local
+  fake API, error surfacing, settings/env, provenance fields, benchmark provider run.
+
+### Not verified in this patch
+
+- The wire shape of OpenAI Decisions and TypeSafe Jev (`{"model","state","questions"}` → `{"id","answers","usage"}`)
+  is the provider wire v1 assumption documented in `README.md`; it was not checked against the real APIs (no network
+  from the session). The first `deqio benchmark --provider ...` run or `provider_record` will show any mismatch.
+
+
 ## [0.5.9] — 2026-10-12 (not tagged yet)
 
 One patch on top of 0.5.8: Hub revisions pinned from the owner's `pin_audit` (D12c). No public route, response

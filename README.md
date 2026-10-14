@@ -628,6 +628,24 @@ Deqio only compares profiles whose canonical runtime identity matches, including
 
 ---
 
+## Decision providers
+
+Every decision names its provider in provenance. `local` is the catalog sidecar selected with `deqio models use`.
+Two remote decision APIs are available behind flags and are never used as a fallback: `openai-decisions`
+(`POST https://api.openai.com/v1/decisions`, default model `gpt-6-luna`; `DEQIO_PROVIDER_OPENAI_DECISIONS=1`,
+`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`) and `typesafe-jev` (`POST $TYPESAFE_JEV_BASE_URL/v1/decisions`;
+`DEQIO_PROVIDER_TYPESAFE_JEV=1`, `TYPESAFE_JEV_API_KEY`, `TYPESAFE_JEV_BASE_URL`). Select one in `config.json`
+(`"provider"`, optional `"provider_model"`, `"provider_base_url"`) or with `DEQIO_PROVIDER`, `DEQIO_PROVIDER_MODEL`,
+`DEQIO_PROVIDER_BASE_URL`; `deqio serve` then answers `/v1/noul`, `/v1/choice`, `/v1/shared` and `/v1/systemone`
+through the API without a sidecar (`/v1/score`, `/v1/multi`, `/v1/act` stay unavailable with an explicit 422), and
+`deqio benchmark --provider openai-decisions` runs a suite through it. Provenance gains `provider` (name, kind, model,
+endpoint, price), `remote_request_id` and `cost_estimate` (USD from the API's reported input tokens and the published
+input price; `amount` is `null` without reported usage; one batch-scoped estimate per `/v1/shared` call). Keys come
+from the environment only and never appear in provenance, logs or recordings. Provider wire v1 — request `{"model",
+"state", "questions"}` as in `/v1/systemone`, response `{"id", "answers", "usage": {"input_tokens"}}` — is the shape
+both adapters use until a recording (`python -m deqio.provider_record --provider NAME --out FILE`) proves otherwise;
+the contract tests replay the cassettes under `tests/fixtures/providers/`.
+
 ## Correctness and provenance
 
 Decision responses include Deqio runtime/model provenance. Installed profiles record artifact revisions where available so a result can be tied to the actual runtime/model identity used for inference.

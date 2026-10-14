@@ -18,6 +18,7 @@ from .benchmark_compare import main as compare_main
 from .benchmark_identity import build_profile_identity
 from .catalog import apply_selection, get_model, get_profile, load_catalog
 from .config import read_config_data, settings_from_data
+from .providers import provider_spec
 from .installations import installed_profiles
 from .watch_store import WatchStore
 from .process_lock import process_lock
@@ -42,6 +43,10 @@ class BenchResult:
     correct: int
     top_probability: float | None = None
     error: str | None = None
+    # D11: who answered (local sidecar or remote provider), the remote request id and the cost estimate
+    provider_name: str | None = None
+    remote_request_id: str | None = None
+    cost_estimate: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -238,6 +243,17 @@ def _benchmark_watch_session_token(watch: WatchStore | None) -> str | None:
         return None
 
 
+def _provider_fields(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """D11: provider identity carried from a raw result into a BenchResult row."""
+    raw = raw if isinstance(raw, dict) else {}
+    provider = raw.get("provider") if isinstance(raw.get("provider"), dict) else {}
+    return {
+        "provider_name": str(provider.get("name")) if provider.get("name") else None,
+        "remote_request_id": raw.get("remote_request_id"),
+        "cost_estimate": raw.get("cost_estimate") if isinstance(raw.get("cost_estimate"), dict) else None,
+    }
+
+
 def _run_case(
     runtime: BackendRuntime,
     model: dict[str, str],
@@ -271,7 +287,8 @@ def _run_case(
             )
             return BenchResult(**model, case_id=case_id, kind=kind, passed=actual == expected,
                                expected=expected, actual=actual, latency_ms=latency_ms,
-                               assertions=1, correct=int(actual == expected), top_probability=top)
+                               assertions=1, correct=int(actual == expected), top_probability=top,
+                               **_provider_fields(raw))
 
         if kind == "choice":
             row = _choice_row(case)
@@ -289,7 +306,8 @@ def _run_case(
             )
             return BenchResult(**model, case_id=case_id, kind=kind, passed=actual == expected,
                                expected=expected, actual=actual, latency_ms=latency_ms,
-                               assertions=1, correct=int(actual == expected), top_probability=top)
+                               assertions=1, correct=int(actual == expected), top_probability=top,
+                               **_provider_fields(raw))
 
         rows = []
         expected: list[str] = []
@@ -336,7 +354,8 @@ def _run_case(
         )
         return BenchResult(**model, case_id=case_id, kind=kind, passed=correct == len(expected),
                            expected=expected, actual=actual, latency_ms=latency_ms,
-                           assertions=len(expected), correct=correct)
+                           assertions=len(expected), correct=correct,
+                           **_provider_fields(raw_results[0] if raw_results else None))
     except Exception as error:
         latency_ms = (time.perf_counter() - started) * 1000.0
         if kind == "shared":
@@ -459,7 +478,42 @@ def _select_profiles(
     return [rows[index] for index in dict.fromkeys(indexes)]
 
 
+def _provider_row(args: argparse.Namespace) -> dict[str, Any] | None:
+    """D11: `--provider NAME` benchmarks a remote decision provider instead of installed profiles."""
+    name = getattr(args, "provider", None)
+    if not name:
+        return None
+    spec = provider_spec(str(name))
+    if spec.kind != "remote":
+        raise RuntimeError(f"--provider needs a remote provider; {spec.name!r} is {spec.kind}")
+    model = str(getattr(args, "provider_model", "") or spec.default_model)
+    return {
+        "provider": spec.name,
+        "model_id": model,
+        "backend": "remote",
+        "engine": spec.name,
+        "provider_base_url": str(getattr(args, "provider_base_url", "") or ""),
+    }
+
+
+def _provider_settings(config_path: Path, config_data: dict[str, Any], row: dict[str, Any]):
+    from dataclasses import replace
+
+    base = settings_from_data(config_path, config_data, apply_environment=False)
+    return replace(
+        base,
+        engine=str(row["engine"]),
+        model_id=str(row["model_id"]),
+        backend="remote",
+        provider=str(row["provider"]),
+        provider_model=str(row["model_id"]),
+        provider_base_url=str(row.get("provider_base_url") or ""),
+    )
+
+
 def _runtime_settings(config_path: Path, config_data: dict[str, Any], catalog: dict[str, Any], row: dict[str, Any]):
+    if row.get("provider"):
+        return _provider_settings(config_path, config_data, row)
     entry = get_model(catalog, str(row["model_id"]))
     profile = get_profile(catalog, str(row["model_id"]), str(row["backend"]))
     selected = apply_selection(config_data, entry, profile, str(row["backend"]))
@@ -557,7 +611,10 @@ def run(args: argparse.Namespace) -> int:
         print("Cancelled.")
         return 0
     suite = load_suite(suite_path)
-    profiles = _select_profiles(_installed(config_path, config_data, catalog), args)
+    provider_row = _provider_row(args)
+    profiles = (
+        [provider_row] if provider_row is not None else _select_profiles(_installed(config_path, config_data, catalog), args)
+    )
     if profiles is None:
         print("Cancelled.")
         return 0
@@ -576,9 +633,14 @@ def run(args: argparse.Namespace) -> int:
     all_summaries: list[dict[str, Any]] = []
     with _benchmark_workspace_lock(config_path):
         try:
-            lease = _suspend_live_server(
-                config_path,
-                timeout=min(max(sidecar_timeout, 60.0), 1800.0),
+            # A remote provider does not use the workspace's inference; the live server keeps serving.
+            lease = (
+                None
+                if provider_row is not None
+                else _suspend_live_server(
+                    config_path,
+                    timeout=min(max(sidecar_timeout, 60.0), 1800.0),
+                )
             )
             with results_path.open("w", encoding="utf-8") as log:
                 for profile_row in profiles:
@@ -723,6 +785,13 @@ def build_parser() -> argparse.ArgumentParser:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--all", action="store_true", help="Benchmark every installed host-compatible profile")
     group.add_argument("--model", action="append", help="Benchmark MODEL_ID:BACKEND; repeat to select several")
+    group.add_argument(
+        "--provider",
+        help="Benchmark a remote decision provider (openai-decisions | typesafe-jev) instead of installed profiles; "
+        "needs its DEQIO_PROVIDER_* flag and API key in the environment",
+    )
+    parser.add_argument("--provider-model", default="", help="Remote model for --provider (default: the provider's)")
+    parser.add_argument("--provider-base-url", default="", help="Endpoint base URL for --provider (default: the provider's)")
     return parser
 
 

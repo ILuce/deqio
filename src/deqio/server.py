@@ -1038,20 +1038,48 @@ def _bind_result_provenance(
         and score.get("kind") != "unknown"
         and (input_receipt is None or input_receipt.get("status") == "complete")
     )
+    provider = _provider_descriptor(raw_result, runtime_identity)
+    remote = provider.get("kind") == "remote"
     response["provenance"] = {
         "schema_version": INPUT_ATTESTATION_SCHEMA_VERSION if input_receipt is not None else 1,
         "runtime": runtime_identity,
         "score": score,
         "attestation": {
             "kind": (
-                "deqio-local-response-v2" if input_receipt is not None else "deqio-local-response"
+                ("deqio-remote-response-v2" if remote else "deqio-local-response-v2")
+                if input_receipt is not None
+                else ("deqio-remote-response" if remote else "deqio-local-response")
             ),
             "signed": False,
             "complete": complete,
             "sha256": _attestation_sha(binding),
         },
+        # D11 (additive): who answered, the remote API's request id, and the estimated price.
+        "provider": provider,
+        "remote_request_id": raw_result.get("remote_request_id"),
+        "cost_estimate": raw_result.get("cost_estimate"),
     }
     return response
+
+
+def _provider_descriptor(raw_result: dict[str, Any], runtime_identity: dict[str, Any]) -> dict[str, Any]:
+    """The provider that produced a raw result: the result's own descriptor, else the runtime's, else local."""
+    for candidate in (raw_result.get("provider"), runtime_identity.get("provider")):
+        if isinstance(candidate, dict) and candidate.get("name"):
+            return dict(candidate)
+    return {"name": "local", "kind": "local"}
+
+
+def _attach_batch_provider_provenance(
+    provenance: dict[str, Any], raw_results: list[dict[str, Any]], runtime_identity: dict[str, Any]
+) -> dict[str, Any]:
+    """D11 (additive) on a shared batch: one remote call answered every decision, so the
+    batch carries one request id and one batch-scoped cost estimate."""
+    first = raw_results[0] if raw_results and isinstance(raw_results[0], dict) else {}
+    provenance["provider"] = _provider_descriptor(first, runtime_identity)
+    provenance["remote_request_id"] = first.get("remote_request_id")
+    provenance["cost_estimate"] = first.get("cost_estimate")
+    return provenance
 
 
 def _shared_provenance(
@@ -1619,6 +1647,10 @@ def _execute_system_one(payload: SystemOneRequest, *, endpoint: str) -> dict[str
             "total_ms": round(float(timing.get("total_seconds", 0.0)) * 1000.0, 3),
             "decisions": len(payload.questions),
         },
+        # D11 (additive): the provider that answered this native request.
+        "provider": _provider_descriptor({}, runtime_identity),
+        "remote_request_id": timing.get("remote_request_id"),
+        "cost_estimate": timing.get("cost_estimate"),
     }
     observability_result = {
         "timing": result["deqio"]["timing"],
@@ -1961,8 +1993,10 @@ def _serve_shared(
                     raw, runtime_identity=runtime_identity, input_receipt=per_result_receipt
                 )
             )
-        batch_provenance = _shared_provenance(
-            results, runtime_identity, input_receipt=shared_receipt
+        batch_provenance = _attach_batch_provider_provenance(
+            _shared_provenance(results, runtime_identity, input_receipt=shared_receipt),
+            raw_results,
+            runtime_identity,
         )
         shared_timing = format_shared_timing(timing)
         batch_input_tokens, _batch_source = _shared_batch_usage(raw_results)

@@ -1139,7 +1139,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.5.9"
+    assert __version__ == "0.6.0.dev0"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
