@@ -117,7 +117,7 @@ def test_decision3_catalog_entry_pins_the_three_backends(model_id: str) -> None:
     assert mlx["source"] == "community" and mlx["source_url"] == f"https://huggingface.co/ahmedandaloes/{model_id}-mlx"
     assert mlx["precision"] == "bf16" and "bits" not in mlx and "quantization" not in mlx
     assert mlx["systems"] == ["Darwin"] and mlx["platform"] == "mlx"
-    assert "mlx-vlm==0.3.9" in mlx["packages"] and "mlx==0.29.3" in mlx["packages"] and "transformers==5.17.0" in mlx["packages"]
+    assert "mlx-vlm==0.7.6" in mlx["packages"] and "mlx==0.32.3" in mlx["packages"] and "transformers==5.17.0" in mlx["packages"]
     assert mlx["capabilities"]["score"] is False and mlx["capabilities"]["choice"] is True and mlx["capabilities"]["noul"] is True
     assert mlx["capabilities"]["systemone"] is True and mlx["capabilities"]["multi_question"] is True
 
@@ -234,7 +234,7 @@ def test_decision3_installer_pins_torch_first_then_the_official_requirements(tmp
 
     commands.clear()
     manager._install_runtime(config, {"runtime_dir": ".model-runtimes", "backend": "mlx"}, get_profile(catalog, "d3-mini", "mlx"), upgrade=False)
-    assert len(commands) == 1 and "mlx-vlm==0.3.9" in commands[0] and "fastapi==0.141.1" in commands[0]
+    assert len(commands) == 1 and "mlx-vlm==0.7.6" in commands[0] and "fastapi==0.141.1" in commands[0]
     assert "--exclude-newer" in commands[0]
 
 
@@ -324,3 +324,61 @@ def test_decision3_choice_probabilities_are_preserved_without_renormalization() 
     raw = _choice_raw(row=row, answer=answer, response={"answers": {"decision": answer}}, payload={}, latency_ms=1.0, preserve_native="decision3")
     assert raw["probabilities"] == [0.62, 0.3]
     assert "Decision 3.0" in raw["probability_status"] and raw["score_provenance"]["normalized"] is False
+
+
+# --- 0.6.1 fix 1: the MLX runtime pin must carry mlx_vlm.models.qwen3_5 -------------------------------
+MLX_VLM_PIN = "mlx-vlm==0.7.6"  # 2026-10-05, the last release before the catalog cutoff; qwen3_5 (GatedDeltaNet) since v0.7.x
+MLX_PIN = "mlx==0.32.3"  # the mlx that mlx-vlm 0.7.6 requires (macOS 14+ wheels)
+
+
+def test_decision3_mlx_runtime_pin_carries_the_qwen3_5_model() -> None:
+    """The community d3_mlx.py imports `mlx_vlm.models.qwen3_5`; mlx-vlm 0.3.9 (the pin 0.6.1 shipped, resolved by
+    uv for a macOS 13 target) has no such module and the install-time probe failed with ImportError on the owner's
+    Mac. Every D3 MLX profile pins the release that has it and the matching mlx, without mlx-lm."""
+    for model_id in sorted(OFFICIAL):
+        packages = get_profile(_catalog(), model_id, "mlx")["packages"]
+        assert MLX_VLM_PIN in packages and MLX_PIN in packages, (model_id, packages)
+        assert not any(spec.startswith("mlx-lm") or spec.startswith("mlx-vlm==0.3") for spec in packages), packages
+        pins = {spec.split("==")[0]: spec for spec in packages}
+        assert pins["transformers"] == "transformers==5.17.0"
+        assert pins["fastapi"] == "fastapi==0.141.1" and pins["uvicorn[standard]"] == "uvicorn[standard]==0.53.0"
+
+
+def test_decision3_mlx_sidecar_reports_a_runtime_import_failure_in_the_response(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A broken runtime environment must surface its cause through the HTTP reply Deqio prints, not only in the
+    sidecar's traceback (0.6.1 on the owner's Mac printed `HTTP 500: Internal Server Error` for the ImportError)."""
+    import importlib.abc
+    import importlib.machinery
+
+    from deqio import d3_mlx_sidecar
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "d3_mlx.py").write_text("", encoding="utf-8")
+
+    class Broken(importlib.abc.Loader):
+        def create_module(self, spec):
+            raise ImportError("cannot import name 'qwen3_5' from 'mlx_vlm.models'")
+
+        def exec_module(self, module):  # pragma: no cover - create_module raises first
+            raise AssertionError
+
+    class Finder(importlib.abc.MetaPathFinder):
+        def find_spec(self, name, path, target=None):
+            if name == "d3_mlx":
+                return importlib.machinery.ModuleSpec("d3_mlx", Broken())
+            return None
+
+    monkeypatch.delitem(sys.modules, "d3_mlx", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [Finder(), *sys.meta_path])
+    app = d3_mlx_sidecar.build_app(str(snapshot), "ahmedandaloes/d3-lite-mlx")
+
+    async def call() -> httpx.Response:
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url="http://sidecar") as client:
+            return await client.post("/v1/systemone", json={"state": "s", "questions": {"q": {"type": "noul"}}})
+
+    response = asyncio.run(call())
+    assert response.status_code == 500
+    assert "qwen3_5" in response.text and "d3_mlx" in response.text, response.text
+    assert response.headers.get("content-type", "").startswith("application/json")

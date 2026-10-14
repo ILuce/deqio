@@ -2872,7 +2872,7 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
     assert basal["runtime_key"] == "basal20-main-mlx"
     assert basal["basal_mode"] == "mlx"
     assert basal["quantization"]["bits"] == 8
-    assert basal["min_memory_gib"] == pytest.approx(5.5)
+    assert basal["min_memory_gib"] == pytest.approx(5.2)  # the Basal 1.5 guardrail: same weights, same 8-bit quantization
     assert basal["recommended_memory_gib"] == 8
 
     basal_gguf = get_profile(catalog, "basal-2.0-main", "gguf")

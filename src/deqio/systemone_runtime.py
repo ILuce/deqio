@@ -1070,6 +1070,16 @@ class SystemOneRuntime:
                 command.extend(["--gguf", str(gguf_path)])
             if profile.get("basal_soam") is True:
                 command.extend(["--soam", "on"])
+            overflow = profile.get("basal_context_overflow")
+            if overflow is not None:
+                # 0.6.1 fix 1: basal-serve 2.0 truncates the middle of a state longer than the model's context by
+                # default and only marks it in usage.truncated; Deqio profiles ask for an explicit refusal (HTTP 422)
+                # instead, so an over-long prompt is never answered from a silently cut state.
+                if str(overflow) not in {"truncate", "refuse"}:
+                    raise RuntimeError(
+                        f"Catalog profile basal_context_overflow must be 'truncate' or 'refuse', got {overflow!r}"
+                    )
+                command.extend(["--context-overflow", str(overflow)])
             command.extend(["--port", str(port)])
             return command
 

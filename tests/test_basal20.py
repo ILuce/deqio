@@ -139,7 +139,7 @@ def test_basal20_launchers_use_the_official_server_with_the_pinned_revision(tmp_
     )
     assert command == [
         str(executable), "--model", "Remek/basal-2.0-max-MLX-8bit", "--revision", BASAL20["max"][2],
-        "--mode", "mlx", "--soam", "on", "--port", "9441",
+        "--mode", "mlx", "--soam", "on", "--context-overflow", "refuse", "--port", "9441",
     ]
 
     gguf = get_profile(catalog, "basal-2.0-mini", "gguf")
@@ -154,7 +154,7 @@ def test_basal20_launchers_use_the_official_server_with_the_pinned_revision(tmp_
     )
     assert command == [
         str(executable), "--model", "Remek/basal-2.0-mini", "--revision", BASAL20["mini"][1],
-        "--mode", "gguf", "--gguf", str(weights.resolve()), "--soam", "on", "--port", "9442",
+        "--mode", "gguf", "--gguf", str(weights.resolve()), "--soam", "on", "--context-overflow", "refuse", "--port", "9442",
     ]
 
 
@@ -365,3 +365,55 @@ def test_basal20_launchers_use_official_server_for_mlx_and_mps_modes(tmp_path: P
         assert command == [
             str(executable), "--model", model, "--mode", mode, "--soam", "on", "--port", "9020"
         ]
+
+
+# --- 0.6.1 fix 1: memory guardrails as in 1.5, explicit context overflow ------------------------------
+# tier -> backend -> (min_memory_gib, recommended_memory_gib): the Basal 1.5 values of 0.5.9 for the same
+# Bielik-v3 weights and the same 8-bit / Q8_0 quantizations (0.6.1 shipped higher numbers; max became unavailable
+# on a 16 GiB Mac that ran basal-1.5-max).
+BASAL15_MEMORY = {
+    "mini": {"mlx": (1.8, 4), "gguf": (1.7, 4)},
+    "main": {"mlx": (5.2, 8), "gguf": (5.1, 8)},
+    "max": {"mlx": (12.0, 20), "gguf": (12.0, 20)},
+}
+
+
+@pytest.mark.parametrize("tier", sorted(BASAL15_MEMORY))
+def test_basal20_memory_guardrails_match_basal15_for_the_same_weights(tier: str) -> None:
+    catalog = _catalog()
+    for backend, (minimum, recommended) in BASAL15_MEMORY[tier].items():
+        profile = get_profile(catalog, f"basal-2.0-{tier}", backend)
+        assert profile["min_memory_gib"] == pytest.approx(minimum), (tier, backend, profile["min_memory_gib"])
+        assert profile["recommended_memory_gib"] == pytest.approx(recommended), (tier, backend)
+
+
+def test_basal20_context_is_the_models_and_overflow_is_refused_explicitly(tmp_path: Path) -> None:
+    """basal-serve 2.0 takes the context from the model's config.json (mini 8192, 4.5B/max 32768) and by default
+    truncates the middle of a longer state (`--context-overflow truncate`, marked only in usage.truncated).
+    Deqio never truncates silently: every Basal 2.0 profile declares `basal_context_overflow: refuse` and the
+    launcher passes it, so an over-long prompt is a 422 from the sidecar and a 422 for the client."""
+    catalog = _catalog()
+    for tier in ("mini", "main", "max"):
+        for backend in ("mlx", "gguf"):
+            profile = get_profile(catalog, f"basal-2.0-{tier}", backend)
+            assert profile["basal_context_overflow"] == "refuse", (tier, backend)
+            assert profile["max_input_tokens"] == MAX_INPUT_TOKENS[tier]
+
+    env_dir = tmp_path / "runtime"
+    executable = env_dir / "bin" / "basal-serve"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("", encoding="utf-8")
+    python = env_dir / "bin" / "python"
+    python.write_text("", encoding="utf-8")
+    profile = get_profile(catalog, "basal-2.0-mini", "mlx")
+    command = SystemOneRuntime._command(
+        SimpleNamespace(engine="basal", backend="mlx", model_revision=profile["model_revision"], config_path=tmp_path / "config.json"),
+        profile, env_dir, python, 9450, {},
+    )
+    assert command[command.index("--context-overflow") + 1] == "refuse"
+    assert command.index("--context-overflow") < command.index("--port")
+    with pytest.raises(RuntimeError, match="basal_context_overflow"):
+        SystemOneRuntime._command(
+            SimpleNamespace(engine="basal", backend="mlx", model_revision=profile["model_revision"], config_path=tmp_path / "config.json"),
+            {**profile, "basal_context_overflow": "drop"}, env_dir, python, 9450, {},
+        )

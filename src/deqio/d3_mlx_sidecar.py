@@ -38,9 +38,20 @@ def build_app(snapshot: str, name: str):
                     raise HTTPException(status_code=500, detail=f"d3_mlx.py is missing from the pinned snapshot {snapshot_dir}")
                 if str(snapshot_dir) not in sys.path:
                     sys.path.insert(0, str(snapshot_dir))
-                from d3_mlx import D3MLX  # the runtime shipped by the pinned community snapshot
+                try:
+                    from d3_mlx import D3MLX  # the runtime shipped by the pinned community snapshot
 
-                model = D3MLX(str(snapshot_dir))
+                    model = D3MLX(str(snapshot_dir))
+                except Exception as error:  # noqa: BLE001 - the cause must reach Deqio's console, not only this process
+                    # 0.6.1 fix 1: a runtime environment that cannot import or load d3_mlx.py (for example an mlx-vlm
+                    # without mlx_vlm.models.qwen3_5) answers with the cause instead of a bare 500.
+                    raise HTTPException(
+                        status_code=500,
+                        detail=(
+                            f"Decision 3.0 MLX runtime failed to load d3_mlx.py from {snapshot_dir}: "
+                            f"{type(error).__name__}: {error}. Run deqio models update for this profile."
+                        ),
+                    ) from error
         return model
 
     @app.get("/health")

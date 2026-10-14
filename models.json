@@ -223,8 +223,8 @@
           "launcher": "d3_mlx",
           "python": "3.12",
           "packages": [
-            "mlx-vlm==0.3.9",
-            "mlx==0.29.3",
+            "mlx-vlm==0.7.6",
+            "mlx==0.32.3",
             "transformers==5.17.0",
             "fastapi==0.141.1",
             "uvicorn[standard]==0.53.0"
@@ -386,8 +386,8 @@
           "launcher": "d3_mlx",
           "python": "3.12",
           "packages": [
-            "mlx-vlm==0.3.9",
-            "mlx==0.29.3",
+            "mlx-vlm==0.7.6",
+            "mlx==0.32.3",
             "transformers==5.17.0",
             "fastapi==0.141.1",
             "uvicorn[standard]==0.53.0"
@@ -549,8 +549,8 @@
           "launcher": "d3_mlx",
           "python": "3.12",
           "packages": [
-            "mlx-vlm==0.3.9",
-            "mlx==0.29.3",
+            "mlx-vlm==0.7.6",
+            "mlx==0.32.3",
             "transformers==5.17.0",
             "fastapi==0.141.1",
             "uvicorn[standard]==0.53.0"
@@ -712,8 +712,8 @@
           "launcher": "d3_mlx",
           "python": "3.12",
           "packages": [
-            "mlx-vlm==0.3.9",
-            "mlx==0.29.3",
+            "mlx-vlm==0.7.6",
+            "mlx==0.32.3",
             "transformers==5.17.0",
             "fastapi==0.141.1",
             "uvicorn[standard]==0.53.0"
@@ -875,8 +875,8 @@
           "launcher": "d3_mlx",
           "python": "3.12",
           "packages": [
-            "mlx-vlm==0.3.9",
-            "mlx==0.29.3",
+            "mlx-vlm==0.7.6",
+            "mlx==0.32.3",
             "transformers==5.17.0",
             "fastapi==0.141.1",
             "uvicorn[standard]==0.53.0"
@@ -1813,12 +1813,13 @@
           "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 2.2,
-          "recommended_memory_gib": 4.7,
+          "min_memory_gib": 1.8,
+          "recommended_memory_gib": 4,
           "max_input_tokens": 8192,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",
@@ -1867,13 +1868,14 @@
           "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin",
             "Linux"
           ],
-          "min_memory_gib": 2.2,
-          "recommended_memory_gib": 4.7,
+          "min_memory_gib": 1.7,
+          "recommended_memory_gib": 4,
           "max_input_tokens": 8192,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",
@@ -1950,12 +1952,13 @@
           "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 5.5,
-          "recommended_memory_gib": 8.0,
+          "min_memory_gib": 5.2,
+          "recommended_memory_gib": 8,
           "max_input_tokens": 32768,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",
@@ -2004,13 +2007,14 @@
           "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin",
             "Linux"
           ],
-          "min_memory_gib": 5.5,
-          "recommended_memory_gib": 8.0,
+          "min_memory_gib": 5.1,
+          "recommended_memory_gib": 8,
           "max_input_tokens": 32768,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",
@@ -2087,12 +2091,13 @@
           "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "mlx",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin"
           ],
-          "min_memory_gib": 12.5,
-          "recommended_memory_gib": 15.0,
+          "min_memory_gib": 12.0,
+          "recommended_memory_gib": 20,
           "max_input_tokens": 32768,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",
@@ -2141,13 +2146,14 @@
           "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/af1ce43a1770dd4fdfc1611e3fe720b93d42fc73.tar.gz",
           "basal_mode": "gguf",
           "basal_soam": true,
+          "basal_context_overflow": "refuse",
           "pin_hf_revisions_at_install": true,
           "systems": [
             "Darwin",
             "Linux"
           ],
-          "min_memory_gib": 12.5,
-          "recommended_memory_gib": 15.0,
+          "min_memory_gib": 12.0,
+          "recommended_memory_gib": 20,
           "max_input_tokens": 32768,
           "default_max_input_tokens": 4096,
           "family": "basal2.0",

@@ -48,6 +48,18 @@ and Basal 1.5 and the 0.6.0.dev0 provider configuration (`provider*` in `config.
   backends); `config.json` `provider`/`provider_model`/`provider_base_url`, `DEQIO_PROVIDER*`, the
   `DEQIO_PROVIDER_OPENAI_DECISIONS`/`DEQIO_PROVIDER_TYPESAFE_JEV` flags and `deqio benchmark --provider*`.
 
+### Fixed (0.6.1 fix 1, 2026-10-14, after the owner's first install on Apple Silicon)
+- Decision 3.0 MLX: the runtime pin `mlx-vlm==0.3.9` / `mlx==0.29.3` had no `mlx_vlm.models.qwen3_5` (the module
+  `d3_mlx.py` imports), so the install-time probe failed with ImportError; the profiles now pin `mlx-vlm==0.7.6`
+  (2026-10-05, the last release before the catalog cutoff) and `mlx==0.32.3` (macOS 14+ wheels). The sidecar reports
+  a runtime import/load failure in its HTTP reply, so Deqio's console shows the cause instead of a bare `HTTP 500`.
+- Basal 2.0: memory guardrails restored to the Basal 1.5 values for the same weights and quantizations (mini 1.8/4,
+  main 5.2/8, max 12.0/20 GiB on MLX; 1.7/5.1/12.0 on GGUF), so `basal-2.0-max` is offered on a 16 GiB Mac again.
+  `basal-2.0-mini` keeps the model's own context (`max_position_embeddings` 8192 in both the 1.5 and the 2.0 mini
+  checkpoints; main/max 32768) as its token-budget limit, and every Basal 2.0 profile now runs `basal-serve` with
+  `--context-overflow refuse`: a prompt longer than the model context is an explicit 422, never a state whose middle
+  basal-serve cut silently.
+
 ## [0.6.0.dev0] — 2026-10-13 (0.6.0-dev; not tagged)
 
 One patch on top of 0.5.9: the decision-provider abstraction (D11). No public route, response field or CLI command was
