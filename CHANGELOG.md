@@ -8,6 +8,46 @@ production audit.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-14 (not tagged yet)
+
+Public HTTP routes and response fields are unchanged; nothing was removed or renamed. The catalog families Decision 2.0
+and Basal 1.5 and the 0.6.0.dev0 provider configuration (`provider*` in `config.json`, `DEQIO_PROVIDER*`,
+`deqio benchmark --provider*`) are removed; remote decision APIs are catalog profiles on the new `remote` backend.
+0.6.0.dev0 was never tagged, so this is the first 0.6 release; the 0.6.0 SDK/OpenAPI scope (D13) moves to 0.6.2.
+
+### Added
+- `remote` backend: `deqio models setup` offers it beside mlx/mps/gguf/cuda on every supported host; the catalog
+  profiles `openai-decisions` (OpenAI Decisions API, `gpt-6-luna`) and `typesafe-jev` (TypeSafe System One API,
+  `jev-latest`) are installed like local models — model identifier, API key, token budget, one probe decision — and
+  served, switched, benchmarked and deleted like them (`deqio.remote_runtime`).
+- API keys live in the OS keychain through the new core dependency `keyring` (`deqio.credentials`; service `deqio`);
+  a host without a keychain backend is an explicit error. `deqio models delete MODEL --backend remote` removes the key.
+- Decision 3.0 (`decision3`): catalog profiles `d3`, `d3-flash`, `d3-mini`, `d3-nano`, `d3-lite` on CUDA (the
+  official package's `d3_server.py` run from the pinned snapshot; `MODEL_MANIFEST.json` identity verified against the
+  catalog), GGUF Q8_0 (`ggml-org`, through llama.cpp) and MLX (community BF16 conversions by `ahmedandaloes` through
+  the new `deqio.d3_mlx_sidecar`; choice and noul only). Native probabilities are preserved unchanged.
+- Basal 2.0: catalog profiles `basal-2.0-mini`, `basal-2.0-main`, `basal-2.0-max` on MLX 8-bit and GGUF Q8_0 with the
+  official `rkinas/basal` v2.0.0 runtime (`af1ce43a`) and the author's artifacts pinned by commit.
+- `deqio models install|update|select --remote-model` for remote profiles; `python -m deqio.provider_record --key
+  keychain|env`.
+
+### Changed
+- D11b: the remote wire mappings follow the vendors' documentation instead of the guessed provider wire v1 —
+  OpenAI Decisions (`input`, `questions` array with `name`/`choices`/`levels`, `predicate` for noul, `answers` array,
+  `usage.input_tokens`, `refusal` is an explicit error) and TypeSafe (`POST https://api.typesafe.ai/v1/systemone`,
+  native System One wire, `TYPESAFE_API_KEY` convention, versioned `model` in the reply). The synthetic cassettes
+  under `tests/fixtures/providers/` are rewritten in the documented shapes.
+- llama.cpp pinned for every GGUF profile at `cbe28bb3cb0758f0c566a9a3561766821aeb0748` (2026-10-13, "fix vllm d3
+  multi seq case", ggml-org/llama.cpp#30408) instead of `99b95488`; the existing GGUF profiles (Kev, Clef, Laya)
+  need their before/after benchmark before the tag.
+- `deqio benchmark` resolves a profile's installed token budget and remote model identifier from the registry.
+- Version 0.6.1.
+
+### Removed
+- Decision 2.0 engine, sidecar and the six `decision-2.0-*` profiles; Basal 1.5 profiles (`basal-1.5-*`, all four
+  backends); `config.json` `provider`/`provider_model`/`provider_base_url`, `DEQIO_PROVIDER*`, the
+  `DEQIO_PROVIDER_OPENAI_DECISIONS`/`DEQIO_PROVIDER_TYPESAFE_JEV` flags and `deqio benchmark --provider*`.
+
 ## [0.6.0.dev0] — 2026-10-13 (0.6.0-dev; not tagged)
 
 One patch on top of 0.5.9: the decision-provider abstraction (D11). No public route, response field or CLI command was

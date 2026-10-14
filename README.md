@@ -79,23 +79,22 @@ Today both accept the same `state`, `questions`, and request modifiers, and both
 - `evidence: true` — per-question evidence spans where supported.
 - `option_keys: "show" | "hide"` — per-question option-key presentation where supported.
 
-Basal 1.5 currently exposes the broadest native feature set in Deqio: Choice, Noul, Score, Multi, Act, Facts, SOAM, option keys, and Evidence on native PyTorch profiles that support it.
+Basal 2.0 currently exposes the broadest native feature set in Deqio: Choice, Noul, Score, Multi, Act, Facts, SOAM and option keys (Basal 2.0 ships no evidence head, so `evidence: true` is refused explicitly).
 
 ---
 
 ## Supported models and backends
 
-The table below is generated from the model profiles shipped in the current Deqio 0.5 catalog. A check mark means Deqio has a profile for that model/backend combination; actual availability still depends on the operating system, accelerator, memory, and upstream runtime requirements.
+The table below is generated from the model profiles shipped in the current Deqio 0.6 catalog. A check mark means Deqio has a profile for that model/backend combination; actual availability still depends on the operating system, accelerator, memory, and upstream runtime requirements. Remote decision APIs (`openai-decisions`, `typesafe-jev`, backend `remote`) are described in "Remote decision APIs".
 
 | Model | Model ID | MLX | MPS | CUDA | GGUF |
 | --- | --- | :---: | :---: | :---: | :---: |
 | SemIf / Qwen3.5 4B | `semif-qwen3.5-4b` | ✓ 8-bit | ✓ | ✓ | — |
-| Decision 2.0 Kai 0.6B | `decision-2.0-kai` | — | — | ✓ | — |
-| Decision 2.0 Eos 0.8B | `decision-2.0-eos` | — | — | ✓ | — |
-| Decision 2.0 Sol 2B | `decision-2.0-sol` | — | — | ✓ | — |
-| Decision 2.0 Nox 4B | `decision-2.0-nox` | — | — | ✓ | — |
-| Decision 2.0 Lux 9B | `decision-2.0-lux` | — | — | ✓ | — |
-| Decision 2.0 Vega 27B | `decision-2.0-vega` | — | — | ✓ | — |
+| Decision 3.0 d3 26B | `d3` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-flash 8B | `d3-flash` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-mini 4.5B | `d3-mini` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-nano 2.2B | `d3-nano` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-lite 0.85B | `d3-lite` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
 | Kev 0.8B | `kev-0.8b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
 | Kev 4B | `kev-4b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
 | Kev 9B | `kev-9b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
@@ -106,9 +105,9 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Open-Jev 9B | `open-jev-9b` | — | — | ✓ | — |
 | Open-Jev 27B v1.1 | `open-jev-27b-v1.1` | — | — | ✓ | — |
 | CLM 8B | `clm-8b` | — | — | ✓ | — |
-| Basal 1.5 Mini — 1.5B | `basal-1.5-mini` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
-| Basal 1.5 Main — 4.5B | `basal-1.5-main` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
-| Basal 1.5 Max — 11B | `basal-1.5-max` | ✓ 8-bit | ✓ | ✓ | ✓ Q8_0 |
+| Basal 2.0 Mini — 1.5B | `basal-2.0-mini` | ✓ 8-bit | — | — | ✓ Q8_0 |
+| Basal 2.0 — 4.5B | `basal-2.0-main` | ✓ 8-bit | — | — | ✓ Q8_0 |
+| Basal 2.0 Max — 11B | `basal-2.0-max` | ✓ 8-bit | — | — | ✓ Q8_0 |
 | Clef Flash 9B | `clef-flash` | ✓ 8-bit | — | — | ✓ Q8_0 |
 | Clef 27B | `clef` | ✓ 8-bit | — | — | ✓ Q8_0 |
 | Decider 0.8B | `decider-0.8b` | — | ✓ | ✓ | — |
@@ -120,9 +119,9 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Von | `von` | — | ✓ | ✓ | — |
 | Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
 
-- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile.
-- Decision 2.0 profiles are intentionally **CUDA-only** in Deqio 0.5 and require the official CUDA runtime.
-- Basal 1.5 spans all four backend classes (MLX 8-bit, MPS, GGUF Q8_0, CUDA) and currently exposes Deqio's broadest native feature set.
+- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile; `✓ bf16 (community)` marks the Decision 3.0 MLX conversions by `ahmedandaloes` (BF16, choice and noul only; no 8-bit MLX conversion of Decision 3.0 exists yet).
+- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`.
+- Basal 2.0 (official `rkinas/basal` v2.0.0 runtime; replacing Basal 1.5 in 0.6.1) is catalogued as MLX 8-bit and GGUF Q8_0 with Deqio's broadest native feature set (no evidence head). Remove an old Basal 1.5 installation with `deqio models delete` before upgrading, or delete `.model-runtimes/basal15-*` by hand afterwards.
 - Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
 - Run `deqio models list` for the full catalog and `deqio models installed` for profiles available locally.
 
@@ -560,8 +559,8 @@ deqio models installed
 The browser UI shows the same capability matrix. For example:
 
 - a profile with Choice/Noul/Score but no Multi will reject `/v1/multi`;
-- Basal MLX/GGUF supports many Basal 1.5 features but not Evidence;
-- native Basal MPS/CUDA profiles expose Evidence where the upstream runtime supports it;
+- Basal 2.0 MLX/GGUF profiles support Multi, Act, Facts, SOAM and option keys but not Evidence (no evidence head in 2.0);
+- Decision 3.0 MLX profiles reject Score (the community conversion implements choice and noul only);
 
 No unsupported feature is silently ignored.
 
@@ -608,7 +607,7 @@ Run a benchmark interactively, or select everything up front:
 ```bash
 deqio benchmark                                   # choose suite and profiles interactively
 deqio benchmark --suite benchmarks/pl.json        # one suite file (default: pick from ./benchmarks/*.json)
-deqio benchmark --model decider-2b:mps --model basal-1.5-mini:mlx   # repeatable MODEL_ID:BACKEND
+deqio benchmark --model decider-2b:mps --model basal-2.0-mini:mlx   # repeatable MODEL_ID:BACKEND
 deqio benchmark --all                             # every installed, host-compatible profile
 deqio benchmark --all --output runs/today         # results directory (default: .deqio/benchmarks/<timestamp>)
 ```
@@ -628,23 +627,25 @@ Deqio only compares profiles whose canonical runtime identity matches, including
 
 ---
 
-## Decision providers
+## Remote decision APIs
 
-Every decision names its provider in provenance. `local` is the catalog sidecar selected with `deqio models use`.
-Two remote decision APIs are available behind flags and are never used as a fallback: `openai-decisions`
-(`POST https://api.openai.com/v1/decisions`, default model `gpt-6-luna`; `DEQIO_PROVIDER_OPENAI_DECISIONS=1`,
-`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`) and `typesafe-jev` (`POST $TYPESAFE_JEV_BASE_URL/v1/decisions`;
-`DEQIO_PROVIDER_TYPESAFE_JEV=1`, `TYPESAFE_JEV_API_KEY`, `TYPESAFE_JEV_BASE_URL`). Select one in `config.json`
-(`"provider"`, optional `"provider_model"`, `"provider_base_url"`) or with `DEQIO_PROVIDER`, `DEQIO_PROVIDER_MODEL`,
-`DEQIO_PROVIDER_BASE_URL`; `deqio serve` then answers `/v1/noul`, `/v1/choice`, `/v1/shared` and `/v1/systemone`
-through the API without a sidecar (`/v1/score`, `/v1/multi`, `/v1/act` stay unavailable with an explicit 422), and
-`deqio benchmark --provider openai-decisions` runs a suite through it. Provenance gains `provider` (name, kind, model,
-endpoint, price), `remote_request_id` and `cost_estimate` (USD from the API's reported input tokens and the published
-input price; `amount` is `null` without reported usage; one batch-scoped estimate per `/v1/shared` call). Keys come
-from the environment only and never appear in provenance, logs or recordings. Provider wire v1 — request `{"model",
-"state", "questions"}` as in `/v1/systemone`, response `{"id", "answers", "usage": {"input_tokens"}}` — is the shape
-both adapters use until a recording (`python -m deqio.provider_record --provider NAME --out FILE`) proves otherwise;
-the contract tests replay the cassettes under `tests/fixtures/providers/`.
+`openai-decisions` (OpenAI Decisions API, `POST https://api.openai.com/v1/decisions`, default model `gpt-6-luna`) and
+`typesafe-jev` (TypeSafe System One API, `POST https://api.typesafe.ai/v1/systemone`, default model `jev-latest`) are
+catalog profiles on the `remote` backend, handled exactly like a local model (no separate mechanism, flag or fallback):
+
+```bash
+deqio models setup                                        # backend remote → provider → model id → API key → token budget → probe
+deqio models use openai-decisions --backend remote        # then deqio serve / deqio benchmark --model typesafe-jev:remote
+deqio models delete openai-decisions --backend remote     # also removes the key from the keychain
+```
+
+The API key typed at setup is stored only in the operating-system keychain (`keyring`; service `deqio`, account =
+provider) and read when the profile loads — never `config.json`, the registry, provenance, logs or recordings; a host
+without a keychain backend is an explicit error, and nothing is registered before the probe decision passes.
+Deqio speaks each vendor's documented wire (`deqio.providers`; an OpenAI `refusal` is an explicit error). Choice, Noul
+and Score are supported; `/v1/multi`, `/v1/act`, `facts`, `option_keys` and `evidence` are refused with 422.
+Provenance carries `provider`, `remote_request_id` and `cost_estimate` (USD from the reported input tokens and the
+published input price; `amount` is `null` without usage); `python -m deqio.provider_record` records real cassettes.
 
 ## Correctness and provenance
 
@@ -668,7 +669,7 @@ deqio models setup                                # interactive model installati
 deqio models list                                 # catalog
 deqio models installed                            # installed profiles
 deqio models status                               # active profile
-deqio models use MODEL_ID --backend BACKEND       # switch installed profile
+deqio models use MODEL_ID --backend BACKEND       # switch installed profile (BACKEND: mlx | mps | gguf | cuda | remote)
 deqio models install MODEL_ID --backend BACKEND   # install / update / delete
 deqio models update MODEL_ID --backend BACKEND
 deqio models delete MODEL_ID --backend BACKEND

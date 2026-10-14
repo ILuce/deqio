@@ -45,6 +45,9 @@ def test_every_profile_declares_one_exclude_newer_instant_per_runtime() -> None:
     missing = []
     for model in _catalog()["models"]:
         for backend, profile in model["backends"].items():
+            if backend == "remote":
+                # 0.6.1: a remote profile installs no packages, so it has no resolution to bound.
+                continue
             value = str(profile.get("exclude_newer", ""))
             if not INSTANT.match(value):
                 missing.append(f"{model['id']}::{backend}")
@@ -75,9 +78,10 @@ def _captured_install_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     for model_id, backend in (
         ("semif-qwen3.5-4b", "mlx"),
         ("laya-english", "mps"),
-        ("decision-2.0-vega", "cuda"),
-        ("basal-1.5-main", "cuda"),
-        ("basal-1.5-main", "mlx"),
+        ("d3", "cuda"),
+        ("d3", "mlx"),
+        ("basal-2.0-main", "gguf"),
+        ("basal-2.0-main", "mlx"),
         ("nimble-9b", "mlx"),
         ("nimble-9b", "cuda"),
         ("decider-2b", "gguf"),
@@ -105,7 +109,7 @@ def test_installers_bound_every_pypi_resolution_by_the_profile_cutoff(
     installs = _captured_install_commands(tmp_path, monkeypatch)
     assert len(installs) >= 12, installs
     custom_index = [command for _, command in installs if "--index-url" in command]
-    assert len(custom_index) == 2, custom_index  # Basal CUDA and Nimble CUDA torch wheels
+    assert len(custom_index) == 1, custom_index  # Nimble CUDA torch wheel (Basal 2.0 is MLX/GGUF only; D3 torch comes from PyPI)
     for command in custom_index:
         assert "--exclude-newer" not in command, command
         specs = [token for token in command[5:] if not token.startswith("-") and not token.startswith("https://")]

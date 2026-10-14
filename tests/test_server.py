@@ -250,13 +250,13 @@ def test_model_manager_exposes_mlx_mps_and_gguf_on_apple_silicon(monkeypatch: py
     monkeypatch.setattr(hardware.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(hardware.platform, "machine", lambda: "arm64")
 
-    assert hardware.host_backends() == ("mlx", "mps", "gguf")
+    assert hardware.host_backends() == ("mlx", "mps", "gguf", "remote")
 
 
 def test_supported_backends_include_official_basal_gguf() -> None:
     from deqio.catalog import SUPPORTED_BACKENDS, load_catalog
 
-    assert SUPPORTED_BACKENDS == ("mlx", "mps", "gguf", "cuda")
+    assert SUPPORTED_BACKENDS == ("mlx", "mps", "gguf", "cuda", "remote")
     catalog = load_catalog(Path("models.json"))
     for entry in catalog["models"]:
         assert set(entry["backends"]) <= set(SUPPORTED_BACKENDS)
@@ -1139,7 +1139,7 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.6.0.dev0"
+    assert __version__ == "0.6.1"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
 
@@ -1466,7 +1466,7 @@ def test_backend_loader_routes_semif_through_systemone(monkeypatch: pytest.Monke
 
     sentinel = object()
     monkeypatch.setattr(SystemOneRuntime, "load", classmethod(lambda cls, settings: sentinel))
-    assert BackendRuntime.load(SimpleNamespace(engine="semif")) is sentinel
+    assert BackendRuntime.load(SimpleNamespace(engine="semif", backend="mlx")) is sentinel
 
 
 def test_semif_sidecar_normalizes_noul_and_choice_without_runtime_import() -> None:
@@ -2830,75 +2830,15 @@ def test_legacy_basal10_catalog_profiles_are_removed() -> None:
     ids = {entry["id"] for entry in catalog["models"]}
     assert "basal-1.5b" not in ids
     assert "basal-4.5b" not in ids
-    assert {"basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"}.issubset(ids)
-
-def test_basal15_installer_uses_official_backend_specific_packages(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import deqio.model_manager as manager
-
-    commands: list[list[str]] = []
-    python = tmp_path / ".model-runtimes" / "basal15" / "bin" / "python"
-    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
-    monkeypatch.setattr(manager, "_run", lambda command, **kwargs: commands.append(list(command)))
-
-    for backend, package in (
-        ("mlx", "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
-        ("mps", "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
-        ("cuda", "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz"),
-    ):
-        commands.clear()
-        manager._install_basal(
-            tmp_path / "config.json",
-            {"backend": backend, "runtime_dir": ".model-runtimes"},
-            {
-                "runtime_key": "basal15",
-                "exclude_newer": "2026-10-10T00:00:00Z",
-                "python": "3.12",
-                "basal_backend": backend,
-                "basal_runtime_version": "1.5.0",
-                "basal_package": package,
-            },
-            upgrade=False,
-        )
-        if backend == "cuda":
-            assert len(commands) == 2
-            assert "torch==2.11.0" in commands[0]
-            assert commands[1][-1] == package
-        else:
-            assert len(commands) == 1
-            assert commands[0][-1] == package
-
-def test_basal15_systemone_commands_use_official_server_for_mlx_and_mps(tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    env_dir = tmp_path / "runtime"
-    executable = env_dir / "bin" / "basal-serve"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    python = env_dir / "bin" / "python"
-    python.write_text("", encoding="utf-8")
-
-    for backend, model, mode in (
-        ("mlx", "Remek/basal-1.5-mini-MLX-8bit", "mlx"),
-        ("mps", "Remek/basal-1.5-mini", "mps"),
-    ):
-        command = SystemOneRuntime._command(
-            SimpleNamespace(engine="basal", backend=backend, model_revision="main", config_path=tmp_path / "config.json"),
-            {"model": model, "model_revision": "main", "basal_mode": mode, "basal_soam": True},
-            env_dir, python, 9020, {},
-        )
-        assert command == [
-            str(executable), "--model", model, "--mode", mode, "--soam", "on", "--port", "9020"
-        ]
+    assert not any(model_id.startswith("basal-1.5") for model_id in ids)
+    assert {"basal-2.0-mini", "basal-2.0-main", "basal-2.0-max"}.issubset(ids)
 
 def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
     from deqio.catalog import get_profile, load_catalog
 
     catalog = load_catalog(Path("models.json"))
     ids = {str(entry["id"]) for entry in catalog["models"]}
-    assert {"clef-flash", "clef", "basal-1.5-main"} <= ids
+    assert {"clef-flash", "clef", "basal-2.0-main"} <= ids
 
     flash = get_profile(catalog, "clef-flash", "mlx")
     assert flash["model"] == "mlx-community/clef-flash-8bit"
@@ -2927,23 +2867,23 @@ def test_patch3_catalog_adds_validated_quantized_profiles_only() -> None:
     assert clef["min_memory_gib"] == pytest.approx(30.8)
     assert clef["recommended_memory_gib"] == 44
 
-    basal = get_profile(catalog, "basal-1.5-main", "mlx")
-    assert basal["model"] == "Remek/basal-1.5-4.5B-MLX-8bit"
-    assert basal["runtime_key"] == "basal15-main-mlx"
+    basal = get_profile(catalog, "basal-2.0-main", "mlx")
+    assert basal["model"] == "Remek/basal-2.0-4.5B-MLX-8bit"
+    assert basal["runtime_key"] == "basal20-main-mlx"
     assert basal["basal_mode"] == "mlx"
     assert basal["quantization"]["bits"] == 8
-    assert basal["min_memory_gib"] == pytest.approx(5.2)
+    assert basal["min_memory_gib"] == pytest.approx(5.5)
     assert basal["recommended_memory_gib"] == 8
 
-    basal_cuda = get_profile(catalog, "basal-1.5-main", "cuda")
-    assert basal_cuda["model"] == "Remek/basal-1.5-4.5B"
-    assert basal_cuda["runtime_key"] == "basal15-main-cuda"
-    assert basal_cuda["basal_mode"] == "fast-nocompile"
-    assert basal_cuda["basal_runtime_version"] == "1.5.0"
-
-    basal_mps = get_profile(catalog, "basal-1.5-main", "mps")
-    assert basal_mps["basal_mode"] == "mps"
-    assert basal_mps["capabilities"]["evidence"] is True
+    basal_gguf = get_profile(catalog, "basal-2.0-main", "gguf")
+    assert basal_gguf["model"] == "Remek/basal-2.0-4.5B"
+    assert basal_gguf["runtime_key"] == "basal20-main-gguf"
+    assert basal_gguf["basal_mode"] == "gguf"
+    assert basal_gguf["basal_runtime_version"] == "2.0.0"
+    assert basal_gguf["capabilities"]["evidence"] is False  # Basal 2.0 ships no evidence head
+    for backend in ("cuda", "mps"):
+        with pytest.raises(RuntimeError, match="does not support backend"):
+            get_profile(catalog, "basal-2.0-main", backend)
 
     for model_id in ("clef-flash", "clef"):
         with pytest.raises(RuntimeError, match="does not support backend"):
@@ -3022,56 +2962,6 @@ def test_clef_sidecar_executes_cached_upstream_server_without_truncation(tmp_pat
     ]
 
 
-def test_basal15_cuda_installer_leaves_torch_resolution_to_official_runtime(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import deqio.model_manager as manager
-
-    commands: list[list[str]] = []
-    python = tmp_path / ".model-runtimes" / "basal15-main-cuda" / "bin" / "python"
-    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
-    monkeypatch.setattr(manager, "_run", lambda command, **kwargs: commands.append(list(command)))
-
-    manager._install_basal(
-        tmp_path / "config.json",
-        {"backend": "cuda", "runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "basal15-main-cuda",
-            "exclude_newer": "2026-10-10T00:00:00Z",
-            "python": "3.12",
-            "basal_backend": "cuda",
-            "basal_runtime_version": "1.5.0",
-            "basal_mode": "fast-nocompile",
-            "basal_package": "basal @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
-        },
-        upgrade=False,
-    )
-    assert len(commands) == 2
-    assert "torch==2.11.0" in commands[0]
-    assert "https://download.pytorch.org/whl/cu128" in commands[0]
-    assert commands[1][-1].endswith("basal/archive/refs/tags/v1.5.0.tar.gz")
-
-def test_basal15_main_cuda_uses_official_fast_nocompile_mode(tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    env_dir = tmp_path / "runtime"
-    executable = env_dir / "bin" / "basal-serve"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    python = env_dir / "bin" / "python"
-    python.write_text("", encoding="utf-8")
-
-    command = SystemOneRuntime._command(
-        SimpleNamespace(engine="basal", backend="cuda", model_revision="main", config_path=tmp_path / "config.json"),
-        {"model": "Remek/basal-1.5-4.5B", "model_revision": "main", "basal_mode": "fast-nocompile", "basal_soam": True},
-        env_dir, python, 9033, {},
-    )
-    assert command == [
-        str(executable), "--model", "Remek/basal-1.5-4.5B",
-        "--mode", "fast-nocompile", "--soam", "on", "--port", "9033",
-    ]
-
 def test_cuda_compute_capability_guard_is_fail_closed_for_fp8_profiles() -> None:
     from deqio.hardware import HostCapabilities, profile_compatibility
 
@@ -3120,280 +3010,6 @@ def test_clef_flash_8bit_is_short_context_compatible_on_16gib_apple_host() -> No
     assert any(value == 32768 and "profile limit is 16384" in reason for value, reason in blocked)
 
 
-def test_patch1_decision2_catalog_is_official_cuda_only() -> None:
-    from deqio.catalog import get_profile, load_catalog
-
-    catalog = load_catalog(Path("models.json"))
-    expected = {
-        "decision-2.0-kai": ("vllm-sr/Decision-2.0-Kai-0.6B", 8192),
-        "decision-2.0-eos": ("vllm-sr/Decision-2.0-Eos-0.8B", 16384),
-        "decision-2.0-sol": ("vllm-sr/Decision-2.0-Sol-2B", 16384),
-        "decision-2.0-nox": ("vllm-sr/Decision-2.0-Nox-4B", 16384),
-        "decision-2.0-lux": ("vllm-sr/Decision-2.0-Lux-9B", 16384),
-        "decision-2.0-vega": ("vllm-sr/Decision-2.0-Vega-27B", 32768),
-    }
-
-    for model_id, (repo_id, max_tokens) in expected.items():
-        entry = next(item for item in catalog["models"] if item["id"] == model_id)
-        assert entry["engine"] == "decision2"
-        assert set(entry["backends"]) == {"cuda"}
-        profile = get_profile(catalog, model_id, "cuda")
-        assert profile["model"] == repo_id
-        assert len(profile["model_revision"]) == 40
-        assert profile["family"] == "decision2"
-        assert profile["runtime"] == "decision2-native"
-        assert profile["platform"] == "cuda"
-        assert profile["source"] == "official"
-        assert profile["systems"] == ["Linux"]
-        assert profile["max_input_tokens"] == max_tokens
-        assert profile["capabilities"] == {
-            "systemone": True,
-            "choice": True,
-            "noul": True,
-            "score": True,
-            "multi_question": True,
-            "multi": False,
-            "act": False,
-            "facts": False,
-            "evidence": False,
-        }
-        for unsupported in ("mlx", "mps"):
-            with pytest.raises(RuntimeError):
-                get_profile(catalog, model_id, unsupported)
-
-    vega = get_profile(catalog, "decision-2.0-vega", "cuda")
-    assert vega["downloads"][1] == {
-        "type": "snapshot",
-        "repo_id": "Qwen/Qwen3.8-27B",
-        "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
-        "role": "pinned-base",
-    }
-    kai = get_profile(catalog, "decision-2.0-kai", "cuda")
-    assert "flash-linear-attention==0.5.2" not in kai["packages"]
-    eos = get_profile(catalog, "decision-2.0-eos", "cuda")
-    assert "flash-linear-attention==0.5.2" in eos["packages"]
-    assert "causal-conv1d==1.7.0" in eos["packages"]
-    assert "peft==0.21.0" not in eos["packages"]
-    assert "peft==0.21.0" in vega["packages"]
-    assert "huggingface-hub==1.31.0" in vega["packages"]
-
-
-def test_patch1_vega_attestation_preserves_package_and_pinned_base_roles(tmp_path: Path) -> None:
-    import deqio.model_manager as manager
-    from deqio.catalog import get_profile, load_catalog
-
-    profile = get_profile(load_catalog(Path("models.json")), "decision-2.0-vega", "cuda")
-    artifacts = manager._artifact_attestation(
-        tmp_path / "config.json", {"runtime_dir": ".model-runtimes"}, profile
-    )
-
-    assert [(item["role"], item["repo_id"], item["resolved_revision"]) for item in artifacts] == [
-        (
-            "decision2-package",
-            "vllm-sr/Decision-2.0-Vega-27B",
-            "7aec49ae11a18741706da549ab626b9052795fe7",
-        ),
-        (
-            "pinned-base",
-            "Qwen/Qwen3.8-27B",
-            "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
-        ),
-    ]
-
-
-def test_patch1_decision2_installer_pins_official_runtime_dependencies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import deqio.model_manager as manager
-
-    env = tmp_path / ".model-runtimes" / "decision2-cuda"
-    python = env / "bin" / "python"
-    commands: list[list[str]] = []
-    monkeypatch.setattr(manager, "_ensure_venv", lambda *a, **k: python)
-    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
-
-    result = manager._install_decision2(
-        tmp_path / "config.json",
-        {"runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "decision2-cuda",
-            "exclude_newer": "2026-10-10T00:00:00Z",
-            "python": "3.12.13",
-            "platform": "cuda",
-            "packages": [
-                "transformers==5.17.0",
-                "safetensors==0.8.0",
-                "tokenizers==0.23.2",
-                "triton==3.7.1",
-                "causal-conv1d==1.7.0",
-                "flash-linear-attention==0.5.2",
-                "huggingface-hub==1.31.0",
-                "peft==0.21.0",
-            ],
-        },
-        upgrade=False,
-    )
-
-    assert result == env
-    assert commands[0][-1] == "torch==2.12.0"
-    assert "transformers==5.17.0" in commands[1]
-    assert "safetensors==0.8.0" in commands[1]
-    assert "flash-linear-attention==0.5.2" in commands[1]
-    assert "causal-conv1d==1.7.0" in commands[1]
-    assert "peft==0.21.0" in commands[1]
-    assert not any("mlx" in part.lower() or "mps" in part.lower() for command in commands for part in command)
-
-
-def test_patch1_decision2_command_is_transport_to_pinned_official_model(tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    python = tmp_path / "python"
-    command = SystemOneRuntime._command(
-        SimpleNamespace(
-            engine="decision2",
-            backend="cuda",
-            model_revision="a" * 40,
-        ),
-        {
-            "model": "vllm-sr/Decision-2.0-Kai-0.6B",
-            "model_revision": "b" * 40,
-        },
-        tmp_path,
-        python,
-        9123,
-        {},
-    )
-
-    assert command[0] == str(python)
-    assert command[1].endswith("decision2_sidecar.py")
-    assert command[2:] == [
-        "--model",
-        "vllm-sr/Decision-2.0-Kai-0.6B",
-        "--revision",
-        "b" * 40,
-        "--port",
-        "9123",
-    ]
-
-
-def test_patch1_decision2_accelerator_fails_closed_without_cuda_on_linux(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from deqio.systemone_runtime import SystemOneRuntime
-    from types import SimpleNamespace
-
-    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Linux")
-    monkeypatch.setattr(
-        "deqio.systemone_runtime.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=1),
-    )
-    with pytest.raises(RuntimeError, match="CUDA is unavailable") as exc:
-        SystemOneRuntime._validate_accelerator(
-            SimpleNamespace(engine="decision2", backend="cuda"), Path("/runtime/python")
-        )
-    assert "No CPU, MPS or MLX fallback" in str(exc.value)
-
-
-def test_patch1_decision2_accelerator_never_falls_back_on_macos(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from deqio.systemone_runtime import SystemOneRuntime
-    from types import SimpleNamespace
-
-    monkeypatch.setattr("deqio.systemone_runtime.platform.system", lambda: "Darwin")
-    with pytest.raises(RuntimeError, match="CUDA runtime") as exc:
-        SystemOneRuntime._validate_accelerator(
-            SimpleNamespace(engine="decision2", backend="cuda"), Path("/missing/python")
-        )
-    message = str(exc.value)
-    assert "macOS/Apple Silicon" in message
-    assert "No CPU, MPS or MLX fallback" in message
-
-
-def test_patch1_decision2_choice_probabilities_are_not_renormalized() -> None:
-    from deqio.systemone_runtime import _choice_raw
-
-    result = _choice_raw(
-        row={
-            "id": "q",
-            "options": [
-                {"id": "a", "description": "A"},
-                {"id": "b", "description": "B"},
-            ],
-        },
-        answer={"choice": "a", "probabilities": {"a": 0.51, "b": 0.48}},
-        response={"usage": {"input_tokens": 12}},
-        payload={"state": "s", "questions": {}},
-        latency_ms=1.0,
-        preserve_native=True,
-    )
-
-    assert result["probabilities"] == [0.51, 0.48]
-    assert result["score_provenance"]["normalized"] is False
-    assert result["score_provenance"]["transforms"] == []
-    assert "preserved unchanged" in result["probability_status"]
-
-
-def test_patch1_decision2_native_systemone_keeps_mixed_questions_in_one_request() -> None:
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    runtime = object.__new__(SystemOneRuntime)
-    runtime.engine = "decision2"
-    runtime.profile = {
-        "capabilities": {
-            "choice": True,
-            "noul": True,
-            "score": True,
-            "multi_question": True,
-        }
-    }
-    calls: list[tuple[object, object, object]] = []
-
-    def fake_request(state, questions, execution_mode=None):
-        calls.append((state, questions, execution_mode))
-        return (
-            {"model": "decision2", "state": state, "questions": questions},
-            {
-                "model": "vllm-sr/Decision-2.0-Kai-0.6B",
-                "answers": {
-                    "route": {"choice": "support", "probabilities": {"support": 0.8, "sales": 0.2}},
-                    "urgent": {"noul": 0.7},
-                    "severity": {"score": 2.4, "probabilities": {"1": 0.1, "2": 0.4, "3": 0.5}},
-                },
-                "usage": {"input_tokens": 42, "output_tokens": 0},
-            },
-            3.5,
-        )
-
-    runtime._request = fake_request
-    questions = {
-        "route": {"type": "choice", "instructions": "Route", "criteria": {"support": "S", "sales": "P"}},
-        "urgent": {"type": "noul", "instructions": "Urgent?"},
-        "severity": {"type": "score", "instructions": "Severity", "criteria": ["low", "mid", "high"]},
-    }
-    response, timing = runtime.system_one("state", questions)
-
-    assert len(calls) == 1
-    assert calls[0] == ("state", questions, None)
-    assert response["answers"]["urgent"]["noul"] == 0.7
-    assert response["answers"]["severity"]["score"] == 2.4
-    assert timing["batch_size"] == 3
-
-
-def test_patch1_decision2_systemone_rejects_non_decision2_capability() -> None:
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    runtime = object.__new__(SystemOneRuntime)
-    runtime.engine = "decision2"
-    runtime.profile = {"capabilities": {"choice": True, "noul": True, "score": True, "multi_question": True}}
-    with pytest.raises(RuntimeError, match="does not support question type"):
-        runtime.system_one(
-            "state",
-            {"labels": {"type": "multi", "instructions": "Select all"}},
-        )
-
-
 def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3402,9 +3018,9 @@ def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
     class FakeRuntime:
         def identity_snapshot(self):
             return {
-                "runtime_instance_id": "decision2-runtime",
-                "engine": "decision2",
-                "model_id": "decision-2.0-kai",
+                "runtime_instance_id": "decision3-runtime",
+                "engine": "decision3",
+                "model_id": "d3-mini",
                 "backend": "cuda",
                 "requested_revision": "d" * 40,
                 "artifact_revisions_resolved": True,
@@ -3413,7 +3029,7 @@ def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
         def system_one(self, state, questions):
             return (
                 {
-                    "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+                    "model": "vllm-sr/d3-mini",
                     "answers": {
                         "pick": {
                             "choice": "a",
@@ -3422,7 +3038,7 @@ def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
                     },
                     "usage": {"input_tokens": 9, "output_tokens": 0},
                 },
-                {"total_seconds": 0.002, "batch_size": 1, "engine": "decision2"},
+                {"total_seconds": 0.002, "batch_size": 1, "engine": "decision3"},
             )
 
     monkeypatch.setattr(server, "runtime", FakeRuntime())
@@ -3441,179 +3057,12 @@ def test_patch1_systemone_api_preserves_native_response_and_adds_deqio_metadata(
         },
     )))
 
-    assert result["model"] == "vllm-sr/Decision-2.0-Kai-0.6B"
+    assert result["model"] == "vllm-sr/d3-mini"
     assert result["answers"]["pick"]["probabilities"] == {"a": 0.51, "b": 0.48}
     assert result["usage"] == {"input_tokens": 9, "output_tokens": 0}
-    assert result["deqio"]["runtime"]["runtime_instance_id"] == "decision2-runtime"
+    assert result["deqio"]["runtime"]["runtime_instance_id"] == "decision3-runtime"
     assert result["deqio"]["timing"]["total_ms"] == 2.0
 
-
-
-def test_patch2_basal15_catalog_has_full_official_family_and_capabilities() -> None:
-    from deqio.catalog import get_profile, load_catalog
-
-    catalog = load_catalog(Path("models.json"))
-    expected = {
-        "basal-1.5-mini": {
-            "mlx": "Remek/basal-1.5-mini-MLX-8bit",
-            "mps": "Remek/basal-1.5-mini",
-            "gguf": "Remek/basal-1.5-mini",
-            "cuda": "Remek/basal-1.5-mini",
-        },
-        "basal-1.5-main": {
-            "mlx": "Remek/basal-1.5-4.5B-MLX-8bit",
-            "mps": "Remek/basal-1.5-4.5B",
-            "gguf": "Remek/basal-1.5-4.5B",
-            "cuda": "Remek/basal-1.5-4.5B",
-        },
-        "basal-1.5-max": {
-            "mlx": "Remek/basal-1.5-max-MLX-8bit",
-            "mps": "Remek/basal-1.5-max",
-            "gguf": "Remek/basal-1.5-max",
-            "cuda": "Remek/basal-1.5-max",
-        },
-    }
-    for model_id, backends in expected.items():
-        entry = next(item for item in catalog["models"] if item["id"] == model_id)
-        assert entry["engine"] == "basal"
-        assert set(entry["backends"]) == {"mlx", "mps", "gguf", "cuda"}
-        for backend, repo in backends.items():
-            profile = get_profile(catalog, model_id, backend)
-            assert profile["family"] == "basal1.5"
-            assert profile["source"] == "official"
-            assert profile["model"] == repo
-            assert profile["basal_runtime_version"] == "1.5.0"
-            assert profile["pin_hf_revisions_at_install"] is True
-            caps = profile["capabilities"]
-            for capability in ("choice", "noul", "score", "multi", "act", "facts", "soam", "option_keys"):
-                assert caps[capability] is True
-            assert caps["evidence"] is (backend in {"mps", "cuda"})
-
-
-def test_patch2_basal15_mlx_and_gguf_use_quality_profiles() -> None:
-    from deqio.catalog import get_profile, load_catalog
-
-    catalog = load_catalog(Path("models.json"))
-    for model_id in ("basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"):
-        mlx = get_profile(catalog, model_id, "mlx")
-        gguf = get_profile(catalog, model_id, "gguf")
-        assert mlx["precision"] == "mlx-8bit"
-        assert mlx["quantization"]["bits"] == 8
-        assert mlx["basal_mode"] == "mlx"
-        assert "basal[mlx]" in mlx["basal_package"]
-        assert gguf["precision"] == "q8_0"
-        assert gguf["quantization"]["quantization"] == "Q8_0"
-        assert gguf["basal_mode"] == "gguf"
-        assert gguf["basal_gguf_pattern"] == "*Q8_0.gguf"
-        q8_download = next(item for item in gguf["downloads"] if item.get("role") == "basal-gguf-q8_0")
-        assert q8_download["filename_pattern"] == "*Q8_0.gguf"
-        assert "filename" not in q8_download
-        assert "basal[gguf]" in gguf["basal_package"]
-
-
-def test_patch2_basal15_installer_uses_official_v150_extras(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import deqio.model_manager as manager
-
-    commands: list[list[str]] = []
-    python = tmp_path / ".model-runtimes" / "basal15" / "bin" / "python"
-    monkeypatch.setattr(manager, "_ensure_venv", lambda *args, **kwargs: python)
-    monkeypatch.setattr(manager, "_run", lambda command: commands.append(list(command)))
-
-    manager._install_basal(
-        tmp_path / "config.json",
-        {"backend": "mlx", "runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "basal15",
-            "exclude_newer": "2026-10-10T00:00:00Z",
-            "basal_backend": "mlx",
-            "basal_runtime_version": "1.5.0",
-            "basal_package": "basal[mlx] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
-        },
-        upgrade=False,
-    )
-    assert len(commands) == 1
-    assert commands[0][-1].endswith("basal/archive/refs/tags/v1.5.0.tar.gz")
-
-    commands.clear()
-    manager._install_basal(
-        tmp_path / "config.json",
-        {"backend": "gguf", "runtime_dir": ".model-runtimes"},
-        {
-            "runtime_key": "basal15",
-            "exclude_newer": "2026-10-10T00:00:00Z",
-            "basal_backend": "gguf",
-            "basal_runtime_version": "1.5.0",
-            "basal_package": "basal[gguf] @ https://github.com/rkinas/basal/archive/refs/tags/v1.5.0.tar.gz",
-        },
-        upgrade=False,
-    )
-    assert len(commands) == 1
-    assert "basal[gguf]" in commands[0][-1]
-
-
-def test_patch2_basal15_command_preserves_official_mlx_soam_and_revision(tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    env_dir = tmp_path / "runtime"
-    executable = env_dir / "bin" / "basal-serve"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    python = env_dir / "bin" / "python"
-    python.write_text("", encoding="utf-8")
-    revision = "a" * 40
-    command = SystemOneRuntime._command(
-        SimpleNamespace(engine="basal", backend="mlx", model_revision=revision, config_path=tmp_path / "config.json"),
-        {
-            "model": "Remek/basal-1.5-4.5B-MLX-8bit",
-            "model_revision": revision,
-            "basal_mode": "mlx",
-            "basal_soam": True,
-        },
-        env_dir, python, 9441, {},
-    )
-    assert command == [
-        str(executable),
-        "--model", "Remek/basal-1.5-4.5B-MLX-8bit",
-        "--revision", revision,
-        "--mode", "mlx",
-        "--soam", "on",
-        "--port", "9441",
-    ]
-
-
-def test_patch2_basal15_gguf_command_uses_local_q8_and_official_metadata(tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    env_dir = tmp_path / "runtime"
-    executable = env_dir / "bin" / "basal-serve"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    python = env_dir / "bin" / "python"
-    python.write_text("", encoding="utf-8")
-    gguf = tmp_path / "models" / "main-Q8_0.gguf"
-    gguf.parent.mkdir(parents=True)
-    gguf.write_text("weights", encoding="utf-8")
-    revision = "b" * 40
-    command = SystemOneRuntime._command(
-        SimpleNamespace(engine="basal", backend="gguf", model_revision=revision, config_path=tmp_path / "config.json"),
-        {
-            "model": "Remek/basal-1.5-4.5B",
-            "model_revision": revision,
-            "basal_mode": "gguf",
-            "basal_soam": True,
-            "basal_gguf_dir": "models",
-            "basal_gguf_pattern": "*Q8_0.gguf",
-        },
-        env_dir, python, 9442, {},
-    )
-    assert "--gguf" in command
-    assert command[command.index("--gguf") + 1] == str(gguf.resolve())
-    assert command[command.index("--revision") + 1] == revision
-    assert command[command.index("--mode") + 1] == "gguf"
 
 
 def test_patch2_basal15_systemone_preserves_mixed_native_response_and_one_request() -> None:
@@ -3624,7 +3073,7 @@ def test_patch2_basal15_systemone_preserves_mixed_native_response_and_one_reques
     runtime.engine = "basal"
     runtime.settings = SimpleNamespace(backend="mlx")
     runtime.profile = {
-        "family": "basal1.5",
+        "family": "basal2.0",
         "capabilities": {
             "choice": True, "noul": True, "score": True, "multi": True, "act": True,
             "facts": True, "soam": True, "option_keys": True, "evidence": False,
@@ -3684,7 +3133,7 @@ def test_patch2_basal15_evidence_is_capability_aware() -> None:
     runtime.engine = "basal"
     runtime.settings = SimpleNamespace(backend="mlx")
     runtime.profile = {
-        "family": "basal1.5",
+        "family": "basal2.0",
         "capabilities": {"choice": True, "soam": True, "evidence": False},
     }
     with pytest.raises(SystemOneCapabilityError, match="Evidence is not available") as exc:
@@ -3722,7 +3171,7 @@ def test_patch2_basal15_rejects_evidence_for_multi_even_on_native_backend() -> N
     runtime.engine = "basal"
     runtime.settings = SimpleNamespace(backend="mps")
     runtime.profile = {
-        "family": "basal1.5",
+        "family": "basal2.0",
         "capabilities": {"multi": True, "soam": True, "evidence": True},
     }
     with pytest.raises(SystemOneCapabilityError, match="not supported for multi"):
@@ -3798,49 +3247,6 @@ def test_patch2_basal15_api_returns_422_for_unsupported_capability(
     assert "Evidence is not available" in str(getattr(exc.value, "detail", ""))
 
 
-def test_patch2_basal15_profile_pin_prefers_selected_exact_revision_before_install_record() -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import _profile_with_installed_pin
-
-    revision = "c" * 40
-    settings = SimpleNamespace(
-        model_revision=revision,
-        config_path=Path("/tmp/config.json"),
-        model_id="basal-1.5-main",
-        backend="mlx",
-    )
-    profile = {
-        "model": "Remek/basal-1.5-4.5B-MLX-8bit",
-        "model_revision": "main",
-        "pin_hf_revisions_at_install": True,
-    }
-    pinned = _profile_with_installed_pin(settings, profile)
-    assert pinned["model_revision"] == revision
-    assert profile["model_revision"] == "main"
-
-
-def test_patch2_basal15_runtime_metadata_requires_official_v150(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from types import SimpleNamespace
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    monkeypatch.setattr(
-        "deqio.systemone_runtime.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(stdout='{"runtime_version":"1.5.0"}'),
-    )
-    metadata = SystemOneRuntime._basal_runtime_metadata(
-        {"basal_runtime_version": "1.5.0", "basal_mode": "mlx", "basal_backend": "mlx"},
-        tmp_path / "python",
-    )
-    assert metadata == {
-        "runtime_version": "1.5.0",
-        "basal_mode": "mlx",
-        "basal_backend": "mlx",
-        "official_runtime": True,
-    }
-
-
 def test_patch2_systemone_request_rejects_unknown_top_level_options() -> None:
     from pydantic import ValidationError
     import deqio.server as server
@@ -3851,51 +3257,6 @@ def test_patch2_systemone_request_rejects_unknown_top_level_options() -> None:
             questions={"q": {"type": "noul", "instructions": "Q?"}},
             silently_ignored_feature=True,
         )
-
-
-def test_patch2_basal15_pin_resolves_exact_q8_artifact_without_filename_guessing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from types import SimpleNamespace
-    import deqio.model_manager as manager
-
-    class FakeApi:
-        def model_info(self, repo_id, revision=None):
-            suffix = "1" if repo_id.endswith("4.5B") else "2"
-            return SimpleNamespace(sha=suffix * 40)
-
-        def list_repo_files(self, repo_id, revision=None):
-            assert revision == "2" * 40
-            return ["README.md", "official-basal-main-Q8_0.gguf", "official-basal-main-Q4_K_M.gguf"]
-
-    monkeypatch.setattr(manager, "HfApi", lambda: FakeApi())
-    profile = {
-        "pin_hf_revisions_at_install": True,
-        "model": "Remek/basal-1.5-4.5B",
-        "model_revision": "main",
-        "downloads": [
-            {
-                "type": "snapshot",
-                "repo_id": "Remek/basal-1.5-4.5B",
-                "revision": "main",
-                "role": "basal-metadata",
-            },
-            {
-                "type": "file",
-                "repo_id": "Remek/basal-1.5-4.5B-GGUF",
-                "revision": "main",
-                "role": "basal-gguf-q8_0",
-                "filename_pattern": "*Q8_0.gguf",
-                "local_dir": "models/basal-1.5-4.5B-GGUF",
-            },
-        ],
-    }
-    pinned = manager._pin_profile_hf_revisions(profile)
-    assert pinned["model_revision"] == "1" * 40
-    assert pinned["downloads"][0]["revision"] == "1" * 40
-    assert pinned["downloads"][1]["revision"] == "2" * 40
-    assert pinned["downloads"][1]["filename"] == "official-basal-main-Q8_0.gguf"
-    assert "filename" not in profile["downloads"][1]
 
 
 def test_patch4_adds_native_convenience_endpoints_without_inventing_modifier_endpoints() -> None:
@@ -3930,7 +3291,7 @@ def test_fix01_installed_profiles_use_attested_resolved_revision_for_pin_on_inst
                 "model": "Remek/basal-1.5-mini-MLX-8bit",
                 "model_revision": "main",
                 "runtime_key": "basal15-mini-mlx",
-                "family": "basal1.5",
+                "family": "basal2.0",
                 "runtime": "basal-1.5-mlx",
                 "source": "official",
                 "precision": "mlx-8bit",
@@ -4074,10 +3435,7 @@ def test_fix01_catalog_adds_only_audited_official_q8_gguf_profiles() -> None:
     for model_id in ("kev-27b", "decider-0.8b", "laya-multilingual", "laya-typed-decisions", "nimble-9b"):
         with pytest.raises(RuntimeError, match="does not support backend"):
             get_profile(catalog, model_id, "gguf")
-    for model_id in (
-        "decision-2.0-kai", "decision-2.0-eos", "decision-2.0-sol",
-        "decision-2.0-nox", "decision-2.0-lux", "decision-2.0-vega",
-    ):
+    for model_id in ("openai-decisions", "typesafe-jev"):
         with pytest.raises(RuntimeError, match="does not support backend"):
             get_profile(catalog, model_id, "gguf")
 
@@ -4140,56 +3498,6 @@ def test_fix01_official_gguf_launchers_use_local_q8_and_native_readout(tmp_path:
     assert Path(command[1]).name == "jevk5_gguf_sidecar.py"
     assert command[command.index("--gguf") + 1] == str(jev.resolve())
     assert command[command.index("--temperature") + 1] == "1.316"
-
-
-@pytest.mark.parametrize("model_id", ["basal-1.5-mini", "basal-1.5-main", "basal-1.5-max"])
-def test_fix01_basal15_native_mps_family_preserves_exact_evidence_spans(model_id: str, tmp_path: Path) -> None:
-    from types import SimpleNamespace
-    from deqio.catalog import get_profile, load_catalog
-    from deqio.systemone_runtime import SystemOneRuntime
-
-    profile = get_profile(load_catalog(Path("models.json")), model_id, "mps")
-    assert profile["basal_mode"] == "mps"
-    assert profile["capabilities"]["evidence"] is True
-
-    env_dir = tmp_path / "runtime"
-    executable = env_dir / "bin" / "basal-serve"
-    executable.parent.mkdir(parents=True)
-    executable.write_text("", encoding="utf-8")
-    python = env_dir / "bin" / "python"
-    python.write_text("", encoding="utf-8")
-    command = SystemOneRuntime._command(
-        SimpleNamespace(engine="basal", backend="mps", model_revision="main", config_path=tmp_path / "config.json"),
-        profile,
-        env_dir, python, 9330, {},
-    )
-    assert command[command.index("--mode") + 1] == "mps"
-
-    runtime = object.__new__(SystemOneRuntime)
-    runtime.engine = "basal"
-    runtime.settings = SimpleNamespace(backend="mps")
-    runtime.profile = profile
-    state = "The damaged laptop arrived yesterday."
-    start = state.index("damaged laptop")
-    text = "damaged laptop"
-    end = start + len(text)
-    native = {
-        "answers": {
-            "proof": {
-                "type": "noul",
-                "noul": 0.93,
-                "probabilities": {"true": 0.93, "false": 0.07},
-                "evidence": [{"text": text, "start": start, "end": end, "probability": 0.91}],
-            }
-        }
-    }
-    runtime._request = lambda state, questions, execution_mode=None, request_options=None: ({}, native, 1.0)
-    response, _ = runtime.system_one(
-        state,
-        {"proof": {"type": "noul", "instructions": "Was it damaged?", "evidence": True}},
-    )
-    span = response["answers"]["proof"]["evidence"][0]
-    assert state[span["start"]:span["end"]] == span["text"]
 
 
 def test_fix01_von_and_clm_expose_native_systemone_capabilities() -> None:
@@ -5144,9 +4452,11 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "0 runtime errors" in readme
     assert "## Supported models and backends" in readme
     assert readme.index("## Supported models and backends") < readme.index("## Benchmark snapshot")
-    assert "`decision-2.0-vega`" in readme
-    assert "`basal-1.5-main`" in readme
+    assert "`d3-mini`" in readme
+    assert "`basal-2.0-main`" in readme
+    assert "`openai-decisions`" in readme and "`typesafe-jev`" in readme
     assert "`laya-english`" in readme
+    assert "DEQIO_PROVIDER" not in readme
     benchmark_snapshot = readme[readme.index("## Benchmark snapshot"):readme.index("## Installation")]
     assert "Laya English 421M" not in benchmark_snapshot
     assert "earlier local snapshot from **2026-10-03**" not in readme

@@ -51,6 +51,12 @@ COMMUNITY_PROFILES = {
     "laya-typed-decisions::mlx",
     "clef-flash::mlx",
     "clef::mlx",
+    # 0.6.1: Decision 3.0 MLX is the BF16 conversion by ahmedandaloes (no official or 8-bit MLX exists).
+    "d3::mlx",
+    "d3-flash::mlx",
+    "d3-mini::mlx",
+    "d3-nano::mlx",
+    "d3-lite::mlx",
 }
 
 # Hugging Face artifacts whose catalog revision is not yet an immutable commit
@@ -165,7 +171,8 @@ def test_installers_only_install_pinned_packages(tmp_path: Path, monkeypatch: py
     catalog = _catalog()
 
     for model_id, backend in (
-        ("decision-2.0-kai", "cuda"),
+        ("d3-mini", "cuda"),
+        ("d3-mini", "mlx"),
         ("decider-2b", "gguf"),
         ("nimble-9b", "mlx"),
         ("nimble-9b", "cuda"),
@@ -174,7 +181,8 @@ def test_installers_only_install_pinned_packages(tmp_path: Path, monkeypatch: py
         ("laya-english", "mps"),
         ("clef", "mlx"),
         ("von", "mps"),
-        ("basal-1.5-main", "cuda"),
+        ("basal-2.0-main", "mlx"),
+        ("basal-2.0-main", "gguf"),
     ):
         profile = get_profile(catalog, model_id, backend)
         manager._install_runtime(config, {**data, "backend": backend}, profile, upgrade=True)

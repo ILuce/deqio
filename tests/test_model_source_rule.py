@@ -119,18 +119,18 @@ def test_load_accepts_a_pin_on_install_revision_recorded_by_the_installer(
     from deqio.installations import mark_installed
 
     config = ensure_workspace(tmp_path / "ws")
-    profile = get_profile(_catalog(config), "basal-1.5-mini", "mlx")
+    profile = get_profile(_catalog(config), "basal-2.0-mini", "mlx")
     assert profile.get("pin_hf_revisions_at_install"), "test needs a pin-on-install profile"
-    _runtime_for(config, "basal-1.5-mini", "mlx", monkeypatch)
+    _runtime_for(config, "basal-2.0-mini", "mlx", monkeypatch)
     mark_installed(
-        config, "basal-1.5-mini", "mlx", verified=True, source="install",
+        config, "basal-2.0-mini", "mlx", verified=True, source="install",
         artifacts=[{"source": "huggingface", "repo_id": profile["model"], "role": "basal-model",
                     "requested_revision": profile.get("model_revision"), "resolved_revision": profile["model_revision"]}],
         max_input_tokens=4096,
     )
 
     with pytest.raises(AssertionError, match="sidecar spawned"):
-        SystemOneRuntime.load(_settings(config, "basal-1.5-mini", "mlx"))
+        SystemOneRuntime.load(_settings(config, "basal-2.0-mini", "mlx"))
 
 
 def test_runtime_identity_model_matches_the_catalog_profile(tmp_path: Path) -> None:

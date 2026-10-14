@@ -259,7 +259,7 @@ The project has an existing unit test suite.</textarea>
             <option value="off">off</option>
             <option value="auto">auto</option>
           </select>
-          <div class="runtime-note"><code>facts: "auto"</code> asks a supporting native runtime (currently Basal 1.5 profiles) to derive supported deterministic facts before the decision. It is not a standalone endpoint.</div>
+          <div class="runtime-note"><code>facts: "auto"</code> asks a supporting native runtime (currently Basal 2.0 profiles) to derive supported deterministic facts before the decision. It is not a standalone endpoint.</div>
         </div>
         <div class="field">
           <label for="systemOneQuestions">SOAM questions (JSON object)</label>

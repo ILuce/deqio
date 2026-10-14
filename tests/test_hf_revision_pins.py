@@ -30,13 +30,24 @@ KEV = {
     "9b": "db029f08b290afd9fee4aa4bbcd9ae48602d1eb0",
 }
 BASAL = {
-    # tier -> (model repo suffix, MLX commit, base commit, GGUF commit)
-    "mini": ("mini", "6ea29c486e39e1a217932ab56b222c0d1bc4ba82", "1978d0705ce09cd2d7d8d3e87b304468121e7255",
-             "9671696b53ccf4adbb30adc24f4ae8372e02dffc"),
-    "main": ("4.5B", "79f5a7cbbd028758c506f9aca5fec1ef431ee893", "784a683bfadcc8865238fc0fc74a83b4000269bc",
-             "6943511d883b0cd7029d94abd0e837482d7a7f86"),
-    "max": ("max", "fafde24a328b3ea092b12ee12c17024b6a467468", "be1b5ee7e7a9755a931262fa7fab4f59be0fd03c",
-            "88dafb2b58fe82ec3751c81c2431acf442e9038c"),
+    # 0.6.1, Basal 2.0 (Hub HEAD commits read through the Hub API on 2026-10-14, twice each):
+    # tier -> (model repo suffix, MLX-8bit commit, base commit, GGUF commit)
+    "mini": ("mini", "f26d1e2df8002665a54583f74d954569fe99ec96", "cb81b32ce89b0b87e62fcdad28f0435e25c953f3",
+             "594d115f7d5e9f7c7858b39d023c78574c2fe77a"),
+    "main": ("4.5B", "77d3b723e5e2e7835dcea372045fe916097bb13c", "e5ba9149760d99b73b1963d8e0ccf948b58afacb",
+             "237294ca8fec0ae697f44ae0093995817c8ad578"),
+    "max": ("max", "8d4dc59784524004583d19bb2ac74f81f506b293", "2fffc5cc41e5cf7a2f752f38f17e7b4d9a4a8252",
+            "8af9c1e127f0247cbdc326be04c2feeb273b8e26"),
+}
+# 0.6.1, Decision 3.0: official commits verified by the owner (2026-10-12 runtime commits; the 2026-10-13
+# commits changed the model card only), ggml-org GGUF and ahmedandaloes MLX HEADs read on 2026-10-14.
+D3 = {
+    # model -> (official commit, GGUF commit, MLX commit)
+    "d3": ("093cffbaa7be6f5dfe14252ae7e80c396c06dbd9", "de9670136f5ddd83e677c89ce041d5b9bb3b0dcb", "cbc374ff4bc8e2ee17cb78df4725231f97dc1e17"),
+    "d3-flash": ("f6075bff3c0f7d5704e353d0fb2ebf94888d1691", "3d53d13778bf8035e6e1e534ce489ed052ee5663", "77adb3bea9abde92d1f32158743a0cbbb0bf7aa3"),
+    "d3-mini": ("0e78bbdbe3cf480ed1461c185c9e0c4fa9258011", "c03ac9c3bdc5ae949111acb945338933f396e4d7", "c645173f5729051d473916283f9e37208b5113bb"),
+    "d3-nano": ("9d9b937f5f117f78c030ea7ba677c0b3d328ec58", "67baf946c0042cd74ca7106929ed57db699a5f4b", "b503613cd2bdbbaef1cfbd09c6e348a5758b255b"),
+    "d3-lite": ("3c49f5c0bd48a4b28e29b8ec1f38f56e199f3d61", "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21", "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a"),
 }
 DECIDER = {
     "0.8b": "a0a01d6f8135298f400a8c856b355793012ae971",
@@ -64,12 +75,13 @@ PINS: dict[tuple[str, str], dict[str, str]] = {
         "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
     },
     ("clm-8b", "cuda"): {"Qwen/Qwen3-8B": CLM_ENCODER, "Contrastive-LM/CLM-v0.1-8B": CLM_CHECKPOINT},
-    **{(f"basal-1.5-{tier}", "mlx"): {f"Remek/basal-1.5-{repo}-MLX-8bit": mlx}
+    **{(f"basal-2.0-{tier}", "mlx"): {f"Remek/basal-2.0-{repo}-MLX-8bit": mlx}
        for tier, (repo, mlx, _, _) in BASAL.items()},
-    **{(f"basal-1.5-{tier}", backend): {f"Remek/basal-1.5-{repo}": base}
-       for tier, (repo, _, base, _) in BASAL.items() for backend in ("mps", "cuda")},
-    **{(f"basal-1.5-{tier}", "gguf"): {f"Remek/basal-1.5-{repo}": base, f"Remek/basal-1.5-{repo}-GGUF": gguf}
+    **{(f"basal-2.0-{tier}", "gguf"): {f"Remek/basal-2.0-{repo}": base, f"Remek/basal-2.0-{repo}-GGUF": gguf}
        for tier, (repo, _, base, gguf) in BASAL.items()},
+    **{(model, "cuda"): {f"vllm-sr/{model}": official} for model, (official, _, _) in D3.items()},
+    **{(model, "gguf"): {f"ggml-org/vllm-{model}-GGUF": gguf} for model, (_, gguf, _) in D3.items()},
+    **{(model, "mlx"): {f"ahmedandaloes/{model}-mlx": mlx} for model, (_, _, mlx) in D3.items()},
     ("clef-flash", "gguf"): {"ggml-org/Clef-Flash-GGUF": "6b4fe4c59098479652d94f0fe11a40facbebd1ec"},
     ("clef", "gguf"): {"ggml-org/Clef-GGUF": "d2aa75cb425ae922b5c3c15ef3157d417b7f7641"},
     **{(f"decider-{size}", backend): {f"Mapika/decider-{size}": sha}
@@ -217,10 +229,10 @@ def test_installed_pin_must_match_a_catalog_commit(tmp_path: Path, monkeypatch: 
     """Pin-on-install profiles whose catalog now names the commit: the catalog wins, and an installation
     made at another commit is refused with the repair command instead of silently loading the old files."""
     config = ensure_workspace(tmp_path / "ws")
-    profile = get_profile(_catalog(), "basal-1.5-mini", "mlx")
+    profile = get_profile(_catalog(), "basal-2.0-mini", "mlx")
     catalog_sha = BASAL["mini"][1]
     settings = _launcher_settings(
-        config, engine="basal", backend="mlx", model_id="basal-1.5-mini", model=profile["model"], model_revision="main"
+        config, engine="basal", backend="mlx", model_id="basal-2.0-mini", model=profile["model"], model_revision="main"
     )
     monkeypatch.setattr(runtime_module, "installation_record", lambda *args: None)
     assert runtime_module._profile_with_installed_pin(settings, profile)["model_revision"] == catalog_sha
@@ -235,16 +247,16 @@ def test_installed_pin_must_match_a_catalog_commit(tmp_path: Path, monkeypatch: 
         runtime_module._profile_with_installed_pin(settings, profile)
 
 
-def test_decision2_triton_pin_matches_the_installed_torch() -> None:
-    """The installer puts torch==2.12.0 from the PyTorch index into every Decision 2.0 runtime; torch 2.12.0's
-    own metadata requires triton==3.7.0 (PyPI requires_dist, read 2026-10-12), so a profile pin of another
-    triton leaves torch's dependency unmet after `uv pip install`."""
-    source = Path(model_manager.__file__).read_text(encoding="utf-8")
-    torch_version = re.search(r'torch_command\.append\("torch==([\d.]+)"\)', source).group(1)
-    expected = {"2.12.0": "3.7.0", "2.12.1": "3.7.1"}[torch_version]
+def test_decision3_profiles_pin_torch_and_leave_triton_to_torch() -> None:
+    """0.6.1: every Decision 3.0 CUDA profile installs the same exact torch pin from PyPI under the profile cutoff;
+    triton is torch's own dependency (no profile pin), as upstream's requirements.txt leaves it."""
+    torch_pins = set()
     for model in _catalog()["models"]:
-        if model["engine"] != "decision2":
+        if model["engine"] != "decision3":
             continue
-        for backend, profile in model["backends"].items():
-            triton = [spec for spec in profile["packages"] if str(spec).startswith("triton==")]
-            assert triton in ([], [f"triton=={expected}"]), f"{model['id']}::{backend}: {triton} with torch {torch_version}"
+        profile = model["backends"]["cuda"]
+        pins = {str(spec).split("==")[0]: str(spec) for spec in profile["packages"]}
+        torch_pins.add(pins["torch"])
+        assert "triton" not in pins, f"{model['id']}::cuda pins triton"
+        assert pins["transformers"] == "transformers==5.17.0" and pins["flash-linear-attention"] == "flash-linear-attention==0.5.2"
+    assert torch_pins == {"torch==2.13.0"}

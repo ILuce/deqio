@@ -43,12 +43,13 @@ class HostCapabilities:
 
 
 def host_backends() -> tuple[str, ...]:
+    """Backends this host can run; `remote` (HTTPS decision APIs) needs no accelerator."""
     system = platform.system()
     machine = platform.machine().lower()
     if system == "Darwin" and machine == "arm64":
-        return ("mlx", "mps", "gguf")
+        return ("mlx", "mps", "gguf", "remote")
     if system == "Linux":
-        return ("cuda", "gguf") if _nvidia_gpu_listed() else ("gguf",)
+        return ("cuda", "gguf", "remote") if _nvidia_gpu_listed() else ("gguf", "remote")
     return ()
 
 

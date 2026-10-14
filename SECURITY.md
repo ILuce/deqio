@@ -45,3 +45,12 @@ Deqio process, but it is not a cryptographic proof for a remote party. Model
 outputs are probabilities, not safety guarantees; applications must keep the
 decision to act (and any side effects) in their own deterministic policy or
 with a human.
+
+## Remote API keys
+
+API keys of `remote` profiles (`openai-decisions`, `typesafe-jev`) are stored only in the operating-system keychain
+through `keyring` (service `deqio`, account = provider name). Deqio reads a key when it loads that profile and never
+writes it to `config.json`, `.deqio/installed-models.json`, provenance, logs, Watch events, benchmark summaries or the
+cassettes recorded by `python -m deqio.provider_record`. `deqio models delete MODEL --backend remote` removes the key.
+Requests to the remote endpoints carry the decision state in clear text to the vendor; do not install a remote profile
+in a workspace that must keep its states local.

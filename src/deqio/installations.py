@@ -79,7 +79,9 @@ def mark_installed(
     source: str = "install",
     artifacts: list[dict[str, Any]] | None = None,
     max_input_tokens: int | None = None,
+    remote: dict[str, Any] | None = None,
 ) -> None:
+    """``remote`` (0.6.1): ``remote_model``, ``endpoint`` and ``api_key_store`` of a remote profile; never the key."""
     with process_lock(_registry_lock_path(config_path), timeout=10.0):
         data = load_registry(config_path)
         profiles = data.setdefault("profiles", {})
@@ -106,6 +108,11 @@ def mark_installed(
             if int(max_input_tokens) < 1:
                 raise ValueError("max_input_tokens must be positive")
             record["max_input_tokens"] = int(max_input_tokens)
+        if remote is not None:
+            for field in ("remote_model", "endpoint", "api_key_store"):
+                if remote.get(field) in (None, ""):
+                    raise ValueError(f"remote installation record needs {field}")
+                record[field] = str(remote[field])
         profiles[key] = record
         _write_registry(config_path, data)
 
@@ -338,7 +345,7 @@ def _artifact_ready(
     def installed_revision(repo_id: str, role: Any, fallback: Any) -> Any:
         """Prefer the immutable revision recorded for this installation.
 
-        Pin-on-install profiles (Basal 1.5 today, and potentially other model
+        Pin-on-install profiles (Basal 2.0 today, and potentially other model
         families later) intentionally replace a mutable catalog revision such
         as ``main`` with a commit SHA during installation.  The installation
         registry is therefore the source of truth when checking whether that
@@ -465,6 +472,10 @@ def installed_profiles(
             runtime_key = profile.get("runtime_key")
             env_dir = runtime_root / str(runtime_key) if runtime_key else runtime_root / "__missing__"
             runtime_ready = bool(runtime_key) and _runtime_python(env_dir).is_file()
+            if backend == "remote":
+                # 0.6.1: a remote profile has no runtime directory; its registry record (written only
+                # after the install-time probe) and the keychain entry read at load time are its state.
+                runtime_ready = True
             if runtime_ready and profile.get("installer") in {"llama_cpp", "jevk5_gguf"}:
                 binary = env_dir / ("Scripts" if os.name == "nt" else "bin") / (
                     "llama-server.exe" if os.name == "nt" else "llama-server"
@@ -525,6 +536,7 @@ def installed_profiles(
                         if explicit and record.get("max_input_tokens") is not None
                         else None
                     ),
+                    "remote_model": str(record["remote_model"]) if explicit and record.get("remote_model") else None,
                 }
             )
 

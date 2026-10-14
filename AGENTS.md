@@ -71,9 +71,12 @@ mlx
 mps
 gguf
 cuda
+remote
 ```
 
-A catalog profile must exist for every allowed `(model_id, backend)` pair.
+A catalog profile must exist for every allowed `(model_id, backend)` pair. `remote` is the backend of the catalogued
+remote decision APIs (`openai-decisions`, `typesafe-jev`): no runtime directory, no weights, served by
+`deqio.remote_runtime` over HTTPS; see "Remote decision profiles".
 
 ## Package management
 
@@ -142,6 +145,8 @@ DEQIO_SIDECAR_PROCESS_READY_SECONDS
 DEQIO_HF_OFFLINE_RUNTIME
 DEQIO_WATCH_TOKEN
 ```
+
+Remote decision APIs are selected through the catalog (`backend: remote`), never through environment variables: there is no provider-selection variable family.
 
 Keep project configuration under the `DEQIO_` namespace. `SemIf` remains the name of one upstream engine.
 
@@ -212,7 +217,7 @@ Do not silently fall back from an unsupported backend to CPU or another backend.
 
 Every runtime package is pinned: catalog `packages`, every `*_package` field and every package an installer adds itself is an exact PyPI version (`name==version`) or a GitHub commit (`@<40-hex>` or `/archive/<40-hex>.tar.gz`), never a branch, tag, range or bare name. FastAPI/Uvicorn inside engine runtimes only carry Deqio's sidecars and use the core `uv.lock` versions. Source checkouts (llama.cpp, Nimble) are fetched at the catalog commit, never pulled. Moving a pin to a newer upstream release is its own change with a per-profile benchmark.
 
-Every profile declares `exclude_newer`, an RFC 3339 UTC instant shared by all profiles of its runtime. Installers pass it as `uv pip install --exclude-newer` to every resolution from PyPI, so transitive dependencies resolve the same way on every install, and refuse a profile without it. A pinned version must be older than its profile's instant. Only a command that installs one exact pin from an index without upload times (the PyTorch CUDA wheels) runs without it. Moving the instant is a benchmarked change like moving a pin. `python -m deqio.pin_audit` compares an installed workspace with these pins and the Hub revisions (read-only).
+Every profile with a runtime declares `exclude_newer`, an RFC 3339 UTC instant shared by all profiles of its runtime (remote profiles install nothing and declare none). Installers pass it as `uv pip install --exclude-newer` to every resolution from PyPI, so transitive dependencies resolve the same way on every install, and refuse a profile without it. A pinned version must be older than its profile's instant. Only a command that installs one exact pin from an index without upload times (the PyTorch CUDA wheels) runs without it. Moving the instant is a benchmarked change like moving a pin. `python -m deqio.pin_audit` compares an installed workspace with these pins and the Hub revisions (read-only).
 
 Hugging Face artifacts carry a 40-hex commit revision. The remaining exceptions are listed in `tests/test_catalog_pinning.py::HF_REVISION_PENDING`, which may only shrink. Pin a revision only where the launcher makes the engine load it (an argument, `LAYA_REVISION`, a snapshot path); otherwise the offline cache, the loaded weights and provenance disagree. An engine whose CLI takes a repo id but no revision (Decider, JevK5) is given the path of the pinned commit's cached snapshot and refuses to start when the cache lacks it. Where the catalog itself names the commit of a pin-on-install profile, an installation verified at another commit is refused with the repair command.
 
@@ -238,7 +243,9 @@ Do not alias MPS to MLX or MLX to MPS. They are distinct Apple Silicon runtime s
 
 The catalog profile is the only source of the model an engine loads: launchers take model, revision and checkpoint paths from the profile, and `config.json` / `DEQIO_MODEL` / `DEQIO_MODEL_REVISION` are a mirror written by `deqio models use/select`. A mirror value that differs from the catalog profile must fail loading with an explicit error before any sidecar is spawned (pin-on-install profiles may run the immutable revision recorded by the installer). Never override the catalog silently.
 
-Basal 1.5 fully replaces the removed Basal 1.0 catalog profiles. The only Basal family is `basal-1.5-mini`, `basal-1.5-main`, and `basal-1.5-max`. Use the official Basal v1.5.0 `basal-serve` runtime and official model artifacts. The accepted backends are MLX 8-bit, native MPS, GGUF Q8_0, and native CUDA. Advanced semantics remain native SystemOne semantics internally: Choice, Noul, Score, Multi, Act, `facts: "auto"`, SOAM, option keys, and Evidence where the selected backend actually supports it. Patch 4 may expose thin convenience HTTP wrappers for native `score`, `multi`, `act`, and `soam`, but they must inject/forward to the same `SystemOneRuntime.system_one` path and must not implement alternative scoring. Do not create standalone Facts/Evidence/OptionKey endpoints: those remain request/question modifiers. Do not softmax Multi probabilities, do not re-decide Act results, and never silently ignore unsupported Evidence. Evidence is native-PyTorch-only for the current Basal 1.5 profiles (MPS/CUDA), not MLX/GGUF.
+Basal 2.0 fully replaces the removed Basal 1.5 catalog profiles (0.6.1). The only Basal family is `basal-2.0-mini`, `basal-2.0-main` (upstream `Remek/basal-2.0-4.5B`), and `basal-2.0-max`. Use the official `rkinas/basal` v2.0.0 `basal-serve` runtime pinned by commit and the author's official `-MLX-8bit` and `-GGUF` (Q8_0) artifacts; the accepted backends are MLX 8-bit and GGUF Q8_0 (MPS and CUDA profiles are not catalogued for 2.0). Advanced semantics remain native SystemOne semantics internally: Choice, Noul, Score, Multi, Act, `facts: "auto"`, SOAM and option keys; Basal 2.0 ships no evidence head, so `evidence: true` is refused explicitly on every 2.0 profile. The thin convenience HTTP wrappers for native `score`, `multi`, `act`, and `soam` must inject/forward to the same `SystemOneRuntime.system_one` path and must not implement alternative scoring. Do not create standalone Facts/Evidence/OptionKey endpoints: those remain request/question modifiers. Do not softmax Multi probabilities, do not re-decide Act results, and never silently ignore unsupported Evidence. The 2.0 `tool` question type is not exposed yet.
+
+Decision 3.0 (`decision3`, 0.6.1) replaces the removed Decision 2.0 engine. The official `vllm-sr/d3*` packages ship their own System One server (`d3_server.py`, stdlib HTTP, `POST /v1/systemone`); the CUDA launcher runs it from the pinned snapshot path (`--model <snapshot> --verify fast`), so the pinned commit is the code that runs, and `_decision3_runtime_metadata` refuses a snapshot whose `MODEL_MANIFEST.json` identity differs from the catalog's `d3_model_sha256`. GGUF profiles use the `ggml-org/vllm-<model>-GGUF` Q8_0 files through the shared llama.cpp runtime; MLX profiles are the community BF16 conversions by `ahmedandaloes` (`source: community`, choice and noul only, served by `deqio.d3_mlx_sidecar`). Decision 3.0 probabilities are native and preserved unchanged (no Deqio renormalization), as Decision 2.0's were.
 
 Clef Flash and Clef use pinned `mlx-community` 8-bit snapshots on MLX, retaining the BF16 joint schema head and the snapshot-bundled `clef_mlx.py` System One server with truncation disabled. They also expose audited official `ggml-org` Q8_0 GGUF profiles through llama.cpp's native SystemOne endpoint. Do not replace the decision head with a normal text-generation path, and do not alias MPS to MLX.
 
@@ -386,12 +393,23 @@ Avoid changes that:
 
 External engines should remain resident in a localhost-only child process for the lifetime of the main server.
 
-## Decision providers (D11)
+## Remote decision profiles (D11, backend form since 0.6.1)
 
-A decision provider answers a System One request and names itself in provenance (`provider`, `remote_request_id`,
-`cost_estimate`). `local` is the catalog sidecar; remote providers (`deqio.providers`) are selected explicitly, sit
-behind their own flag, read keys from the environment only, and never serve as a fallback for a failed sidecar or for
-each other: a missing flag, key or endpoint and any non-decision answer is an explicit error. Cost is an estimate from
-the API's reported input tokens and the published input price, never a bill; `amount` stays `null` when usage is not
-reported. Remote wire mappings live in `deqio.providers` only, and the contract tests replay the cassettes under
-`tests/fixtures/providers/` (synthetic until `python -m deqio.provider_record` replaces them).
+A remote decision API is a catalog profile on the `remote` backend (`openai-decisions`, `typesafe-jev`) and behaves
+1:1 like a local profile: `deqio models setup` installs it (model identifier typed by the user, API key, the same
+input-token budget list as a local model, then one typed-decision probe against the real endpoint — nothing is
+registered before the probe passes), `deqio models use` / `POST /v1/models/activate` select it, `deqio benchmark`
+runs it as an installed profile, `deqio models delete` removes it. There is no separate provider configuration, flag
+or environment selection, and a remote profile is never a fallback for a sidecar or for another provider. The API key
+lives only in the operating-system keychain (`deqio.credentials`, `keyring`, service `deqio`, account = provider);
+it is read when the profile loads and never written to `config.json`, the registry, provenance, logs or recordings;
+a host without a keychain backend is an explicit error, not a file or environment fallback. The registry record
+holds `remote_model`, `endpoint` and `api_key_store`; `config.json` `model` mirrors `remote_model` (a mismatch refuses
+to load, as for local profiles). Every answer names its provider in provenance (`provider`, `remote_request_id`,
+`cost_estimate`); cost is an estimate from the API's reported input tokens and the published input price, never a
+bill, and `amount` stays `null` when usage is not reported. The wire mapping of each API (OpenAI Decisions:
+`input` + `questions` array, `predicate` for noul, `answers` array, `refusal` is an error; TypeSafe: the native
+System One wire at `/v1/systemone`) lives in `deqio.providers` only, is corrected from recorded cassettes, never
+guessed twice, and the contract tests replay the cassettes under `tests/fixtures/providers/` (synthetic in the
+documented shapes until `python -m deqio.provider_record` replaces them). Unsupported request options and question
+types are refused with an explicit error.

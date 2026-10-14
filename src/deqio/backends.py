@@ -14,11 +14,9 @@ class BackendRuntime:
 
     @classmethod
     def load(cls, settings: Settings) -> "BackendRuntime":
-        from .providers import LOCAL_PROVIDER, provider_spec
-
-        # D11: a remote decision provider answers without a sidecar; it is selected
-        # explicitly (config.json `provider` / DEQIO_PROVIDER) and never used as a fallback.
-        if provider_spec(getattr(settings, "provider", LOCAL_PROVIDER)).kind == "remote":
+        # 0.6.1: a `remote` profile is served over HTTPS by the provider named in the catalog;
+        # it is an installed profile like any other and never a fallback for a sidecar.
+        if settings.backend == "remote":
             from .remote_runtime import RemoteProviderRuntime
 
             return RemoteProviderRuntime.load(settings)  # type: ignore[return-value]

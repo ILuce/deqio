@@ -6,10 +6,12 @@ from typing import Any
 
 
 DEFAULT_CATALOG_NAME = "models.json"
-SUPPORTED_BACKENDS = ("mlx", "mps", "gguf", "cuda")
+# 0.6.1: `remote` is the backend of the catalogued remote decision APIs (openai-decisions,
+# typesafe-jev); it has no runtime directory and is served by deqio.remote_runtime.
+SUPPORTED_BACKENDS = ("mlx", "mps", "gguf", "cuda", "remote")
 SUPPORTED_ENGINES = (
     "semif",
-    "decision2",
+    "decision3",
     "kev",
     "jevk5",
     "open-jev",
@@ -20,6 +22,8 @@ SUPPORTED_ENGINES = (
     "laya",
     "von",
     "nimble",
+    "openai-decisions",
+    "typesafe-jev",
 )
 
 

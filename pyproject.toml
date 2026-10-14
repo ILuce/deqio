@@ -1,6 +1,6 @@
 [project]
 name = "deqio"
-version = "0.6.0.dev0"
+version = "0.6.1"
 description = "Unified runtime for fast typed AI decisions across multiple decision engines"
 readme = "README.md"
 license = "MIT"
@@ -11,6 +11,7 @@ dependencies = [
     "uvicorn[standard]>=0.27,<1",
     "huggingface-hub>=1,<2",
     "pydantic>=2,<3",
+    "keyring>=25,<26",
 ]
 keywords = ["ai", "llm", "decision", "jev", "system-one", "inference", "mlx", "mps", "cuda"]
 classifiers = [

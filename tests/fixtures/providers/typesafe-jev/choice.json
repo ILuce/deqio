@@ -1,13 +1,27 @@
 {
   "provider": "typesafe-jev",
-  "wire": "deqio-provider-wire-v1",
+  "wire": "typesafe-systemone-v1",
   "synthetic": true,
-  "note": "Synthetic example in the provider wire v1 shape; replace with `python -m deqio.provider_record` output recorded from the real API.",
+  "note": "Synthetic example in the shape documented at https://docs.typesafe.ai/api (read 2026-10-14); replace with `python -m deqio.provider_record --provider typesafe-jev` output recorded from the real API.",
   "request": {
-    "url": "https://jev.example.invalid/v1/decisions",
-    "body": {
-      "model": "jev",
+    "url": "https://api.typesafe.ai/v1/systemone",
+    "system_one": {
       "state": "A customer reports that the API returns HTTP 500 after the latest deployment.",
+      "questions": {
+        "decision": {
+          "type": "choice",
+          "instructions": "Classify the report.",
+          "criteria": {
+            "bug": "An existing function no longer works",
+            "feature": "A request for new functionality",
+            "support": "A question about how to use the product"
+          }
+        }
+      }
+    },
+    "body": {
+      "state": "A customer reports that the API returns HTTP 500 after the latest deployment.",
+      "model": "jev-latest",
       "questions": {
         "decision": {
           "type": "choice",
@@ -24,15 +38,15 @@
   "response": {
     "status": 200,
     "headers": {
-      "content-type": "application/json",
-      "x-request-id": "jev_req_synthetic_0001"
+      "content-type": "application/json"
     },
     "json": {
-      "id": "jev_synthetic_0001",
-      "model": "jev",
+      "model": "jev-1.13.0",
       "answers": {
         "decision": {
+          "type": "choice",
           "choice": "bug",
+          "confidence": 0.91,
           "probabilities": {
             "bug": 0.91,
             "feature": 0.03,
@@ -41,7 +55,8 @@
         }
       },
       "usage": {
-        "input_tokens": 412
+        "input_tokens": 412,
+        "output_tokens": 0
       }
     }
   }

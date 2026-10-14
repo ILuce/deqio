@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .catalog import SUPPORTED_ENGINES
+from .catalog import SUPPORTED_BACKENDS, SUPPORTED_ENGINES
 from .workspace import ensure_workspace
 
 
@@ -27,10 +27,6 @@ ENV_OVERRIDES = {
     "DEQIO_SIDECAR_STARTUP_SECONDS": "sidecar_startup_seconds",
     "DEQIO_SIDECAR_PROCESS_READY_SECONDS": "sidecar_process_ready_seconds",
     "DEQIO_HF_OFFLINE_RUNTIME": "hf_offline_runtime",
-    # D11: decision provider selection (local sidecar or a remote decision API behind a flag)
-    "DEQIO_PROVIDER": "provider",
-    "DEQIO_PROVIDER_MODEL": "provider_model",
-    "DEQIO_PROVIDER_BASE_URL": "provider_base_url",
 }
 MODEL_SELECTION_ENV_VARS = (
     "DEQIO_ENGINE",
@@ -58,10 +54,6 @@ class Settings:
     sidecar_startup_seconds: int
     sidecar_process_ready_seconds: int
     hf_offline_runtime: bool
-    # D11: "local" (catalog sidecar) or a remote provider name; see deqio.providers
-    provider: str = "local"
-    provider_model: str = ""
-    provider_base_url: str = ""
 
 
 def _coerce_override(key: str, value: str) -> Any:
@@ -187,8 +179,8 @@ def settings_from_data(
         raise RuntimeError("model_id must be a nonempty string")
 
     backend = str(data["backend"]).lower()
-    if backend not in {"mlx", "mps", "gguf", "cuda"}:
-        raise RuntimeError("backend must be one of: mlx, mps, gguf, cuda")
+    if backend not in SUPPORTED_BACKENDS:
+        raise RuntimeError("backend must be one of: " + ", ".join(SUPPORTED_BACKENDS))
 
     try:
         max_tokens = int(data["max_tokens"])
@@ -233,10 +225,6 @@ def settings_from_data(
     if not revision:
         raise RuntimeError("model_revision must be a nonempty string")
 
-    provider = str(data.get("provider") or "local").strip().lower()
-    if not provider:
-        raise RuntimeError("provider must be a nonempty string")
-
     return Settings(
         config_path=config_path,
         engine=engine,
@@ -253,9 +241,6 @@ def settings_from_data(
         sidecar_startup_seconds=sidecar_startup_seconds,
         sidecar_process_ready_seconds=sidecar_process_ready_seconds,
         hf_offline_runtime=hf_offline_runtime,
-        provider=provider,
-        provider_model=str(data.get("provider_model") or ""),
-        provider_base_url=str(data.get("provider_base_url") or ""),
     )
 
 

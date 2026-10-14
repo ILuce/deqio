@@ -952,10 +952,10 @@ def _write_executable(path: Path, text: str) -> Path:
 @pytest.mark.parametrize(
     ("listing", "exit_code", "expected"),
     [
-        ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver.", 9, ("gguf",)),
-        ("No devices were found", 6, ("gguf",)),
-        ("", 0, ("gguf",)),
-        ("GPU 0: NVIDIA L4 (UUID: GPU-00000000-0000-0000-0000-000000000000)", 0, ("cuda", "gguf")),
+        ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver.", 9, ("gguf", "remote")),
+        ("No devices were found", 6, ("gguf", "remote")),
+        ("", 0, ("gguf", "remote")),
+        ("GPU 0: NVIDIA L4 (UUID: GPU-00000000-0000-0000-0000-000000000000)", 0, ("cuda", "gguf", "remote")),
     ],
     ids=["driver-unreachable", "no-devices", "empty-listing", "one-gpu"],
 )

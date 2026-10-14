@@ -203,28 +203,39 @@ def _normalise_probabilities(
     raise SystemOneProtocolError("External engine did not return choice probabilities")
 
 
+NATIVE_PROBABILITY_ENGINES = {"decision3": "Decision 3.0"}
+
+
+def _native_label(preserve_native: bool | str) -> str:
+    """Display name of the engine whose native probabilities are preserved unchanged."""
+    if isinstance(preserve_native, str):
+        return NATIVE_PROBABILITY_ENGINES.get(preserve_native, preserve_native)
+    return "Decision 3.0"
+
+
 def _native_choice_probabilities(
-    answer: dict[str, Any], option_ids: list[str]
+    answer: dict[str, Any], option_ids: list[str], *, label: str = "Decision 3.0", engine: str = "decision3"
 ) -> tuple[list[float], dict[str, Any]]:
     """Return Decision-owned probabilities unchanged and fail if they are absent.
 
-    Decision 2.0 explicitly forbids Deqio-side normalization and synthetic
-    one-hot fallbacks.  The stable Deqio Choice endpoint may reshape the map
-    into its historical ordered list, but it must not change the values.
+    Decision 3.0 (like 2.0 before it) ships calibrated probabilities; Deqio-side
+    normalization and synthetic one-hot fallbacks are forbidden for it.  The stable
+    Deqio Choice endpoint may reshape the map into its historical ordered list,
+    but it must not change the values.
     """
     values = answer.get("probabilities")
     if not isinstance(values, dict):
-        raise SystemOneProtocolError("Decision 2.0 did not return native choice probabilities")
+        raise SystemOneProtocolError(f"{label} did not return native choice probabilities")
     missing = [option_id for option_id in option_ids if option_id not in values]
     if missing:
         raise SystemOneProtocolError(
-            "Decision 2.0 probabilities are missing option(s): " + ", ".join(missing)
+            f"{label} probabilities are missing option(s): " + ", ".join(missing)
         )
     try:
         probs = [
             _protocol_float(
                 values[option_id],
-                field=f"Decision 2.0 choice probability for {option_id!r}",
+                field=f"{label} choice probability for {option_id!r}",
                 minimum=0.0,
                 maximum=1.0,
             )
@@ -232,16 +243,16 @@ def _native_choice_probabilities(
         ]
     except SystemOneProtocolError as error:
         raise SystemOneProtocolError(
-            "Decision 2.0 returned invalid native choice probabilities"
+            f"{label} returned invalid native choice probabilities"
         ) from error
     return probs, {
         "kind": "engine_probability",
-        "source": "decision2.probabilities",
+        "source": f"{engine}.probabilities",
         "synthetic": False,
         "normalized": False,
         "transforms": [],
         "raw_logits_available": False,
-        "calibration": "decision2-native",
+        "calibration": f"{engine}-native",
     }
 
 
@@ -267,17 +278,18 @@ def _choice_raw(
     response: dict[str, Any],
     payload: dict[str, Any],
     latency_ms: float,
-    preserve_native: bool = False,
+    preserve_native: bool | str = False,
 ) -> dict[str, Any]:
     option_ids = [str(option["id"]) for option in row["options"]]
+    native_engine = preserve_native if isinstance(preserve_native, str) else "decision3"
     probabilities, score_provenance = (
-        _native_choice_probabilities(answer, option_ids)
+        _native_choice_probabilities(answer, option_ids, label=_native_label(preserve_native), engine=native_engine)
         if preserve_native
         else _normalise_probabilities(answer, option_ids)
     )
     input_tokens, input_tokens_source = _input_token_usage(response)
     probability_status = (
-        "native Decision 2.0 probabilities preserved unchanged by Deqio"
+        f"native {_native_label(preserve_native)} probabilities preserved unchanged by Deqio"
         if preserve_native
         else (
             "synthetic one-hot probabilities derived from the engine choice; not a model confidence score"
@@ -310,14 +322,14 @@ def _noul_raw(
     response: dict[str, Any],
     payload: dict[str, Any],
     latency_ms: float,
-    preserve_native: bool = False,
+    preserve_native: bool | str = False,
 ) -> dict[str, Any]:
     try:
         raw_p_yes = _protocol_float(answer.get("noul"), field="Noul probability")
     except SystemOneProtocolError as error:
         raise SystemOneProtocolError("External engine returned an invalid Noul probability") from error
     if preserve_native and not 0.0 <= raw_p_yes <= 1.0:
-        raise SystemOneProtocolError("Decision 2.0 returned an invalid native Noul probability")
+        raise SystemOneProtocolError(f"{_native_label(preserve_native)} returned an invalid native Noul probability")
     p_yes = raw_p_yes if preserve_native else max(0.0, min(1.0, raw_p_yes))
     clamped = p_yes != raw_p_yes
     input_tokens, input_tokens_source = _input_token_usage(response)
@@ -331,7 +343,7 @@ def _noul_raw(
         "total_seconds": latency_ms / 1000.0,
         "prompt_sha256": _sha(payload),
         "probability_status": (
-            "native Decision 2.0 P(true) preserved unchanged by Deqio"
+            f"native {_native_label(preserve_native)} P(true) preserved unchanged by Deqio"
             if preserve_native
             else (
                 "native Noul probability reported by the selected System One engine and clamped to [0, 1]"
@@ -346,7 +358,11 @@ def _noul_raw(
             "normalized": False,
             "transforms": ["clamped_to_unit_interval"] if clamped else [],
             "raw_logits_available": False,
-            "calibration": "decision2-native" if preserve_native else "unspecified",
+            "calibration": (
+                f"{preserve_native if isinstance(preserve_native, str) else 'decision3'}-native"
+                if preserve_native
+                else "unspecified"
+            ),
         },
     }
 
@@ -586,11 +602,11 @@ class SystemOneRuntime:
 
         cls._validate_accelerator(settings, python)
         runtime_metadata = (
-            cls._decision2_runtime_metadata(profile, python)
-            if settings.engine == "decision2"
+            cls._decision3_runtime_metadata(settings, profile)
+            if settings.engine == "decision3"
             else (
                 cls._basal_runtime_metadata(profile, python)
-                if settings.engine == "basal" and profile.get("family") == "basal1.5"
+                if settings.engine == "basal" and profile.get("family") == "basal2.0"
                 else {}
             )
         )
@@ -677,38 +693,6 @@ class SystemOneRuntime:
 
     @staticmethod
     def _validate_accelerator(settings: Settings, python: Path) -> None:
-        if settings.engine == "decision2":
-            if settings.backend != "cuda":
-                raise RuntimeError(
-                    "Decision 2.0 requires the official CUDA runtime. "
-                    "No CPU, MPS or MLX fallback will be used."
-                )
-            if platform.system() != "Linux":
-                suffix = (
-                    " This model is not available on macOS/Apple Silicon in Deqio 0.5."
-                    if platform.system() == "Darwin"
-                    else " The current official Deqio profile is supported on Linux CUDA hosts."
-                )
-                raise RuntimeError(
-                    "Decision 2.0 requires the official CUDA runtime." + suffix +
-                    " No CPU, MPS or MLX fallback will be used."
-                )
-            probe = subprocess.run(
-                [
-                    str(python),
-                    "-c",
-                    "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            if probe.returncode != 0:
-                raise RuntimeError(
-                    "Decision 2.0 requires the official CUDA runtime, but CUDA is unavailable. "
-                    "No CPU, MPS or MLX fallback will be used."
-                )
-            return
         if settings.backend == "mlx":
             if platform.system() != "Darwin" or platform.machine() != "arm64":
                 raise RuntimeError("MLX backend requires macOS on Apple Silicon (Darwin arm64)")
@@ -754,65 +738,61 @@ class SystemOneRuntime:
                 )
 
     @staticmethod
-    def _decision2_runtime_metadata(
-        profile: dict[str, Any], python: Path
-    ) -> dict[str, Any]:
-        """Capture actual CUDA/runtime and pinned package-manifest provenance."""
-        probe = subprocess.run(
-            [
-                str(python),
-                "-c",
-                (
-                    "import json,torch; "
-                    "print(json.dumps({"
-                    "'torch_version': torch.__version__, "
-                    "'cuda_runtime': torch.version.cuda, "
-                    "'cuda_device': torch.cuda.get_device_name(0), "
-                    "'cuda_compute_capability': '.'.join(map(str, torch.cuda.get_device_capability(0)))"
-                    "}))"
-                ),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        try:
-            metadata = json.loads(probe.stdout.strip())
-        except json.JSONDecodeError as error:
-            raise RuntimeError("Could not read Decision 2.0 CUDA runtime metadata") from error
+    def _decision3_runtime_metadata(settings: Settings, profile: dict[str, Any]) -> dict[str, Any]:
+        """Bind the loaded Decision 3.0 package to the catalog identity (0.6.1).
 
-        from huggingface_hub import snapshot_download
-
+        The official CUDA package carries ``MODEL_MANIFEST.json`` (``d3-package-manifest/1``) with the
+        model identity ``identity.model_sha256``; the catalog pins that value as ``d3_model_sha256`` so a
+        snapshot at another identity is refused before the server starts.  GGUF profiles record the
+        official source commit (``d3_source_sha``) and MLX profiles the source model; neither ships a
+        manifest, so only the CUDA profile is verified against one here.
+        """
+        metadata: dict[str, Any] = {
+            "family": "decision3",
+            "official_runtime": settings.backend == "cuda",
+            "launcher": profile.get("launcher"),
+        }
+        if settings.backend != "cuda":
+            if profile.get("d3_source_sha"):
+                metadata["d3_source_sha"] = str(profile["d3_source_sha"])
+            if profile.get("d3_source_model"):
+                metadata["d3_source_model"] = str(profile["d3_source_model"])
+            return metadata
         snapshot = Path(
-            snapshot_download(
-                repo_id=str(profile["model"]),
-                revision=str(profile["model_revision"]),
-                local_files_only=True,
+            _pinned_snapshot_path(
+                str(profile["model"]), profile.get("model_revision"), model_id=settings.model_id, backend=settings.backend
             )
-        ).resolve()
-        config_path = snapshot / "config.json"
+        )
         manifest_path = snapshot / "MODEL_MANIFEST.json"
-        if not config_path.is_file() or not manifest_path.is_file():
+        if not manifest_path.is_file() or not (snapshot / "d3_server.py").is_file():
             raise RuntimeError(
-                "Pinned Decision 2.0 package is missing config.json or MODEL_MANIFEST.json"
+                f"Pinned Decision 3.0 package {profile['model']}@{profile.get('model_revision')} is missing "
+                "MODEL_MANIFEST.json or d3_server.py; run deqio models update for this profile"
             )
-        config = json.loads(config_path.read_text(encoding="utf-8"))
         manifest_bytes = manifest_path.read_bytes()
-        manifest = json.loads(manifest_bytes.decode("utf-8"))
-        runtime = config.get("runtime") if isinstance(config.get("runtime"), dict) else {}
-        if config.get("decision_format") != "vllm-sr-decision" or runtime.get("entry") != "decision2.Decision2.from_pretrained":
-            raise RuntimeError("Pinned package is not an official Decision 2.0 System One package")
-        runtime_source = manifest.get("runtime_source") if isinstance(manifest.get("runtime_source"), dict) else {}
+        try:
+            manifest = json.loads(manifest_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("Pinned Decision 3.0 MODEL_MANIFEST.json is not valid JSON") from error
+        if str(manifest.get("schema", "")) != "d3-package-manifest/1":
+            raise RuntimeError(
+                f"Pinned package is not a Decision 3.0 package (manifest schema {manifest.get('schema')!r})"
+            )
+        identity = manifest.get("identity") if isinstance(manifest.get("identity"), dict) else {}
+        expected = str(profile.get("d3_model_sha256") or "").lower()
+        actual = str(identity.get("model_sha256") or "").lower()
+        if expected and actual != expected:
+            raise RuntimeError(
+                f"Pinned Decision 3.0 package identity {actual or 'unknown'} differs from the catalog's "
+                f"d3_model_sha256 {expected} for {settings.model_id}/cuda; run deqio models update"
+            )
         metadata.update({
-            "runtime_version": runtime_source.get("commit"),
-            "runtime_entry": runtime.get("entry"),
-            "package_schema": config.get("package_schema"),
-            "decision_format": config.get("decision_format"),
-            "format_version": config.get("format_version"),
-            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "package_schema": manifest.get("schema"),
+            "format_id": manifest.get("format_id"),
             "manifest_model_name": manifest.get("model_name"),
-            "manifest_max_input_tokens": manifest.get("max_input_tokens"),
-            "official_package_verified_on_load": True,
+            "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "model_sha256": actual or None,
+            "official_package_verified_on_load": bool(expected),
         })
         return metadata
 
@@ -1005,22 +985,51 @@ class SystemOneRuntime:
             command.extend(["--port", str(port)])
             return command
 
-        if engine == "decision2":
-            if settings.backend != "cuda":
-                raise RuntimeError(
-                    "Decision 2.0 requires the official CUDA runtime; no fallback is allowed"
+        if engine == "decision3":
+            # 0.6.1: both launchers run from the pinned Hub snapshot's path, the only form that names
+            # the commit for code the package itself ships (d3_server.py / d3_mlx.py).
+            if settings.backend == "cuda":
+                snapshot = Path(
+                    _pinned_snapshot_path(model, profile.get("model_revision"), model_id=settings.model_id, backend="cuda")
                 )
-            sidecar = Path(__file__).with_name("decision2_sidecar.py").resolve()
-            return [
-                str(python),
-                str(sidecar),
-                "--model",
-                model,
-                "--revision",
-                str(profile.get("model_revision", settings.model_revision)),
-                "--port",
-                str(port),
-            ]
+                server_script = snapshot / "d3_server.py"
+                if not server_script.is_file():
+                    raise RuntimeError(
+                        f"The official Decision 3.0 System One server d3_server.py is missing from the pinned "
+                        f"snapshot {snapshot}; run deqio models update for this profile"
+                    )
+                verify = str(profile.get("d3_verify", "fast"))
+                if verify not in {"fast", "full", "none"}:
+                    raise RuntimeError(f"Catalog profile d3_verify must be fast, full or none, got {verify!r}")
+                return [
+                    str(python), str(server_script),
+                    "--model", str(snapshot),
+                    "--device", "cuda:0",
+                    "--verify", verify,
+                    "--name", str(profile.get("wire_model", model)),
+                    "--host", "127.0.0.1",
+                    "--port", str(port),
+                ]
+            if settings.backend == "mlx":
+                snapshot = Path(
+                    _pinned_snapshot_path(model, profile.get("model_revision"), model_id=settings.model_id, backend="mlx")
+                )
+                if not (snapshot / "d3_mlx.py").is_file():
+                    raise RuntimeError(
+                        f"The Decision 3.0 MLX runtime d3_mlx.py is missing from the pinned snapshot {snapshot}; "
+                        "run deqio models update for this profile"
+                    )
+                sidecar = Path(__file__).with_name("d3_mlx_sidecar.py").resolve()
+                return [
+                    str(python), str(sidecar),
+                    "--snapshot", str(snapshot),
+                    "--name", str(profile.get("wire_model", model)),
+                    "--port", str(port),
+                ]
+            raise RuntimeError(
+                "Decision 3.0 runs on CUDA (official server), GGUF (llama.cpp) or MLX (community sidecar); "
+                f"backend {settings.backend!r} has no launcher and no fallback is allowed"
+            )
 
         if engine == "basal":
             if settings.backend not in {"mlx", "mps", "gguf", "cuda"}:
@@ -1241,12 +1250,12 @@ class SystemOneRuntime:
         capabilities = self.profile.get("capabilities")
         capabilities = capabilities if isinstance(capabilities, dict) else {}
 
-        if self.engine == "decision2":
+        if self.engine == "decision3":
             if request_options:
                 unsupported = ", ".join(sorted(request_options))
                 raise SystemOneCapabilityError(
                     unsupported,
-                    f"Decision 2.0 does not support System One request option(s): {unsupported}",
+                    f"Decision 3.0 does not support System One request option(s): {unsupported}",
                 )
             if len(questions) > 1 and not capabilities.get("multi_question", False):
                 raise SystemOneCapabilityError(
@@ -1259,18 +1268,20 @@ class SystemOneRuntime:
                 if question_type not in {"choice", "noul", "score"}:
                     raise SystemOneCapabilityError(
                         question_type,
-                        f"Decision 2.0 does not support question type {question_type!r}; "
+                        f"Decision 3.0 does not support question type {question_type!r}; "
                         "supported types are choice, noul and score",
                     )
                 if not capabilities.get(question_type, False):
                     raise SystemOneCapabilityError(
-                        question_type, f"Active profile does not support System One capability {question_type!r}"
+                        question_type,
+                        f"Active Decision 3.0 {self.settings.backend} profile does not support System One "
+                        f"capability {question_type!r}",
                     )
             _payload, response, latency_ms = self._request(state, questions)
 
         elif self.engine == "basal":
-            if self.profile.get("family") != "basal1.5":
-                raise RuntimeError("Native /v1/systemone exposure requires a Basal 1.5 profile")
+            if self.profile.get("family") != "basal2.0":
+                raise RuntimeError("Native /v1/systemone exposure requires a Basal 2.0 profile")
             if len(questions) > 1 and not capabilities.get("soam", False):
                 raise SystemOneCapabilityError(
                     "soam", "Active Basal profile does not support State Once, Ask Many"
@@ -1291,7 +1302,7 @@ class SystemOneRuntime:
                 question_type = str(question.get("type", "choice"))
                 if question_type not in allowed_types:
                     raise SystemOneCapabilityError(
-                        question_type, f"Basal 1.5 does not support question type {question_type!r}"
+                        question_type, f"Basal 2.0 does not support question type {question_type!r}"
                     )
                 if not capabilities.get(question_type, False):
                     raise SystemOneCapabilityError(
@@ -1380,9 +1391,13 @@ class SystemOneRuntime:
             response=response,
             payload=payload,
             latency_ms=latency_ms,
-            preserve_native=self.engine == "decision2",
+            preserve_native=self._preserve_native(),
         )
         return self._annotate_provider(raw)
+
+    def _preserve_native(self) -> bool | str:
+        """Engines whose calibrated probabilities Deqio must not renormalize (Decision 3.0)."""
+        return self.engine if self.engine in NATIVE_PROBABILITY_ENGINES else False
 
     def _annotate_provider(self, raw: dict[str, Any]) -> dict[str, Any]:
         """D11: every raw result names its provider; a sidecar has no remote id and no price."""
@@ -1409,7 +1424,7 @@ class SystemOneRuntime:
             response=response,
             payload=payload,
             latency_ms=latency_ms,
-            preserve_native=self.engine == "decision2",
+            preserve_native=self._preserve_native(),
         )
         return self._annotate_provider(raw)
 
@@ -1446,7 +1461,7 @@ class SystemOneRuntime:
                     response=response,
                     payload=payload,
                     latency_ms=latency_ms,
-                    preserve_native=self.engine == "decision2",
+                    preserve_native=self._preserve_native(),
                 )
             )
         # One engine call measured the whole batch. Report that count once as

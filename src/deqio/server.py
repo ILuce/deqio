@@ -177,7 +177,7 @@ class TypedSystemOneRequest(BaseModel):
 
 class ModelActivateRequest(BaseModel):
     model_id: str
-    backend: Literal["mlx", "mps", "gguf", "cuda"]
+    backend: Literal["mlx", "mps", "gguf", "cuda", "remote"]
 
 
 class WatchSettingsRequest(BaseModel):

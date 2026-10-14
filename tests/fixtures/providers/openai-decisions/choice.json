@@ -1,12 +1,11 @@
 {
   "provider": "openai-decisions",
-  "wire": "deqio-provider-wire-v1",
+  "wire": "openai-decisions-v1",
   "synthetic": true,
-  "note": "Synthetic example in the provider wire v1 shape; replace with `python -m deqio.provider_record` output recorded from the real API.",
+  "note": "Synthetic example in the shape documented at https://developers.openai.com/api/docs/guides/decisions (read 2026-10-14); replace with `python -m deqio.provider_record --provider openai-decisions` output recorded from the real API.",
   "request": {
     "url": "https://api.openai.com/v1/decisions",
-    "body": {
-      "model": "gpt-6-luna",
+    "system_one": {
       "state": "A customer reports that the API returns HTTP 500 after the latest deployment.",
       "questions": {
         "decision": {
@@ -19,6 +18,31 @@
           }
         }
       }
+    },
+    "body": {
+      "model": "gpt-6-luna",
+      "input": "A customer reports that the API returns HTTP 500 after the latest deployment.",
+      "questions": [
+        {
+          "type": "choice",
+          "name": "decision",
+          "instructions": "Classify the report.",
+          "choices": [
+            {
+              "value": "bug",
+              "description": "An existing function no longer works"
+            },
+            {
+              "value": "feature",
+              "description": "A request for new functionality"
+            },
+            {
+              "value": "support",
+              "description": "A question about how to use the product"
+            }
+          ]
+        }
+      ]
     }
   },
   "response": {
@@ -28,20 +52,40 @@
       "x-request-id": "req_synthetic_0001"
     },
     "json": {
-      "id": "dec_synthetic_0001",
-      "model": "gpt-6-luna",
-      "answers": {
-        "decision": {
+      "answers": [
+        {
+          "type": "choice",
+          "name": "decision",
           "choice": "bug",
-          "probabilities": {
-            "bug": 0.91,
-            "feature": 0.03,
-            "support": 0.06
-          }
+          "probabilities": [
+            {
+              "value": "bug",
+              "probability": 0.91
+            },
+            {
+              "value": "feature",
+              "probability": 0.03
+            },
+            {
+              "value": "support",
+              "probability": 0.06
+            }
+          ],
+          "confidence": 0.91
         }
-      },
+      ],
+      "model": "gpt-6-luna",
       "usage": {
-        "input_tokens": 412
+        "input_tokens": 412,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 412
       }
     }
   }

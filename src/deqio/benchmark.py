@@ -18,7 +18,6 @@ from .benchmark_compare import main as compare_main
 from .benchmark_identity import build_profile_identity
 from .catalog import apply_selection, get_model, get_profile, load_catalog
 from .config import read_config_data, settings_from_data
-from .providers import provider_spec
 from .installations import installed_profiles
 from .watch_store import WatchStore
 from .process_lock import process_lock
@@ -478,45 +477,15 @@ def _select_profiles(
     return [rows[index] for index in dict.fromkeys(indexes)]
 
 
-def _provider_row(args: argparse.Namespace) -> dict[str, Any] | None:
-    """D11: `--provider NAME` benchmarks a remote decision provider instead of installed profiles."""
-    name = getattr(args, "provider", None)
-    if not name:
-        return None
-    spec = provider_spec(str(name))
-    if spec.kind != "remote":
-        raise RuntimeError(f"--provider needs a remote provider; {spec.name!r} is {spec.kind}")
-    model = str(getattr(args, "provider_model", "") or spec.default_model)
-    return {
-        "provider": spec.name,
-        "model_id": model,
-        "backend": "remote",
-        "engine": spec.name,
-        "provider_base_url": str(getattr(args, "provider_base_url", "") or ""),
-    }
-
-
-def _provider_settings(config_path: Path, config_data: dict[str, Any], row: dict[str, Any]):
-    from dataclasses import replace
-
-    base = settings_from_data(config_path, config_data, apply_environment=False)
-    return replace(
-        base,
-        engine=str(row["engine"]),
-        model_id=str(row["model_id"]),
-        backend="remote",
-        provider=str(row["provider"]),
-        provider_model=str(row["model_id"]),
-        provider_base_url=str(row.get("provider_base_url") or ""),
-    )
-
-
 def _runtime_settings(config_path: Path, config_data: dict[str, Any], catalog: dict[str, Any], row: dict[str, Any]):
-    if row.get("provider"):
-        return _provider_settings(config_path, config_data, row)
     entry = get_model(catalog, str(row["model_id"]))
     profile = get_profile(catalog, str(row["model_id"]), str(row["backend"]))
     selected = apply_selection(config_data, entry, profile, str(row["backend"]))
+    if str(row["backend"]) == "remote" and row.get("remote_model"):
+        # 0.6.1: the installed remote model identifier is the one the registry recorded at setup.
+        selected["model"] = str(row["remote_model"])
+    if row.get("max_input_tokens"):
+        selected["max_tokens"] = int(row["max_input_tokens"])
     return settings_from_data(config_path, selected, apply_environment=False)
 
 
@@ -611,10 +580,7 @@ def run(args: argparse.Namespace) -> int:
         print("Cancelled.")
         return 0
     suite = load_suite(suite_path)
-    provider_row = _provider_row(args)
-    profiles = (
-        [provider_row] if provider_row is not None else _select_profiles(_installed(config_path, config_data, catalog), args)
-    )
+    profiles = _select_profiles(_installed(config_path, config_data, catalog), args)
     if profiles is None:
         print("Cancelled.")
         return 0
@@ -633,14 +599,9 @@ def run(args: argparse.Namespace) -> int:
     all_summaries: list[dict[str, Any]] = []
     with _benchmark_workspace_lock(config_path):
         try:
-            # A remote provider does not use the workspace's inference; the live server keeps serving.
-            lease = (
-                None
-                if provider_row is not None
-                else _suspend_live_server(
-                    config_path,
-                    timeout=min(max(sidecar_timeout, 60.0), 1800.0),
-                )
+            lease = _suspend_live_server(
+                config_path,
+                timeout=min(max(sidecar_timeout, 60.0), 1800.0),
             )
             with results_path.open("w", encoding="utf-8") as log:
                 for profile_row in profiles:
@@ -785,13 +746,6 @@ def build_parser() -> argparse.ArgumentParser:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--all", action="store_true", help="Benchmark every installed host-compatible profile")
     group.add_argument("--model", action="append", help="Benchmark MODEL_ID:BACKEND; repeat to select several")
-    group.add_argument(
-        "--provider",
-        help="Benchmark a remote decision provider (openai-decisions | typesafe-jev) instead of installed profiles; "
-        "needs its DEQIO_PROVIDER_* flag and API key in the environment",
-    )
-    parser.add_argument("--provider-model", default="", help="Remote model for --provider (default: the provider's)")
-    parser.add_argument("--provider-base-url", default="", help="Endpoint base URL for --provider (default: the provider's)")
     return parser
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -17,6 +18,7 @@ from huggingface_hub import HfApi, hf_hub_download, scan_cache_dir, snapshot_dow
 from .catalog import SUPPORTED_BACKENDS, apply_selection, get_model, get_profile, load_catalog
 from .backends import BackendRuntime
 from .config import read_config_data, settings_from_data, write_config_data
+from .credentials import delete_api_key, load_api_key, store_api_key
 from .hardware import describe_host, detect_host, host_backends, profile_compatibility
 from .installations import (
     begin_runtime_update,
@@ -47,6 +49,8 @@ SIDECAR_TRANSPORT_PACKAGES = ("fastapi==0.141.1", "uvicorn[standard]==0.53.0")
 LLAMA_CPP_BUILD_TOOLS = ("cmake==4.4.4", "ninja==1.13.2")
 # Hub client of the Nimble preparation environment (the core lock's version).
 NIMBLE_PREP_HUB_PACKAGE = "huggingface-hub==1.31.0"
+# 0.6.1: the only Basal runtime Deqio installs (rkinas/basal tag v2.0.0, pinned by commit in the catalog).
+BASAL_RUNTIME_VERSION = "2.0.0"
 NIMBLE_SOURCE_URL = "https://github.com/bespokelabsai/nimble.git"
 # D12b: every PyPI resolution of an engine runtime is bounded by the profile's
 # `exclude_newer` instant (uv ignores releases uploaded later), so transitive
@@ -140,10 +144,16 @@ def _select_data(
     backend: str,
     *,
     max_input_tokens: int | None = None,
+    remote_model: str | None = None,
 ) -> dict[str, Any]:
     updated = apply_selection(data, model_entry, profile, backend)
     if max_input_tokens is not None:
         updated["max_tokens"] = int(max_input_tokens)
+    if backend == "remote":
+        # 0.6.1: config.json mirrors the model identifier recorded at setup, not the catalog default.
+        if remote_model:
+            updated["model"] = str(remote_model)
+        updated.pop("provider", None)
     return updated
 
 
@@ -462,7 +472,7 @@ def _install_basal(
     *,
     upgrade: bool,
 ) -> Path:
-    """Install an isolated official Basal 1.5 runtime for the selected profile."""
+    """Install an isolated official Basal 2.0 runtime (rkinas/basal v2.0.0) for the selected profile."""
 
     backend = str(profile.get("basal_backend") or data.get("backend") or "")
     if backend not in {"mlx", "mps", "gguf", "cuda"}:
@@ -473,8 +483,12 @@ def _install_basal(
     python_version = str(profile.get("python", "3.12"))
     python_path = _ensure_venv(env_dir, python_version)
 
-    if str(profile.get("basal_runtime_version", "")) != "1.5.0":
-        raise RuntimeError("Deqio 0.5 supports Basal 1.5 profiles only")
+    declared = str(profile.get("basal_runtime_version", ""))
+    if declared != BASAL_RUNTIME_VERSION:
+        raise RuntimeError(
+            f"Deqio 0.6.1 installs the official Basal runtime {BASAL_RUNTIME_VERSION} only; the profile declares "
+            f"{declared or 'no version'} (older Basal catalog families are no longer installed)"
+        )
 
     if backend == "cuda":
         # Native Basal CUDA uses the upstream PyTorch engine. Install the CUDA
@@ -501,46 +515,68 @@ def _install_basal(
     return env_dir
 
 
-def _install_decision2(
+def _install_decision3(
     config_path: Path,
     data: dict[str, Any],
     profile: dict[str, Any],
     *,
     upgrade: bool,
 ) -> Path:
-    """Install the official Decision 2.0 Python runtime dependencies.
+    """Install the Python environment of the official Decision 3.0 package (0.6.1).
 
-    The model package itself contains the official ``decision2`` runtime and is
-    loaded from the pinned Hugging Face revision.  Deqio only supplies an
-    isolated CUDA environment plus a localhost transport sidecar; it does not
-    reimplement Decision 2.0 scoring or model conversion.
+    The pinned Hub snapshot ships the runtime itself (``d3_runtime.py``, ``d3_server.py``,
+    ``MODEL_MANIFEST.json``); Deqio only provides an isolated CUDA environment with the
+    package's pinned requirements.  PyTorch is installed first (from PyPI, under the
+    profile's cutoff) because ``flash-linear-attention`` resolves against it.  Deqio does not
+    reimplement Decision 3.0 scoring and ships no transport of its own for this engine: the
+    official stdlib HTTP server is launched from the snapshot.
     """
 
     if str(profile.get("platform")) != "cuda":
-        raise RuntimeError("Decision 2.0 in Deqio 0.5 requires the official CUDA runtime")
+        raise RuntimeError("The official Decision 3.0 runtime in Deqio requires the CUDA profile; no fallback is allowed")
 
-    runtime_key = str(profile.get("runtime_key", "decision2-cuda"))
+    runtime_key = str(profile.get("runtime_key", "decision3-cuda"))
     env_dir = _runtime_root(config_path, data) / runtime_key
-    python_version = str(profile.get("python", "3.12.13"))
+    python_version = str(profile.get("python", "3.12"))
     python_path = _ensure_venv(env_dir, python_version)
 
-    # The current official Decision 2.0 manifests are built/tested with the
-    # versions below.  PyTorch is installed first because the hybrid Qwen
-    # runtime dependencies import/build against it.  We intentionally do not
-    # install any MLX/MPS/CPU-specific Decision implementation.
+    packages = [str(package) for package in (profile.get("packages") or [])]
+    torch_specs = [package for package in packages if package.split("==")[0] == "torch"]
+    if len(torch_specs) != 1 or not packages:
+        raise RuntimeError("Decision 3.0 profile must declare its pinned runtime packages, including exactly one torch pin")
+
     torch_command = _pip_install(python_path, profile, upgrade=upgrade)
-    torch_command.append("torch==2.12.0")
+    torch_command.append(torch_specs[0])
     _run(torch_command)
 
-    packages = profile.get("packages")
-    if not isinstance(packages, list) or not packages:
-        raise RuntimeError("Decision 2.0 profile does not declare its pinned runtime packages")
-
     command = _pip_install(python_path, profile, upgrade=upgrade)
-    command.extend(str(package) for package in packages)
-    # FastAPI/Uvicorn are Deqio's localhost transport only; the model and all
-    # scoring/runtime logic remain the verified package shipped by upstream.
-    command.extend(SIDECAR_TRANSPORT_PACKAGES)
+    command.extend(package for package in packages if package != torch_specs[0])
+    _run(command)
+    return env_dir
+
+
+def _install_d3_mlx(
+    config_path: Path,
+    data: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    upgrade: bool,
+) -> Path:
+    """Install the community Decision 3.0 MLX runtime (mlx-vlm) plus Deqio's sidecar transport (0.6.1)."""
+
+    if str(profile.get("platform")) != "mlx":
+        raise RuntimeError("The Decision 3.0 MLX runtime requires the mlx profile")
+    runtime_key = str(profile.get("runtime_key", "d3-mlx"))
+    env_dir = _runtime_root(config_path, data) / runtime_key
+    python_path = _ensure_venv(env_dir, str(profile.get("python", "3.12")))
+    packages = [str(package) for package in (profile.get("packages") or [])]
+    if not packages:
+        raise RuntimeError("Decision 3.0 MLX profile does not declare its pinned runtime packages")
+    command = _pip_install(python_path, profile, upgrade=upgrade)
+    command.extend(packages)
+    for transport in SIDECAR_TRANSPORT_PACKAGES:
+        if transport not in packages:
+            command.append(transport)
     _run(command)
     return env_dir
 
@@ -689,8 +725,12 @@ def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str,
         return _install_nimble(config_path, data, profile, upgrade=upgrade)
     if profile.get("installer") == "basal":
         return _install_basal(config_path, data, profile, upgrade=upgrade)
-    if profile.get("installer") == "decision2":
-        return _install_decision2(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "decision3":
+        return _install_decision3(config_path, data, profile, upgrade=upgrade)
+    if profile.get("installer") == "d3_mlx":
+        return _install_d3_mlx(config_path, data, profile, upgrade=upgrade)
+    if str(data.get("backend")) == "remote" or profile.get("platform") == "remote":
+        raise RuntimeError("Remote profiles have no runtime to install; deqio models setup verifies them with a probe")
     if profile.get("installer") == "llama_cpp":
         return _install_llama_cpp(config_path, data, profile, upgrade=upgrade)
     if profile.get("installer") == "jevk5_gguf":
@@ -981,6 +1021,24 @@ def _preflight_profile(
     return compatibility
 
 
+def _remote_prompts(entry: dict[str, Any], profile: dict[str, Any]) -> tuple[str, str] | None:
+    """Model identifier and API key for a remote profile; ``None`` when the user quits."""
+    default_model = str(profile.get("model", ""))
+    provider = str(profile.get("provider") or entry.get("engine"))
+    print(
+        f"\nRemote profile {entry['id']}: {profile.get('endpoint')} ({profile.get('wire')}). "
+        "The API key is stored in the OS keychain only (service 'deqio'); it never enters this workspace."
+    )
+    value = input(f"Model identifier [{default_model}, q]: ").strip()
+    if value.lower() in {"q", "quit", "exit"}:
+        return None
+    remote_model = value or default_model
+    api_key = getpass.getpass(f"API key for {provider} (input hidden; empty = quit): ").strip()
+    if not api_key:
+        return None
+    return remote_model, api_key
+
+
 def _verify_model_ready(
     config_path: Path,
     data: dict[str, Any],
@@ -989,10 +1047,23 @@ def _verify_model_ready(
     backend: str,
     *,
     max_input_tokens: int,
+    remote_model: str | None = None,
+    api_key: str | None = None,
 ) -> None:
     selected = _select_data(
-        data, entry, profile, backend, max_input_tokens=max_input_tokens
+        data, entry, profile, backend, max_input_tokens=max_input_tokens, remote_model=remote_model
     )
+    if backend == "remote":
+        # 0.6.1: one typed decision against the real endpoint with the typed key; nothing is stored before it passes.
+        from .remote_runtime import RemoteProviderRuntime
+
+        settings = settings_from_data(config_path, selected, apply_environment=False)
+        print(f"Verifying the remote endpoint with one typed decision: {entry['id']} / remote ({remote_model})")
+        runtime = RemoteProviderRuntime.load(settings, api_key=api_key, remote_model=remote_model)
+        answer = runtime.probe()
+        runtime.close()
+        print(f"Remote probe answered: choice={answer.get('choice')!r}")
+        return
     # Installation is the one lifecycle phase where network access is allowed.
     # The readiness probe forces the engine to resolve every transitive/base
     # model dependency now, before the profile is registered as installed.
@@ -1019,6 +1090,8 @@ def _install_profile(
     upgrade: bool,
     force: bool,
     max_input_tokens: int | None = None,
+    remote_model: str | None = None,
+    api_key: str | None = None,
 ) -> int:
     entry = get_model(catalog, model_id)
     profile = _pin_profile_hf_revisions(get_profile(catalog, model_id, backend))
@@ -1031,6 +1104,12 @@ def _install_profile(
         compatibility=compatibility,
         force=force,
     )
+
+    if backend == "remote":
+        return _install_remote_profile(
+            config_path=config_path, data=data, entry=entry, profile=profile, model_id=model_id,
+            upgrade=upgrade, max_input_tokens=chosen_max_input_tokens, remote_model=remote_model, api_key=api_key,
+        )
 
     runtime_key = str(profile.get("runtime_key") or "")
     pending: list[str] = []
@@ -1074,6 +1153,55 @@ def _install_profile(
         f"(max input tokens: {chosen_max_input_tokens})"
     )
     return chosen_max_input_tokens
+
+
+def _install_remote_profile(
+    *,
+    config_path: Path,
+    data: dict[str, Any],
+    entry: dict[str, Any],
+    profile: dict[str, Any],
+    model_id: str,
+    upgrade: bool,
+    max_input_tokens: int,
+    remote_model: str | None,
+    api_key: str | None,
+) -> int:
+    """Register a remote profile (0.6.1): probe the endpoint, then store the key in the keychain.
+
+    Without a typed key (``deqio models install/update``), the key already in the keychain is
+    re-verified; a profile that was never set up refuses with the setup command.
+    """
+    provider = str(profile.get("provider") or entry.get("engine"))
+    record = installation_record(config_path, model_id, "remote") or {}
+    model = str(remote_model or record.get("remote_model") or profile.get("model") or "")
+    if not model:
+        raise RuntimeError(f"Remote profile {model_id} has no model identifier; run deqio models setup")
+    key = api_key if api_key is not None else load_api_key(provider)
+    if not key:
+        raise RuntimeError(
+            f"No API key for {provider!r} in the OS keychain; run deqio models setup for {model_id} / remote"
+        )
+    endpoint = str(profile.get("endpoint") or "")
+    _verify_model_ready(
+        config_path, data, entry, profile, "remote", max_input_tokens=max_input_tokens, remote_model=model, api_key=key
+    )
+    if api_key is not None:
+        store_api_key(provider, key)
+        print(f"Stored the {provider} API key in the OS keychain (service 'deqio', account {provider!r}).")
+    mark_installed(
+        config_path,
+        model_id,
+        "remote",
+        verified=True,
+        source="update" if upgrade else "install",
+        artifacts=[{"source": "remote", "provider": provider, "endpoint": endpoint, "model": model,
+                    "requested_revision": None, "resolved_revision": None}],
+        max_input_tokens=max_input_tokens,
+        remote={"remote_model": model, "endpoint": endpoint, "api_key_store": "keychain"},
+    )
+    print(f"Installed and verified profile: {model_id} / remote (model {model}, max input tokens: {max_input_tokens})")
+    return max_input_tokens
 
 
 def _installation_rows(config_path: Path, data: dict[str, Any], catalog: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1123,14 +1251,14 @@ def cmd_list(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Host: {describe_host(host)}")
-    print(f"{'MODEL ID':28} {'ENGINE':10} {'BACKENDS':28} DESCRIPTION")
+    print(f"{'MODEL ID':28} {'ENGINE':16} {'BACKENDS':22} DESCRIPTION")
     print("-" * 112)
     for row in rows:
         backend_text = ",".join(
             item["backend"] + ("!" if item.get("warning") else "")
             for item in row["backends"]
         )
-        print(f"{row['model_id']:28} {row['engine']:10} {backend_text:28} {row['description']}")
+        print(f"{row['model_id']:28} {row['engine']:16} {backend_text:22} {row['description']}")
     if any(item.get("warning") for row in rows for item in row["backends"]):
         print("\n! compatible, but below the catalog's recommended memory")
     return 0
@@ -1154,13 +1282,13 @@ def cmd_installed(args: argparse.Namespace) -> int:
         print("No installed model profiles were detected for this host.")
         return 0
 
-    print(f"{'MODEL ID':28} {'BACKEND':8} {'ENGINE':10} {'STATUS':12} LABEL")
+    print(f"{'MODEL ID':28} {'BACKEND':8} {'ENGINE':16} {'STATUS':12} LABEL")
     print("-" * 92)
     for row in rows:
         marker = "*" if row["active"] else " "
         print(
             f"{marker}{str(row['model_id']):27} {str(row['backend']):8} "
-            f"{str(row['engine']):10} {str(row['status']):12} {row['label']}"
+            f"{str(row['engine']):16} {str(row['status']):12} {row['label']}"
         )
     print("\n* active selection")
     return 0
@@ -1182,6 +1310,7 @@ def cmd_select(args: argparse.Namespace) -> int:
             upgrade=False,
             force=False,
             max_input_tokens=getattr(args, "max_input_tokens", None),
+            remote_model=getattr(args, "remote_model", None),
         )
     record = installation_record(config_path, args.model_id, args.backend) or {}
     updated = _select_data(
@@ -1190,6 +1319,7 @@ def cmd_select(args: argparse.Namespace) -> int:
         profile,
         args.backend,
         max_input_tokens=record.get("max_input_tokens"),
+        remote_model=record.get("remote_model"),
     )
     _write_config(config_path, updated)
     print(f"Selected {args.model_id} on {args.backend} in {config_path}")
@@ -1239,6 +1369,7 @@ def cmd_use(args: argparse.Namespace) -> int:
         profile,
         str(selected["backend"]),
         max_input_tokens=selected.get("max_input_tokens"),
+        remote_model=selected.get("remote_model"),
     )
     _write_config(config_path, updated)
     print(f"Selected installed profile {selected['model_id']} / {selected['backend']}")
@@ -1262,6 +1393,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         upgrade=bool(args.upgrade),
         force=bool(getattr(args, "force", False)),
         max_input_tokens=getattr(args, "max_input_tokens", None),
+        remote_model=getattr(args, "remote_model", None),
     )
     return 0
 
@@ -1369,6 +1501,14 @@ def _cleanup_profile_artifacts(
     remaining_keys: set[str],
     purge_cache: bool,
 ) -> None:
+    if profile.get("platform") == "remote":
+        # 0.6.1: the only artifact of a remote profile is its API key in the OS keychain.
+        provider = str(profile.get("provider") or "")
+        if delete_api_key(provider):
+            print(f"Removed the {provider} API key from the OS keychain (service 'deqio').")
+        else:
+            print(f"No {provider} API key was stored in the OS keychain.")
+        return
     remaining_runtime_keys = _remaining_profile_values(
         catalog, remaining_keys, lambda p: {str(p["runtime_key"])} if p.get("runtime_key") else set()
     )
@@ -1510,6 +1650,7 @@ def cmd_delete(args: argparse.Namespace) -> int:
                     replacement_profile,
                     str(replacement["backend"]),
                     max_input_tokens=replacement.get("max_input_tokens"),
+                    remote_model=replacement.get("remote_model"),
                 ),
             )
             print(f"Active profile removed; selected {replacement['model_id']} / {replacement['backend']} instead.")
@@ -1565,7 +1706,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if not available_backends:
         raise RuntimeError(
             "No supported Deqio backend was detected. Apple Silicon requires macOS; "
-            "Linux/Windows can use Basal 1.5 GGUF, while CUDA additionally requires a working NVIDIA driver visible through nvidia-smi."
+            "Linux can use GGUF profiles (Basal 2.0, Decision 3.0, Kev, Clef), CUDA additionally requires a working NVIDIA "
+            "driver visible through nvidia-smi, and remote profiles need only network access."
         )
     print(f"Host: {describe_host(host)}")
     print("Available backends for this host:")
@@ -1621,6 +1763,15 @@ def cmd_setup(args: argparse.Namespace) -> int:
     entry, selected_check = compatible[model_index]
     profile = get_profile(catalog, str(entry["id"]), backend)
 
+    remote_model: str | None = None
+    api_key: str | None = None
+    if backend == "remote":
+        # 0.6.1: identifier and key first, then the same token-budget list as a local model.
+        prompts = _remote_prompts(entry, profile)
+        if prompts is None:
+            return _cancelled()
+        remote_model, api_key = prompts
+
     default_max_input_tokens = _default_max_input_tokens(
         config_path, data, str(entry["id"]), backend, profile
     )
@@ -1644,13 +1795,18 @@ def cmd_setup(args: argparse.Namespace) -> int:
         upgrade=False,
         force=False,
         max_input_tokens=max_input_tokens,
+        remote_model=remote_model,
+        api_key=api_key,
     )
     updated = _select_data(
-        data, entry, profile, backend, max_input_tokens=chosen_max_input_tokens
+        data, entry, profile, backend, max_input_tokens=chosen_max_input_tokens, remote_model=remote_model
     )
     _write_config(config_path, updated)
     print(f"Setup complete. Active profile: {entry['id']} / {backend}")
-    print("The runtime and model weights are ready; normal serve/benchmark starts run with Hugging Face offline mode enabled.")
+    if backend == "remote":
+        print("The remote endpoint answered the probe; serve/benchmark read the API key from the OS keychain at load time.")
+    else:
+        print("The runtime and model weights are ready; normal serve/benchmark starts run with Hugging Face offline mode enabled.")
     return 0
 
 
@@ -1686,6 +1842,7 @@ def build_parser() -> argparse.ArgumentParser:
     select_cmd.add_argument("model_id")
     select_cmd.add_argument("--backend", choices=SUPPORTED_BACKENDS, required=True)
     select_cmd.add_argument("--install", action="store_true")
+    select_cmd.add_argument("--remote-model", help="Remote profiles with --install: the model identifier to register")
     select_cmd.set_defaults(func=cmd_select)
 
     install_cmd = sub.add_parser("install", help="Install the selected or named runtime/model")
@@ -1694,6 +1851,7 @@ def build_parser() -> argparse.ArgumentParser:
     install_cmd.add_argument("--upgrade", action="store_true")
     install_cmd.add_argument("--force", action="store_true", help="Bypass host memory/backend compatibility checks")
     install_cmd.add_argument("--max-input-tokens", type=int, help="Maximum input-token budget stored for this profile")
+    install_cmd.add_argument("--remote-model", help="Remote profiles: the model identifier to register (default: the recorded or catalog one)")
     install_cmd.set_defaults(func=cmd_install)
 
     update_cmd = sub.add_parser("update", help="Upgrade an isolated engine runtime")
@@ -1701,6 +1859,7 @@ def build_parser() -> argparse.ArgumentParser:
     update_cmd.add_argument("--backend", choices=SUPPORTED_BACKENDS)
     update_cmd.add_argument("--force", action="store_true", help="Bypass host memory/backend compatibility checks")
     update_cmd.add_argument("--max-input-tokens", type=int, help="Maximum input-token budget stored for this profile")
+    update_cmd.add_argument("--remote-model", help="Remote profiles: the model identifier to register (default: the recorded or catalog one)")
     update_cmd.set_defaults(func=lambda a: cmd_install(argparse.Namespace(**vars(a), upgrade=True)))
 
     delete_cmd = sub.add_parser("delete", help="Delete an installed model profile from this workspace")
