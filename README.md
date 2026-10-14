@@ -120,7 +120,7 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
 
 - `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile; `✓ bf16 (community)` marks the Decision 3.0 MLX conversions by `ahmedandaloes` (BF16, choice and noul only; no 8-bit MLX conversion of Decision 3.0 exists yet).
-- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`.
+- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`, whose own causal forward (`deqio-d3-mlx-forward/1`, named in the answer provenance) drives the community checkpoint.
 - Basal 2.0 (official `rkinas/basal` v2.0.0 runtime; replacing Basal 1.5 in 0.6.1) is catalogued as MLX 8-bit and GGUF Q8_0 with Deqio's broadest native feature set (no evidence head). Remove an old Basal 1.5 installation with `deqio models delete` before upgrading, or delete `.model-runtimes/basal15-*` by hand afterwards.
 - Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
 - Run `deqio models list` for the full catalog and `deqio models installed` for profiles available locally.

@@ -745,7 +745,8 @@ class SystemOneRuntime:
         model identity ``identity.model_sha256``; the catalog pins that value as ``d3_model_sha256`` so a
         snapshot at another identity is refused before the server starts.  GGUF profiles record the
         official source commit (``d3_source_sha``) and MLX profiles the source model; neither ships a
-        manifest, so only the CUDA profile is verified against one here.
+        manifest, so only the CUDA profile is verified against one here.  MLX profiles also record the
+        Deqio forward path that runs the community checkpoint (``forward``, 0.6.1 fix 2).
         """
         metadata: dict[str, Any] = {
             "family": "decision3",
@@ -757,6 +758,12 @@ class SystemOneRuntime:
                 metadata["d3_source_sha"] = str(profile["d3_source_sha"])
             if profile.get("d3_source_model"):
                 metadata["d3_source_model"] = str(profile["d3_source_model"])
+            if settings.backend == "mlx":
+                # 0.6.1 fix 2: the community d3_mlx.py only loads the checkpoint; Deqio's sidecar runs the
+                # forward pass, and names that path so MLX results stay attributable to it.
+                from deqio.d3_mlx_sidecar import D3_MLX_FORWARD
+
+                metadata["forward"] = D3_MLX_FORWARD
             return metadata
         snapshot = Path(
             _pinned_snapshot_path(

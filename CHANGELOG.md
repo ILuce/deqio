@@ -60,6 +60,21 @@ and Basal 1.5 and the 0.6.0.dev0 provider configuration (`provider*` in `config.
   `--context-overflow refuse`: a prompt longer than the model context is an explicit 422, never a state whose middle
   basal-serve cut silently.
 
+### Fixed (0.6.1 fix 2, 2026-10-14, after the owner's second Apple Silicon install)
+- Decision 3.0 MLX: with the corrected pin the community `d3_mlx.py` loaded, and its own inference loop failed at
+  the first full-attention layer (`AttributeError: 'NoneType' object has no attribute 'offset'`): it calls every
+  decoder layer as `layer(h)` without a cache or a mask, and the `qwen3_5` attention of every released mlx-vlm
+  (0.5.0 … 0.7.8) reads `cache.offset` unconditionally; it also hard-codes `fa_idx = 2`, a linear-attention layer in
+  d3-lite. `deqio.d3_mlx_sidecar` now owns the forward pass (`DecisionForward`, `deqio-d3-mlx-forward/1`): the
+  community file supplies the loader (weights, readout head, tokenizer, answer codes) and the d3 prompt contract,
+  Deqio runs the checkpoint through mlx-vlm's standard causal path with a fresh per-question cache and the first
+  full-attention / linear-attention layer indices taken from the checkpoint's `layer_types`, refusing a model whose
+  layers do not match them. The path is named in the sidecar's `/health` and answers (`forward`) and in the MLX
+  profiles' `runtime_metadata.forward` (additive, provenance only). Opt-in runtime tests
+  (`tests/test_decision3_mlx_runtime.py`, synthetic checkpoint from `tests/_d3_mlx_synthetic.py`) reproduce the
+  community failure and prove Deqio's forward is causal and deterministic on any host with `mlx` (Linux `mlx-cpu`
+  included); they skip without `mlx_vlm` or `DEQIO_D3_MLX_SNAPSHOT`.
+
 ## [0.6.0.dev0] — 2026-10-13 (0.6.0-dev; not tagged)
 
 One patch on top of 0.5.9: the decision-provider abstraction (D11). No public route, response field or CLI command was

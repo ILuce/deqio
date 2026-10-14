@@ -238,59 +238,211 @@ def test_decision3_installer_pins_torch_first_then_the_official_requirements(tmp
     assert "--exclude-newer" in commands[0]
 
 
-def test_decision3_mlx_sidecar_serves_choice_and_noul_and_refuses_score(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from deqio import d3_mlx_sidecar
+REGULAR_LAYER_TYPES = ["linear_attention", "linear_attention", "linear_attention", "full_attention"] * 2
 
-    snapshot = tmp_path / "snapshot"
-    snapshot.mkdir()
+
+class _FakeArray:
+    """Enough of ``mlx.core.array`` for the sidecar's forward: indexing, astype, matmul, float()."""
+
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, key):
+        keys = key if isinstance(key, tuple) else (key,)
+        value = self.data
+        for k in keys:
+            value = value[k] if not isinstance(k, slice) else value[k]
+        return _FakeArray(value) if isinstance(value, list) else value
+
+    def astype(self, _dtype):
+        return self
+
+    def __matmul__(self, other):
+        return _FakeArray([sum(a * b for a, b in zip(row, other.data)) for row in self.data])
+
+
+def _fake_mlx(monkeypatch: pytest.MonkeyPatch) -> None:
+    import math
+
+    core = types.ModuleType("mlx.core")
+    core.int32, core.float32 = "int32", "float32"
+    core.array = lambda data, dtype=None: _FakeArray(data)
+    core.eval = lambda *args: None
+
+    def softmax(x, axis=-1):
+        peak = max(x.data)
+        weights = [math.exp(v - peak) for v in x.data]
+        return _FakeArray([w / sum(weights) for w in weights])
+
+    core.softmax = softmax
+    package = types.ModuleType("mlx")
+    package.core = core
+    monkeypatch.setitem(sys.modules, "mlx", package)
+    monkeypatch.setitem(sys.modules, "mlx.core", core)
+
+
+def _fake_community_runtime(snapshot: Path, layer_types: list[str], *, model_is_linear: list[bool] | None = None, hidden: int = 4):
+    """A d3_mlx.py stand-in: loader + d3 contract, and a ``system_one`` that fails like the real one does."""
     (snapshot / "d3_mlx.py").write_text("", encoding="utf-8")  # the sidecar checks the runtime file before importing
-    loaded: list[str] = []
-    calls: list[tuple] = []
+    (snapshot / "config.json").write_text(json.dumps({"model_type": "qwen3_5", "text_config": {"layer_types": layer_types}}), encoding="utf-8")
+    is_linear = model_is_linear if model_is_linear is not None else [kind == "linear_attention" for kind in layer_types]
+    record: dict = {"loaded": [], "forwards": [], "community_calls": 0}
+
+    class Tokenizer:
+        def encode(self, text, add_special_tokens=False):
+            return [len(word) for word in text.split()]
+
+    class LanguageModelModel:
+        def __init__(self):
+            self.layers = [SimpleNamespace(is_linear=flag) for flag in is_linear]
+            self.fa_idx = 2  # the community loader's hard-coded value
+            self.ssm_idx = 0
+
+        def __call__(self, ids, cache=None):
+            record["forwards"].append({"ids": ids.data, "cache": cache, "fa_idx": self.fa_idx, "ssm_idx": self.ssm_idx})
+            length = len(ids.data[0])
+            vector = [0.0] * hidden
+            vector[1] = 10.0  # the last hidden state points at answer code index 1
+            return _FakeArray([[[0.0] * hidden] * (length - 1) + [vector]])
+
+    class LanguageModel:
+        def __init__(self, model):
+            self.model = model
+            self.caches = []
+
+        def make_cache(self):
+            cache = [object() for _ in self.model.layers]
+            self.caches.append(cache)
+            return cache
 
     class D3MLX:
         def __init__(self, model_dir):
-            loaded.append(str(model_dir))
+            record["loaded"].append(str(model_dir))
+            self.lm = LanguageModelModel()
+            self.net = SimpleNamespace(language_model=LanguageModel(self.lm))
+            self.tok = Tokenizer()
+            self.readout = _FakeArray([[1.0 if row == column else 0.0 for column in range(hidden)] for row in range(255)])
+            self.codes = ["A", "B", "C", "D"] + [f"X{i}" for i in range(251)]
+            self.code_ids = list(range(255))
 
         def system_one(self, state, questions, batch_size=8):
-            calls.append((state, questions))
-            answers = {}
-            for qid, question in questions.items():
-                if question["type"] == "noul":
-                    answers[qid] = {"type": "noul", "noul": 0.75}
-                elif question["type"] == "choice":
-                    keys = list(question["criteria"])
-                    answers[qid] = {"type": "choice", "choice": keys[0], "probabilities": {k: (0.9 if k == keys[0] else 0.1 / max(len(keys) - 1, 1)) for k in keys}}
-                else:
-                    raise ValueError(f"unsupported question type {question['type']!r}")
-            return {"answers": answers}
+            record["community_calls"] += 1
+            raise AttributeError("'NoneType' object has no attribute 'offset'")
+
+    def options(question):
+        if question["type"] == "choice":
+            keys = list(question["criteria"])
+            return keys, [k if v is None else f"{k}: {v}" for k, v in question["criteria"].items()]
+        if question["type"] == "noul":
+            return ["false", "true"], ["No / false", "Yes / true"]
+        raise ValueError(f"unsupported question type {question['type']!r}")
+
+    def render(tok, state, question, codes):
+        keys, texts = options(question)
+        return f"system user {state} " + " ".join(f"{code}: {text}" for code, text in zip(codes, texts)) + " assistant"
+
+    def to_answer(question, probabilities):
+        keys, _ = options(question)
+        total = sum(probabilities)
+        values = [p / total for p in probabilities]
+        if question["type"] == "noul":
+            return {"type": "noul", "noul": values[1]}
+        best = max(range(len(values)), key=values.__getitem__)
+        return {"type": "choice", "choice": keys[best], "probabilities": dict(zip(keys, values))}
 
     fake = types.ModuleType("d3_mlx")
-    fake.D3MLX = D3MLX
-    monkeypatch.setitem(sys.modules, "d3_mlx", fake)
+    fake.D3MLX, fake.options, fake.render, fake.to_answer = D3MLX, options, render, to_answer
+    return fake, record
 
-    app = d3_mlx_sidecar.build_app(str(snapshot), "ahmedandaloes/d3-mini-mlx")
 
-    async def call(payload: dict) -> httpx.Response:
-        transport = httpx.ASGITransport(app=app)
+def _sidecar_client(app):
+    async def post(payload: dict) -> httpx.Response:
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
         async with httpx.AsyncClient(transport=transport, base_url="http://sidecar") as client:
             return await client.post("/v1/systemone", json=payload)
 
     async def health() -> httpx.Response:
-        transport = httpx.ASGITransport(app=app)
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
         async with httpx.AsyncClient(transport=transport, base_url="http://sidecar") as client:
             return await client.get("/health")
 
-    assert loaded == [] and asyncio.run(health()).json()["status"] == "process-ready"
-    response = asyncio.run(call({"state": "s", "questions": {"q": {"type": "choice", "instructions": "x", "criteria": {"a": "A", "b": None}}, "n": {"type": "noul"}}}))
-    assert response.status_code == 200, response.text
+    return post, health
+
+
+def test_decision3_mlx_sidecar_serves_choice_and_noul_and_refuses_score(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """0.6.1 fix 2: the sidecar answers through Deqio's own forward (fresh mlx-vlm cache, the checkpoint's
+    layer_types) and never through the community ``D3MLX.system_one`` loop, which raises on every mlx-vlm."""
+    from deqio import d3_mlx_sidecar
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    fake, record = _fake_community_runtime(snapshot, REGULAR_LAYER_TYPES)
+    monkeypatch.setitem(sys.modules, "d3_mlx", fake)
+    _fake_mlx(monkeypatch)
+
+    app = d3_mlx_sidecar.build_app(str(snapshot), "ahmedandaloes/d3-mini-mlx")
+    post, health = _sidecar_client(app)
+
+    first_health = asyncio.run(health()).json()
+    assert record["loaded"] == [] and first_health["status"] == "process-ready"
+    questions = {"q": {"type": "choice", "instructions": "x", "criteria": {"a": "A", "b": None}}, "n": {"type": "noul"}}
+    response = asyncio.run(post({"state": "s", "questions": questions}))
+    assert response.status_code == 200, response.text  # 0.6.1 fix 1 answered 500 here: the community loop raised
     body = json.loads(response.text)
-    assert body["answers"]["q"]["choice"] == "a" and body["answers"]["n"]["noul"] == 0.75
+    assert first_health["forward"] == d3_mlx_sidecar.D3_MLX_FORWARD == "deqio-d3-mlx-forward/1"
+    assert body["answers"]["q"]["choice"] == "b" and body["answers"]["q"]["probabilities"]["b"] > 0.99
+    assert body["answers"]["n"]["noul"] > 0.99
+    assert body["forward"] == "deqio-d3-mlx-forward/1"
     assert body["model"] == "ahmedandaloes/d3-mini-mlx" and body["latency_ms"] >= 0
-    assert loaded == [str(snapshot)] and calls[0] == ("s", {"q": {"type": "choice", "instructions": "x", "criteria": {"a": "A", "b": None}}, "n": {"type": "noul"}})
+    assert record["loaded"] == [str(snapshot)] and record["community_calls"] == 0
+    assert len(record["forwards"]) == 2
+    for forward in record["forwards"]:
+        assert forward["fa_idx"] == 3 and forward["ssm_idx"] == 0  # from layer_types, not the loader's fa_idx = 2
+        assert isinstance(forward["cache"], list) and len(forward["cache"]) == len(REGULAR_LAYER_TYPES)
+    assert record["forwards"][0]["cache"] is not record["forwards"][1]["cache"]  # a fresh cache per question
     assert asyncio.run(health()).json()["status"] == "ready"
-    refused = asyncio.run(call({"state": "s", "questions": {"q": {"type": "score", "criteria": ["a", "b"]}}}))
+    refused = asyncio.run(post({"state": "s", "questions": {"q": {"type": "score", "criteria": ["a", "b"]}}}))
     assert refused.status_code == 422 and "score" in refused.text
-    assert len(calls) == 1
+    assert len(record["forwards"]) == 2
+
+
+def test_decision3_mlx_sidecar_refuses_a_checkpoint_whose_layers_do_not_match_layer_types(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A loaded model typed differently from the checkpoint's layer_types is refused explicitly (no mistyped forward)."""
+    from deqio import d3_mlx_sidecar
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    mistyped = [True] * len(REGULAR_LAYER_TYPES)  # every layer linear, although layer_types names full attention
+    fake, record = _fake_community_runtime(snapshot, REGULAR_LAYER_TYPES, model_is_linear=mistyped)
+    monkeypatch.setitem(sys.modules, "d3_mlx", fake)
+    _fake_mlx(monkeypatch)
+    post, _health = _sidecar_client(d3_mlx_sidecar.build_app(str(snapshot), "ahmedandaloes/d3-nano-mlx"))
+
+    response = asyncio.run(post({"state": "s", "questions": {"n": {"type": "noul"}}}))
+    assert response.status_code == 500
+    assert "layer_types" in response.text and "is_linear" in response.text and "Layer 3" in response.text, response.text
+    assert record["forwards"] == [] and record["community_calls"] == 0
+
+    only_linear = tmp_path / "linear"
+    only_linear.mkdir()
+    fake2, record2 = _fake_community_runtime(only_linear, ["linear_attention"] * 4)
+    monkeypatch.setitem(sys.modules, "d3_mlx", fake2)
+    post2, _ = _sidecar_client(d3_mlx_sidecar.build_app(str(only_linear), "ahmedandaloes/d3-nano-mlx"))
+    response2 = asyncio.run(post2({"state": "s", "questions": {"n": {"type": "noul"}}}))
+    assert response2.status_code == 500 and "full_attention" in response2.text, response2.text
+    assert record2["forwards"] == []
+
+
+def test_decision3_mlx_runtime_metadata_names_the_deqio_forward() -> None:
+    from deqio.d3_mlx_sidecar import D3_MLX_FORWARD
+
+    profile = get_profile(_catalog(), "d3-lite", "mlx")
+    settings = SimpleNamespace(engine="decision3", backend="mlx", model_id="d3-lite")
+    metadata = SystemOneRuntime._decision3_runtime_metadata(settings, profile)
+    assert metadata["family"] == "decision3" and metadata["official_runtime"] is False
+    assert metadata["forward"] == D3_MLX_FORWARD == "deqio-d3-mlx-forward/1"
+    gguf = SystemOneRuntime._decision3_runtime_metadata(SimpleNamespace(engine="decision3", backend="gguf", model_id="d3-lite"), get_profile(_catalog(), "d3-lite", "gguf"))
+    assert "forward" not in gguf
 
 
 def test_decision3_native_system_one_honors_backend_capabilities() -> None:
