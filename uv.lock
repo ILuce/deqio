@@ -7,6 +7,12 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+members = [
+    "deqio",
+    "deqio-client",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -208,9 +214,10 @@ wheels = [
 
 [[package]]
 name = "deqio"
-version = "0.6.1"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
+    { name = "deqio-client" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "keyring" },
@@ -228,6 +235,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "deqio-client", editable = "clients/python" },
     { name = "fastapi", specifier = ">=0.110,<1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<1" },
     { name = "huggingface-hub", specifier = ">=1,<2" },
@@ -239,6 +247,11 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27,<1" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "deqio-client"
+version = "0.6.2"
+source = { editable = "clients/python" }
 
 [[package]]
 name = "exceptiongroup"

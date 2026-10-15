@@ -12,12 +12,30 @@ weights, readout head, tokenizer, the 255 answer codes) and the d3 prompt contra
 ``D3MLX.system_one`` calls every decoder layer as ``layer(h)`` with neither a cache nor a mask.  The
 ``qwen3_5`` full-attention layer of every released mlx-vlm (0.5.0 … 0.7.8) reads ``cache.offset``
 unconditionally, so that loop fails with ``AttributeError: 'NoneType' object has no attribute
-'offset'`` on every pin, and without a mask it would attend bidirectionally.  ``DecisionForward``
-therefore runs the checkpoint through mlx-vlm's standard path (``LanguageModel.make_cache`` + the
-model's causal forward) with the first full-attention / linear-attention layer indices taken from
-the checkpoint's ``layer_types`` (the community loader hard-codes ``fa_idx = 2``, a linear layer in
-d3-lite), and never calls ``D3MLX.system_one``.  The path is named in ``/health`` and in every
-answer (``forward``) so benchmark results stay attributable.
+'offset'`` on every pin.  ``DecisionForward`` therefore runs the layers itself with a fresh
+``LanguageModel.make_cache()`` per question, with the first full-attention / linear-attention layer
+indices taken from the checkpoint's ``layer_types`` (the community loader hard-codes ``fa_idx = 2``,
+a linear layer in d3-lite), and never calls ``D3MLX.system_one``.
+
+0.6.2 fix 3 — the forward follows the checkpoint's official decision contract.  The owner's first
+benchmark of fix 2 answered the second option / "yes" on 60/60 cases: two defects, both verified
+against the official ``vllm-sr/d3-*`` package (``d3_runtime.py``, ``decision_config.json``):
+
+* the community ``system_one`` (and fix 2, which copied the line) selects
+  ``probs[code_ids[i]]`` — the codes' *tokenizer ids* (``A`` = 32, ``B`` = 33 …) — from the
+  255-way softmax of the ``[255, hidden]`` readout, so it reads the rows of codes ``AG``/``AH``/…
+  instead of rows 0..n-1.  The official rule is: row ``i`` is option ``i``, rows ``>= n`` are masked
+  and the softmax runs over the first ``n`` rows (``probabilities = softmax(logits[:n] / temperature)``);
+* ``decision_config.json`` declares ``attention_mode: noncausal_full_attention`` for every
+  published Decision 3.0 checkpoint: the official runtime runs the full-attention layers *without*
+  a causal mask (every query sees the whole prompt) while the Gated DeltaNet layers keep their causal
+  recurrence.  Fix 2 ran mlx-vlm's causal path.  ``DecisionForward`` now reads the mode from the
+  checkpoint (``causal`` keeps the causal mask; anything else is refused), checks ``format_id``,
+  ``pooling: last`` and that the config's ``codes``/``token_ids`` equal the loader's, and applies the
+  config's ``temperature``.
+
+The path is named in ``/health`` and in every answer (``forward``, now ``deqio-d3-mlx-forward/2``:
+results of ``/1`` are not comparable) so benchmark results stay attributable.
 """
 
 from __future__ import annotations
@@ -31,9 +49,12 @@ from pathlib import Path
 from typing import Any
 
 SUPPORTED_TYPES = ("choice", "noul")
-D3_MLX_FORWARD = "deqio-d3-mlx-forward/1"
+D3_MLX_FORWARD = "deqio-d3-mlx-forward/2"
 LAYER_TYPES = ("full_attention", "linear_attention")
 REQUIRED_RUNTIME_API = ("D3MLX", "options", "render", "to_answer")
+DECISION_CONFIG = "decision_config.json"
+DECISION_FORMAT_ID = "d3-code-readout-v1"
+ATTENTION_MODES = ("causal", "noncausal_full_attention")  # the official d3_runtime.py accepts exactly these
 
 
 class DecisionForward:
@@ -59,6 +80,49 @@ class DecisionForward:
         self.layer_types = self._layer_types(snapshot_dir)
         self.lm.fa_idx = self.layer_types.index("full_attention")
         self.lm.ssm_idx = self.layer_types.index("linear_attention")
+        self.decision_config = self._decision_config(snapshot_dir)
+        self.attention_mode: str = self.decision_config["attention_mode"]
+        self.temperature: float = self.decision_config["temperature"]
+
+    def _decision_config(self, snapshot_dir: Path) -> dict[str, Any]:
+        """The checkpoint's ``decision_config.json`` (official ``d3-code-readout-v1``): attention mode, temperature,
+        and the answer codes the readout rows stand for.  Nothing here is guessed or defaulted silently; the only
+        default is the official runtime's own (``attention_mode`` absent → ``causal``, ``temperature`` absent → 1.0)."""
+        config_path = snapshot_dir / DECISION_CONFIG
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            raise RuntimeError(
+                f"Cannot read {config_path}: {error}. Decision 3.0 checkpoints ship {DECISION_CONFIG} next to d3_mlx.py; "
+                "without it the attention mode and the answer codes are unknown"
+            ) from error
+        if not isinstance(config, dict):
+            raise RuntimeError(f"{config_path} is not a JSON object")
+        format_id = config.get("format_id")
+        if format_id != DECISION_FORMAT_ID:
+            raise RuntimeError(f"{config_path} declares format_id {format_id!r}; Deqio implements {DECISION_FORMAT_ID!r} only")
+        attention_mode = config.get("attention_mode", "causal")
+        if attention_mode not in ATTENTION_MODES:
+            raise RuntimeError(
+                f"{config_path} declares attention_mode {attention_mode!r}; the Decision 3.0 forward implements "
+                f"{', '.join(ATTENTION_MODES)}"
+            )
+        pooling = config.get("pooling", "last")
+        if pooling != "last":
+            raise RuntimeError(f"{config_path} declares pooling {pooling!r}; the readout reads the last position only")
+        temperature = config.get("temperature", 1.0)
+        if not isinstance(temperature, (int, float)) or isinstance(temperature, bool) or not temperature > 0:
+            raise RuntimeError(f"{config_path} declares temperature {temperature!r}; a positive number is required")
+        codes, token_ids = list(self.loaded.codes), list(self.loaded.code_ids)
+        if config.get("codes") != codes or config.get("token_ids") != token_ids:
+            raise RuntimeError(
+                f"{config_path}: the checkpoint's answer codes differ from the ones d3_mlx.py derived from its tokenizer; "
+                "the readout rows would not match the rendered option codes"
+            )
+        readout_rows = int(self.loaded.readout.shape[0])
+        if readout_rows != len(codes):
+            raise RuntimeError(f"readout.safetensors has {readout_rows} rows but {config_path} names {len(codes)} answer codes")
+        return {"attention_mode": str(attention_mode), "temperature": float(temperature), "format_id": format_id, "pooling": pooling}
 
     def _layer_types(self, snapshot_dir: Path) -> list[str]:
         config_path = snapshot_dir / "config.json"
@@ -92,11 +156,22 @@ class DecisionForward:
         return layer_types
 
     def hidden(self, ids: list[int]):
-        """Causal forward of one token sequence: ``(1, len(ids), hidden)`` after the final norm."""
+        """Forward of one token sequence in the checkpoint's attention mode: ``(1, len(ids), hidden)`` after the final norm.
+
+        A fresh ``make_cache()`` per call (the attention layers read ``cache.offset``; the Gated DeltaNet layers keep
+        their recurrent state in it).  ``noncausal_full_attention``: the full-attention layers get no mask and attend
+        over the whole prompt, as the official ``d3_runtime.py`` hook does; ``causal``: they get the causal mask, which
+        is exactly mlx-vlm's own single-row path.  The linear-attention layers never get a mask — their scan is causal
+        by construction and the single unpadded row needs no padding mask.
+        """
         import mlx.core as mx
 
         cache = self.language_model.make_cache()
-        h = self.lm(mx.array([ids], dtype=mx.int32), cache=cache)
+        h = self.lm.embed_tokens(mx.array([ids], dtype=mx.int32))
+        attention_mask = "causal" if self.attention_mode == "causal" and len(ids) > 1 else None
+        for layer, entry in zip(self.lm.layers, cache):
+            h = layer(h, mask=None if layer.is_linear else attention_mask, cache=entry)
+        h = self.lm.norm(h)
         mx.eval(h)
         return h
 
@@ -106,13 +181,18 @@ class DecisionForward:
         answers: dict[str, Any] = {}
         for name, question in questions.items():
             keys, _texts = self.runtime.options(question)
+            count = len(keys)
+            if count > len(self.loaded.codes):
+                raise ValueError(f"question {name!r} has {count} options; the Decision 3.0 readout has {len(self.loaded.codes)} answer codes")
             text = self.runtime.render(self.loaded.tok, state, question, self.loaded.codes)
             ids = self.loaded.tok.encode(text, add_special_tokens=False)
             h = self.hidden(list(ids))
             logits = (self.loaded.readout @ h[0, -1, :].astype(mx.float32)).astype(mx.float32)
-            probabilities = mx.softmax(logits, axis=-1)
+            # Official d3-code-readout-v1 rule: option i is readout row i; rows >= n are masked out, so the
+            # softmax runs over the first n rows (never over the codes' tokenizer ids, never over all 255 rows).
+            probabilities = mx.softmax(logits[:count] / self.temperature, axis=-1)
             mx.eval(probabilities)
-            picked = [float(probabilities[index]) for index in self.loaded.code_ids[: len(keys)]]
+            picked = [float(probabilities[index]) for index in range(count)]
             answers[name] = self.runtime.to_answer(question, picked)
         return {"answers": answers, "forward": D3_MLX_FORWARD}
 
@@ -161,6 +241,7 @@ def build_app(snapshot: str, name: str):
             "backend": "mlx",
             "snapshot": str(snapshot_dir),
             "forward": D3_MLX_FORWARD,
+            "attention_mode": model.attention_mode if model is not None else None,
         }
 
     @app.post("/v1/systemone")

@@ -15,8 +15,15 @@ from __future__ import annotations
 import atexit
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
+
+# D13: the SDK lives in the workspace member clients/python; import it from this tree, not from whatever
+# ``deqio-client`` is installed in the environment, so the checkout under test is the only variable.
+_CLIENT_SRC = Path(__file__).resolve().parents[1] / "clients" / "python" / "src"
+if _CLIENT_SRC.is_dir() and str(_CLIENT_SRC) not in sys.path:
+    sys.path.insert(0, str(_CLIENT_SRC))
 
 if "DEQIO_CONFIG" not in os.environ:
     from deqio.workspace import ensure_workspace

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -11,6 +12,28 @@ from . import benchmark as benchmark_runner
 from . import model_manager
 from .config import read_config_data
 from .runtime_control import discover_server, ensure_model_management_idle
+
+
+def _openapi(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="deqio openapi",
+        description="Print (or write with --out) the OpenAPI 3.1 document of the Deqio decision routes.",
+    )
+    parser.add_argument("--out", help="write the document to this file instead of stdout")
+    args = parser.parse_args(argv)
+
+    from .openapi import render
+    from .server import app
+
+    text = render(app)
+    if args.out:
+        path = Path(args.out).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {path}")
+    else:
+        sys.stdout.write(text)
+    return 0
 
 
 def _serve(argv: list[str]) -> int:
@@ -75,22 +98,28 @@ def _print_help() -> None:
 
 Usage:
   deqio serve [--host HOST] [--port PORT]
+  deqio decide ROUTE [--url URL] --state TEXT ... [--json]
   deqio models <command> [options]
   deqio benchmark [--all | --model MODEL_ID:BACKEND]
   deqio benchmark compare [--left RUN_ID --right RUN_ID] [--json]
+  deqio openapi [--out FILE]
   deqio status
   deqio version
   deqio --version
 
 Commands:
   serve      Start the API and browser UI
+  decide     Ask a running server for one decision (noul, choice, shared, score, multi, act, soam, systemone)
   models     Install, inspect, select, and update decision models
   benchmark  Run benchmark suites or compare completed runs
+  openapi    Print the OpenAPI 3.1 document of the decision routes
   status     Show the currently selected model/runtime
   version    Show the installed Deqio version
 
 Examples:
   deqio serve
+  deqio decide noul --state "Payment latency is elevated." --question "Is checkout degraded?"
+  deqio decide choice --state "API returns 500 after deploy." --question "Classify." --option bug=Broken --option feature=New
   deqio models setup
   deqio models list --compatible
   deqio models installed
@@ -98,6 +127,7 @@ Examples:
   deqio models delete
   deqio benchmark --all
   deqio benchmark compare
+  deqio openapi --out openapi.json
   deqio status
   deqio --version
 """
@@ -122,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
         return benchmark_runner.main(rest)
     if command == "status":
         return model_manager.main(["status", *rest])
+    if command == "decide":
+        from . import decide
+
+        return decide.main(rest)
+    if command == "openapi":
+        return _openapi(rest)
 
     print(f"error: unknown command {command!r}\n", file=sys.stderr)
     _print_help()

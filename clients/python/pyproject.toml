@@ -1,0 +1,33 @@
+[project]
+name = "deqio-client"
+version = "0.6.2"
+description = "Dependency-free Python SDK for the Deqio decision server (noul, choice, shared, score, multi, act, soam, systemone)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["ai", "decision", "deqio", "sdk", "client", "system-one"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Repository = "https://github.com/ILuce/deqio"
+Issues = "https://github.com/ILuce/deqio/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deqio_client"]

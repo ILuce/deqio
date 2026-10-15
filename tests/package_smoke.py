@@ -23,6 +23,7 @@ def run(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def main() -> int:
     import deqio
+    import deqio_client
 
     metadata_requirements = requires("deqio") or []
     forbidden = [
@@ -32,6 +33,12 @@ def main() -> int:
     ]
     if forbidden:
         raise RuntimeError(f"published metadata contains direct/VCS dependencies: {forbidden}")
+    if not any(requirement.startswith("deqio-client") for requirement in metadata_requirements):
+        raise RuntimeError(f"deqio metadata does not require deqio-client: {metadata_requirements}")
+    if requires("deqio-client"):
+        raise RuntimeError(f"deqio-client must stay dependency-free: {requires('deqio-client')}")
+    if deqio_client.__version__ != deqio.__version__:
+        raise RuntimeError(f"deqio-client {deqio_client.__version__} does not match deqio {deqio.__version__}")
 
     package_root = files("deqio")
     required = [
@@ -94,6 +101,27 @@ def main() -> int:
             ["deqio", "benchmark", "compare", "--help"], cwd=work, env=env, check=True,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
+        decide_help = subprocess.run(
+            ["deqio", "decide", "--help"], cwd=work, env=env, check=True,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if "--option" not in decide_help.stdout:
+            raise RuntimeError("deqio decide --help did not execute from the installed distribution")
+        unreachable = subprocess.run(
+            ["deqio", "decide", "noul", "--url", "http://127.0.0.1:9", "--timeout", "2", "--state", "s", "--question", "Is it?"],
+            cwd=work, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if unreachable.returncode != 1 or "cannot reach" not in unreachable.stderr:
+            raise RuntimeError(f"deqio decide against a closed port must exit 1: {unreachable.returncode} {unreachable.stderr}")
+        openapi = subprocess.run(
+            ["deqio", "openapi"], cwd=work, env=env, check=True,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        document = json.loads(openapi.stdout)
+        if document.get("openapi") != "3.1.0" or "/v1/systemone" not in document.get("paths", {}):
+            raise RuntimeError("deqio openapi did not print the OpenAPI 3.1 document")
+        if document["info"]["version"] != deqio.__version__:
+            raise RuntimeError("deqio openapi reports another version than the installed package")
 
         for relative in ("config.json", "models.json", "benchmarks/basic.json", "benchmarks/pl.json"):
             if not (work / relative).is_file():

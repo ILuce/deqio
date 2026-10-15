@@ -1,11 +1,18 @@
-"""Synthetic Decision 3.0 MLX checkpoints for the opt-in runtime tests (0.6.1 fix 2).
+"""Synthetic Decision 3.0 MLX checkpoints for the opt-in runtime tests (0.6.1 fix 2, 0.6.2 fix 3).
 
 Builds a tiny ``qwen3_5`` checkpoint in the layout of the community ``ahmedandaloes/d3-*-mlx``
-snapshots (``config.json``, ``weights.safetensors``, ``readout.safetensors``, tokenizer files) with
-random weights, so the inference path of ``d3_mlx.py`` and of Deqio's sidecar can be executed on
-any host that has ``mlx`` (Apple Silicon, or the Linux ``mlx-cpu`` backend) without the real
-1.7 GB weights.  The decision semantics cannot be validated with random weights; the shape of the
-forward pass, its causality and the cache handling can.
+snapshots (``config.json``, ``decision_config.json``, ``weights.safetensors``, ``readout.safetensors``,
+tokenizer files) with random weights, so the inference path of ``d3_mlx.py`` and of Deqio's sidecar
+can be executed on any host that has ``mlx`` (Apple Silicon, or the Linux ``mlx-cpu`` backend)
+without the real 1.7 GB weights.  The decision semantics cannot be validated with random weights;
+the shape of the forward pass, its attention mode, the readout indexing and the cache handling can.
+
+``decision_config.json`` follows the official ``d3-code-readout-v1`` format (``vllm-sr/d3-*``):
+``attention_mode`` (``noncausal_full_attention`` in every published Decision 3.0 checkpoint, or
+``causal``), ``pooling: last``, ``temperature``, the 255 answer ``codes`` and their ``token_ids``.
+``zero_attention_output=True`` zeroes every full-attention ``o_proj`` so the network's output can
+only travel through the causal Gated DeltaNet layers (used to prove that the non-causal mask is
+applied to the full-attention layers alone).
 
 Importing this module requires ``mlx``, ``mlx_vlm``, ``tokenizers`` and ``transformers``.
 """
@@ -140,7 +147,57 @@ def retype_layers(net, layer_types: list[str], text_cfg) -> None:
         layer.is_linear = layer_types[i] == "linear_attention"
 
 
-def build_checkpoint(directory: Path, *, layer_types: list[str] | None = None, seed: int = 7) -> Path:
+def answer_codes(tok) -> tuple[list[str], list[int]]:
+    """The official ``answer_codes`` rule (``d3_format.py``, copied by the community ``d3_mlx.py``): the first 255
+    candidate codes that are one token and tokenize unchanged after the chat prefix, with their token ids."""
+    prefix = tok.apply_chat_template([{"role": "user", "content": "Choose an option."}], tokenize=False,
+                                     add_generation_prompt=True, enable_thinking=False)
+    prefix_ids = tok.encode(prefix, add_special_tokens=False)
+    codes: list[str] = []
+    ids: list[int] = []
+    for code in candidate_codes():
+        enc = tok.encode(code, add_special_tokens=False)
+        if len(enc) != 1 or enc[0] in ids:
+            continue
+        if tok.encode(prefix + code, add_special_tokens=False) != prefix_ids + enc:
+            continue
+        codes.append(code)
+        ids.append(enc[0])
+        if len(codes) == 255:
+            break
+    if len(codes) != 255:
+        raise ValueError("the synthetic tokenizer does not provide 255 distinct single-token answer codes")
+    return codes, ids
+
+
+def write_decision_config(directory: Path, *, attention_mode: str = "noncausal_full_attention", temperature: float = 1.0,
+                          **overrides) -> dict:
+    """Write ``decision_config.json`` in the official ``d3-code-readout-v1`` shape and return it."""
+    from transformers import AutoTokenizer
+
+    codes, token_ids = answer_codes(AutoTokenizer.from_pretrained(str(directory)))
+    config = {
+        "format_version": 1,
+        "format_id": "d3-code-readout-v1",
+        "prompt": "d3",
+        "base_model": "synthetic/qwen3_5-tiny",
+        "revision": "0" * 40,
+        "codes": codes,
+        "token_ids": token_ids,
+        "temperature": temperature,
+        "attention_mode": attention_mode,
+        "pooling": "last",
+        "max_length": None,
+        "readout_dtype": "float32",
+    }
+    config.update(overrides)
+    (directory / "decision_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return config
+
+
+def build_checkpoint(directory: Path, *, layer_types: list[str] | None = None, seed: int = 7,
+                     attention_mode: str = "noncausal_full_attention", zero_attention_output: bool = False,
+                     decision_config: bool = True) -> Path:
     """Write a complete synthetic snapshot (without ``d3_mlx.py``) into ``directory`` and return it."""
     layer_types = list(layer_types or REGULAR_LAYER_TYPES)
     directory.mkdir(parents=True, exist_ok=True)
@@ -164,8 +221,12 @@ def build_checkpoint(directory: Path, *, layer_types: list[str] | None = None, s
     weights = {}
     for name, value in tree_flatten(net.parameters()):
         weights[name] = (value + 0.02 * mx.random.normal(value.shape)).astype(mx.float32) if value.dtype != mx.float32 else value
+        if zero_attention_output and name.endswith("self_attn.o_proj.weight"):
+            weights[name] = mx.zeros(value.shape, dtype=mx.float32)
     mx.save_safetensors(str(directory / "weights.safetensors"), weights)
     hidden = config["text_config"]["hidden_size"]
     mx.save_safetensors(str(directory / "readout.safetensors"), {"weight": mx.random.normal((255, hidden))})
     build_tokenizer(directory)
+    if decision_config:
+        write_decision_config(directory, attention_mode=attention_mode)
     return directory

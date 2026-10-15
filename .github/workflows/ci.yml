@@ -46,10 +46,10 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Lint
-        run: uv run --frozen ruff check src tests
+        run: uv run --frozen ruff check src tests clients
 
       - name: Byte-compile sources and tests
-        run: uv run --frozen python -m compileall -q src tests
+        run: uv run --frozen python -m compileall -q src tests clients
 
       - name: Run test suite
         run: uv run --frozen pytest -q

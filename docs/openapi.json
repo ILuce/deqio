@@ -1,0 +1,2544 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Deqio Decision Server",
+    "description": "Deqio — decision in, probabilities out. Portable routes (`/v1/noul`, `/v1/choice`, `/v1/shared`) return the cross-model Deqio contract with Decision Provenance / Attestation (`provenance`, including `provider`, `remote_request_id` and `cost_estimate`); native routes (`/v1/score`, `/v1/multi`, `/v1/act`, `/v1/soam`, `/v1/systemone`) return the active profile's native System One reply plus a `deqio` block. `/v1/decision` is the `/v1/choice` alias. The Python SDK `deqio-client` and `deqio decide` call these routes.",
+    "version": "0.6.2"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/systemone": {
+      "post": {
+        "summary": "Raw native System One",
+        "description": "The canonical native System One contract of the active profile.",
+        "operationId": "decide_systemone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/v1/soam": {
+      "post": {
+        "summary": "SOAM — State Once, Ask Many (native)",
+        "description": "Several typed questions over one state in one native request; same execution path as `/v1/systemone`.",
+        "operationId": "decide_soam",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/v1/score": {
+      "post": {
+        "summary": "Score — ordered levels (native)",
+        "description": "Convenience wrapper that injects `type: score` into one native System One question.",
+        "operationId": "decide_score",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypedSystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/v1/multi": {
+      "post": {
+        "summary": "Multi — independent labels (native)",
+        "description": "Convenience wrapper that injects `type: multi` into one native System One question.",
+        "operationId": "decide_multi",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypedSystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/v1/act": {
+      "post": {
+        "summary": "Act — cost-aware action (native)",
+        "description": "Convenience wrapper that injects `type: act` into one native System One question.",
+        "operationId": "decide_act",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypedSystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemOneResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "decisions"
+        ]
+      }
+    },
+    "/v1/decision": {
+      "post": {
+        "summary": "Choice (compatibility alias)",
+        "operationId": "decide_decision",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type). The negotiated `Deqio-Contract` body was rejected before inference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContractErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "Alias of `/v1/choice` with the same request and response.",
+        "tags": [
+          "decisions"
+        ],
+        "parameters": [
+          {
+            "name": "Deqio-Contract",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "input-completeness-v1"
+              ]
+            },
+            "description": "Negotiates the input-completeness contract: the exact body bytes are hashed, duplicate JSON keys are rejected, explicit stable ids and an `input_policy` are required, and the response carries `input_receipt`/`usage` with attestation schema v2. Unknown versions are rejected with 422."
+          }
+        ]
+      }
+    },
+    "/v1/choice": {
+      "post": {
+        "summary": "Choice — exactly one option",
+        "operationId": "decide_choice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type). The negotiated `Deqio-Contract` body was rejected before inference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContractErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "One option out of `options` (2 … 128).",
+        "tags": [
+          "decisions"
+        ],
+        "parameters": [
+          {
+            "name": "Deqio-Contract",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "input-completeness-v1"
+              ]
+            },
+            "description": "Negotiates the input-completeness contract: the exact body bytes are hashed, duplicate JSON keys are rejected, explicit stable ids and an `input_policy` are required, and the response carries `input_receipt`/`usage` with attestation schema v2. Unknown versions are rejected with 422."
+          }
+        ]
+      }
+    },
+    "/v1/noul": {
+      "post": {
+        "summary": "Noul — yes / no",
+        "operationId": "decide_noul",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoulRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type). The negotiated `Deqio-Contract` body was rejected before inference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContractErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "One yes/no decision over the state. `decision` is `yes` or `no`.",
+        "tags": [
+          "decisions"
+        ],
+        "parameters": [
+          {
+            "name": "Deqio-Contract",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "input-completeness-v1"
+              ]
+            },
+            "description": "Negotiates the input-completeness contract: the exact body bytes are hashed, duplicate JSON keys are rejected, explicit stable ids and an `input_policy` are required, and the response carries `input_receipt`/`usage` with attestation schema v2. Unknown versions are rejected with 422."
+          }
+        ]
+      }
+    },
+    "/v1/shared": {
+      "post": {
+        "summary": "Shared — several decisions over one state",
+        "operationId": "decide_shared",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SharedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rejected before inference (blank question, missing or duplicate ids, too many options or decisions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error, or a request the active profile cannot serve (capability, context overflow, unsupported question type). The negotiated `Deqio-Contract` body was rejected before inference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HTTPErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ContractErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine answered with a protocol error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The runtime is still loading, or inference is suspended while a benchmark owns it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "description": "Up to 64 choice decisions answered over one shared state; one result per decision plus a batch-level provenance.",
+        "tags": [
+          "decisions"
+        ],
+        "parameters": [
+          {
+            "name": "Deqio-Contract",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "input-completeness-v1"
+              ]
+            },
+            "description": "Negotiates the input-completeness contract: the exact body bytes are hashed, duplicate JSON keys are rejected, explicit stable ids and an `input_policy` are required, and the response carries `input_receipt`/`usage` with attestation schema v2. Unknown versions are rejected with 422."
+          }
+        ]
+      }
+    },
+    "/v1/cache/clear": {
+      "post": {
+        "summary": "Clear Cache",
+        "operationId": "clear_cache_v1_cache_clear_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "summary": "Get Stats",
+        "operationId": "get_stats_v1_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "summary": "Get Models",
+        "operationId": "get_models_v1_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/installed": {
+      "get": {
+        "summary": "Get Installed Models",
+        "operationId": "get_installed_models_v1_models_installed_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/activate": {
+      "post": {
+        "summary": "Activate Model",
+        "operationId": "activate_model_v1_models_activate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelActivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/recent": {
+      "get": {
+        "summary": "Get Recent",
+        "operationId": "get_recent_v1_recent_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/watch": {
+      "get": {
+        "summary": "Get Watch",
+        "operationId": "get_watch_v1_watch_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/watch/settings": {
+      "get": {
+        "summary": "Get Watch Settings",
+        "operationId": "get_watch_settings_v1_watch_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Update Watch Settings",
+        "operationId": "update_watch_settings_v1_watch_settings_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/watch/{event_id}": {
+      "get": {
+        "summary": "Get Watch Event",
+        "operationId": "get_watch_event_v1_watch__event_id__get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/watch/clear": {
+      "post": {
+        "summary": "Clear Watch",
+        "operationId": "clear_watch_v1_watch_clear_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/benchmarks": {
+      "get": {
+        "summary": "Get Benchmarks",
+        "operationId": "get_benchmarks_v1_benchmarks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/benchmarks/compare": {
+      "get": {
+        "summary": "Get Benchmark Comparison",
+        "operationId": "get_benchmark_comparison_v1_benchmarks_compare_get",
+        "parameters": [
+          {
+            "name": "left",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Left"
+            }
+          },
+          {
+            "name": "right",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Right"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/benchmarks/{run_id}/summary": {
+      "get": {
+        "summary": "Get Benchmark Summary",
+        "operationId": "get_benchmark_summary_v1_benchmarks__run_id__summary_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/benchmarks/{run_id}/results": {
+      "get": {
+        "summary": "Get Benchmark Results",
+        "operationId": "get_benchmark_results_v1_benchmarks__run_id__results_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ui": {
+      "get": {
+        "summary": "Dashboard",
+        "operationId": "dashboard_ui_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ui/watch": {
+      "get": {
+        "summary": "Watch Dashboard",
+        "operationId": "watch_dashboard_ui_watch_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DecisionRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/Option"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "serial"
+            ],
+            "title": "Mode",
+            "default": "serial"
+          },
+          "input_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "question",
+          "options"
+        ],
+        "title": "DecisionRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InputPolicy": {
+        "properties": {
+          "require_complete": {
+            "type": "boolean",
+            "title": "Require Complete",
+            "default": false
+          },
+          "overflow": {
+            "type": "string",
+            "const": "reject",
+            "title": "Overflow",
+            "default": "reject"
+          }
+        },
+        "type": "object",
+        "title": "InputPolicy"
+      },
+      "ModelActivateRequest": {
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "title": "Model Id"
+          },
+          "backend": {
+            "type": "string",
+            "enum": [
+              "mlx",
+              "mps",
+              "gguf",
+              "cuda",
+              "remote"
+            ],
+            "title": "Backend"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_id",
+          "backend"
+        ],
+        "title": "ModelActivateRequest"
+      },
+      "NoulRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "serial"
+            ],
+            "title": "Mode",
+            "default": "serial"
+          },
+          "input_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "question"
+        ],
+        "title": "NoulRequest"
+      },
+      "Option": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description"
+        ],
+        "title": "Option"
+      },
+      "SharedDecision": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/Option"
+            },
+            "type": "array",
+            "title": "Options"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "options"
+        ],
+        "title": "SharedDecision"
+      },
+      "SharedRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SharedDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "input_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InputPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "decisions"
+        ],
+        "title": "SharedRequest"
+      },
+      "SystemOneRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          },
+          "questions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Questions"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "questions"
+        ],
+        "title": "SystemOneRequest"
+      },
+      "TypedSystemOneRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          },
+          "question": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Question"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "decision"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "auto"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "question"
+        ],
+        "title": "TypedSystemOneRequest",
+        "description": "Convenience request for one native SystemOne question.\n\nThe endpoint injects the decision type (score/multi/act); every other\nquestion field is forwarded unchanged to the active native runtime."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WatchSettingsRequest": {
+        "properties": {
+          "auto_clear_minutes": {
+            "type": "integer",
+            "title": "Auto Clear Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "auto_clear_minutes"
+        ],
+        "title": "WatchSettingsRequest"
+      },
+      "Attestation": {
+        "additionalProperties": false,
+        "description": "Local, unsigned response binding (Attestation v1/v2): not a cryptographic signature or a remote trust proof.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "signed": {
+            "title": "Signed",
+            "type": "boolean"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "signed",
+          "complete",
+          "sha256"
+        ],
+        "title": "Attestation",
+        "type": "object"
+      },
+      "CostEstimate": {
+        "additionalProperties": true,
+        "description": "Estimated price of one remote call from the API's reported input tokens and the published input price. Never a bill.",
+        "properties": {
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` when the API did not report usage.",
+            "title": "Amount"
+          },
+          "basis": {
+            "description": "What the amount is computed from, e.g. `input_tokens`.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "scope": {
+            "description": "`decision` for one result, `batch` for a whole `/v1/shared` call.",
+            "enum": [
+              "decision",
+              "batch"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Input Tokens"
+          },
+          "usd_per_million_input_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usd Per Million Input Tokens"
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Price Source"
+          },
+          "estimate": {
+            "default": true,
+            "title": "Estimate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "amount",
+          "basis",
+          "scope"
+        ],
+        "title": "CostEstimate",
+        "type": "object"
+      },
+      "DecisionProvenance": {
+        "additionalProperties": false,
+        "description": "Decision Provenance / Attestation for one portable result.",
+        "properties": {
+          "schema_version": {
+            "description": "1, or 2 when the `input-completeness-v1` contract was negotiated.",
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "score": {
+            "$ref": "#/components/schemas/ScoreProvenance"
+          },
+          "attestation": {
+            "$ref": "#/components/schemas/Attestation"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderDescriptor"
+          },
+          "remote_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The remote API's request id, `null` for local engines or when not reported.",
+            "title": "Remote Request Id"
+          },
+          "cost_estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` for local engines."
+          }
+        },
+        "required": [
+          "schema_version",
+          "runtime",
+          "score",
+          "attestation",
+          "provider",
+          "remote_request_id",
+          "cost_estimate"
+        ],
+        "title": "DecisionProvenance",
+        "type": "object"
+      },
+      "ProviderDescriptor": {
+        "additionalProperties": true,
+        "description": "Who answered: the local sidecar of the active profile, or the remote decision API behind a `remote` profile.",
+        "properties": {
+          "name": {
+            "description": "`local`, or the remote profile's provider (`openai-decisions`, `typesafe-jev`).",
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "local",
+              "remote"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Local engine name (local providers).",
+            "title": "Engine"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Remote model identifier typed at `deqio models setup` (remote providers).",
+            "title": "Model"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Remote endpoint URL (remote providers).",
+            "title": "Endpoint"
+          },
+          "wire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Wire mapping identifier, e.g. `openai-decisions-v1`.",
+            "title": "Wire"
+          },
+          "usd_per_million_input_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usd Per Million Input Tokens"
+          },
+          "price_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Price Source"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "ProviderDescriptor",
+        "type": "object"
+      },
+      "RuntimeIdentity": {
+        "additionalProperties": true,
+        "description": "The loaded runtime captured under the same inference lock as the score.",
+        "properties": {
+          "deqio_version": {
+            "title": "Deqio Version",
+            "type": "string"
+          },
+          "runtime_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Instance Id"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "backend": {
+            "enum": [
+              "mlx",
+              "mps",
+              "gguf",
+              "cuda",
+              "remote"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "requested_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Requested Revision"
+          },
+          "artifacts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "artifact_revisions_resolved": {
+            "default": false,
+            "title": "Artifact Revisions Resolved",
+            "type": "boolean"
+          },
+          "installation_verified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Installation Verified At"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Capabilities"
+          },
+          "max_input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Input Tokens"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source"
+          }
+        },
+        "required": [
+          "deqio_version",
+          "runtime_instance_id",
+          "engine",
+          "model_id",
+          "backend"
+        ],
+        "title": "RuntimeIdentity",
+        "type": "object"
+      },
+      "ScoreProvenance": {
+        "additionalProperties": true,
+        "description": "How the probabilities were produced: engine-reported, a Deqio transform, or a synthetic fallback — never hidden.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "synthetic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Synthetic"
+          },
+          "normalized": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Normalized"
+          },
+          "transforms": {
+            "items": {},
+            "title": "Transforms",
+            "type": "array"
+          },
+          "raw_logits_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Raw Logits Available"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Calibration"
+          }
+        },
+        "required": [
+          "kind",
+          "source"
+        ],
+        "title": "ScoreProvenance",
+        "type": "object"
+      },
+      "UsageBlock": {
+        "additionalProperties": true,
+        "properties": {
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Input Tokens"
+          },
+          "input_tokens_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Input Tokens Source"
+          }
+        },
+        "title": "UsageBlock",
+        "type": "object"
+      },
+      "DecisionResponse": {
+        "additionalProperties": false,
+        "description": "`/v1/noul`, `/v1/choice`, `/v1/decision`: one decision with probabilities over the option ids (`yes`/`no` for noul).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "probabilities": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Probabilities",
+            "type": "object"
+          },
+          "top_probability": {
+            "title": "Top Probability",
+            "type": "number"
+          },
+          "option_logits": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Raw logits when the engine exposes them, otherwise empty.",
+            "title": "Option Logits",
+            "type": "object"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Tokens"
+          },
+          "timing": {
+            "additionalProperties": true,
+            "title": "Timing",
+            "type": "object"
+          },
+          "prompt_sha256": {
+            "title": "Prompt Sha256",
+            "type": "string"
+          },
+          "probability_status": {
+            "title": "Probability Status",
+            "type": "string"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/DecisionProvenance"
+          },
+          "input_receipt": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Present only for negotiated `Deqio-Contract` requests.",
+            "title": "Input Receipt"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsageBlock"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Present only for negotiated `Deqio-Contract` requests."
+          }
+        },
+        "required": [
+          "id",
+          "decision",
+          "probabilities",
+          "top_probability",
+          "option_logits",
+          "input_tokens",
+          "timing",
+          "prompt_sha256",
+          "probability_status",
+          "provenance"
+        ],
+        "title": "DecisionResponse",
+        "type": "object"
+      },
+      "SharedProvenance": {
+        "additionalProperties": false,
+        "description": "Batch-level provenance of `/v1/shared`: the same runtime instance bound to every result.",
+        "properties": {
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SharedScoreProvenance"
+          },
+          "attestation": {
+            "$ref": "#/components/schemas/Attestation"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderDescriptor"
+          },
+          "remote_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Request Id"
+          },
+          "cost_estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Batch-scoped (`scope: batch`) when a remote API answered the whole batch."
+          }
+        },
+        "required": [
+          "schema_version",
+          "runtime",
+          "score",
+          "attestation",
+          "provider",
+          "remote_request_id",
+          "cost_estimate"
+        ],
+        "title": "SharedProvenance",
+        "type": "object"
+      },
+      "SharedScoreProvenance": {
+        "additionalProperties": true,
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "result_count": {
+            "title": "Result Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "source",
+          "result_count"
+        ],
+        "title": "SharedScoreProvenance",
+        "type": "object"
+      },
+      "SharedResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "shared_timing": {
+            "additionalProperties": true,
+            "title": "Shared Timing",
+            "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/SharedProvenance"
+          },
+          "input_receipt": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Input Receipt"
+          }
+        },
+        "required": [
+          "results",
+          "shared_timing",
+          "provenance"
+        ],
+        "title": "SharedResponse",
+        "type": "object"
+      },
+      "DeqioNativeBlock": {
+        "additionalProperties": false,
+        "description": "Deqio's block on native responses: runtime identity, timing and the provider.",
+        "properties": {
+          "provenance_schema_version": {
+            "title": "Provenance Schema Version",
+            "type": "integer"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RuntimeIdentity"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/NativeTiming"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderDescriptor"
+          },
+          "remote_request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Request Id"
+          },
+          "cost_estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "provenance_schema_version",
+          "runtime",
+          "timing",
+          "provider",
+          "remote_request_id",
+          "cost_estimate"
+        ],
+        "title": "DeqioNativeBlock",
+        "type": "object"
+      },
+      "NativeTiming": {
+        "additionalProperties": true,
+        "properties": {
+          "total_ms": {
+            "title": "Total Ms",
+            "type": "number"
+          },
+          "decisions": {
+            "title": "Decisions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_ms",
+          "decisions"
+        ],
+        "title": "NativeTiming",
+        "type": "object"
+      },
+      "SystemOneAnswer": {
+        "additionalProperties": true,
+        "description": "One native answer. `choice`/`probabilities` for choice, `noul` for noul, `score`/`legend` for score, and the\nengine's own fields for multi/act — preserved unchanged from the runtime.",
+        "properties": {
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "SystemOneAnswer",
+        "type": "object"
+      },
+      "SystemOneResponse": {
+        "additionalProperties": true,
+        "description": "`/v1/score`, `/v1/multi`, `/v1/act`, `/v1/soam`, `/v1/systemone`: the native System One reply plus `deqio`.\nUpstream fields other than `model`, `answers` and `usage` are preserved as the runtime returned them.",
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SystemOneAnswer"
+            },
+            "title": "Answers",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Usage"
+          },
+          "deqio": {
+            "$ref": "#/components/schemas/DeqioNativeBlock"
+          }
+        },
+        "required": [
+          "answers",
+          "deqio"
+        ],
+        "title": "SystemOneResponse",
+        "type": "object"
+      },
+      "HTTPErrorResponse": {
+        "additionalProperties": false,
+        "description": "Rejections raised by a handler: validation before inference, a capability the active profile lacks (422),\na runtime that is loading or suspended (503), a protocol failure (502).",
+        "properties": {
+          "detail": {
+            "description": "A message, or FastAPI's list of body-validation errors.",
+            "title": "Detail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "HTTPErrorResponse",
+        "type": "object"
+      },
+      "ContractErrorResponse": {
+        "additionalProperties": false,
+        "description": "Rejections of the negotiated `Deqio-Contract` body (unknown version, duplicate keys, missing policy).",
+        "properties": {
+          "error": {
+            "additionalProperties": true,
+            "description": "`code` and `message`, plus contract-specific fields.",
+            "title": "Error",
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ContractErrorResponse",
+        "type": "object"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "decisions",
+      "description": "The eight decision routes and the `/v1/decision` alias."
+    }
+  ]
+}

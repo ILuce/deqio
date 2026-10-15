@@ -1139,9 +1139,14 @@ def test_release_version_is_consistent() -> None:
 
     project = tomllib.loads(Path("pyproject.toml").read_text())
 
-    assert __version__ == "0.6.1"
+    assert __version__ == "0.6.2"
     assert project["project"]["version"] == __version__
     assert app.version == __version__
+    import deqio_client
+
+    assert deqio_client.__version__ == __version__  # D13: the SDK is released in lockstep
+    client_project = tomllib.loads((Path("clients") / "python" / "pyproject.toml").read_text())
+    assert client_project["project"]["version"] == __version__
 
 
 def test_catalog_contains_nimble_mlx_and_cuda_only() -> None:
@@ -4420,7 +4425,7 @@ def test_patch4_benchmark_compare_uses_responsive_cards_not_wide_metric_table() 
 
 def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    assert len(readme.splitlines()) < 700
+    assert len(readme.splitlines()) < 800  # 0.6.2: +61 lines for the SDK / `deqio decide` / OpenAPI section (D13)
     for heading in (
         "## API at a glance",
         "### Small models (up to 2.5B)",

@@ -106,6 +106,8 @@ The installed public CLI is:
 
 ```bash
 deqio serve
+deqio decide
+deqio openapi
 deqio models list
 deqio models installed
 deqio models setup
@@ -116,6 +118,9 @@ deqio status
 deqio --version
 deqio version
 ```
+
+`deqio decide ROUTE` (0.6.2) asks a running server for one decision through the SDK `deqio-client` and prints the
+answer; it never starts a server, loads a model or retries. `deqio openapi` prints the OpenAPI 3.1 document.
 
 From a source checkout, prefix these commands with `uv run`. User-facing runtime errors and help text for the installed tool should use `deqio ...`, not `uv run deqio ...`. Missing model/runtime guidance should point users to `deqio models setup`.
 
@@ -151,6 +156,15 @@ Remote decision APIs are selected through the catalog (`backend: remote`), never
 Keep project configuration under the `DEQIO_` namespace. `SemIf` remains the name of one upstream engine.
 
 ## Public HTTP API
+
+`GET /openapi.json` (`deqio openapi`, committed copy `docs/openapi.json`, kept equal by a test) is the OpenAPI 3.1
+document of the API. `deqio.openapi` adds the response contracts of the decision routes — the portable result with
+`provenance` (`provider`, `remote_request_id`, `cost_estimate`), the shared batch, the native System One reply with
+its `deqio` block, the error shapes — as documentation and validation models only: never attach them as FastAPI
+`response_model`s, the handlers keep returning the dicts they always did. A new response field is added to the
+document in the same change (the models reject undocumented top-level fields; engine-specific nested blocks stay open).
+The Python SDK `deqio-client` (`clients/python`, package `deqio_client`, no dependencies, never imports `deqio`) and
+`deqio decide` send exactly the request shapes the server models accept; both are tested against the live server.
 
 Keep these endpoints backward compatible:
 
@@ -245,7 +259,7 @@ The catalog profile is the only source of the model an engine loads: launchers t
 
 Basal 2.0 fully replaces the removed Basal 1.5 catalog profiles (0.6.1). The only Basal family is `basal-2.0-mini`, `basal-2.0-main` (upstream `Remek/basal-2.0-4.5B`), and `basal-2.0-max`. Use the official `rkinas/basal` v2.0.0 `basal-serve` runtime pinned by commit and the author's official `-MLX-8bit` and `-GGUF` (Q8_0) artifacts; the accepted backends are MLX 8-bit and GGUF Q8_0 (MPS and CUDA profiles are not catalogued for 2.0). Advanced semantics remain native SystemOne semantics internally: Choice, Noul, Score, Multi, Act, `facts: "auto"`, SOAM and option keys; Basal 2.0 ships no evidence head, so `evidence: true` is refused explicitly on every 2.0 profile. The thin convenience HTTP wrappers for native `score`, `multi`, `act`, and `soam` must inject/forward to the same `SystemOneRuntime.system_one` path and must not implement alternative scoring. Do not create standalone Facts/Evidence/OptionKey endpoints: those remain request/question modifiers. Do not softmax Multi probabilities, do not re-decide Act results, and never silently ignore unsupported Evidence. The 2.0 `tool` question type is not exposed yet. A Basal profile's `max_input_tokens` is the checkpoint's `max_position_embeddings` (mini 8192, main/max 32768), and every Basal 2.0 profile declares `basal_context_overflow: refuse` so `basal-serve` rejects a prompt longer than the model context (HTTP 422) instead of truncating the state's middle (its default, marked only in `usage.truncated`).
 
-Decision 3.0 (`decision3`, 0.6.1) replaces the removed Decision 2.0 engine. The official `vllm-sr/d3*` packages ship their own System One server (`d3_server.py`, stdlib HTTP, `POST /v1/systemone`); the CUDA launcher runs it from the pinned snapshot path (`--model <snapshot> --verify fast`), so the pinned commit is the code that runs, and `_decision3_runtime_metadata` refuses a snapshot whose `MODEL_MANIFEST.json` identity differs from the catalog's `d3_model_sha256`. GGUF profiles use the `ggml-org/vllm-<model>-GGUF` Q8_0 files through the shared llama.cpp runtime; MLX profiles are the community BF16 conversions by `ahmedandaloes` (`source: community`, choice and noul only, served by `deqio.d3_mlx_sidecar`). The community `d3_mlx.py` is used as a loader and prompt contract only (`D3MLX.__init__`, `options`, `render`, `to_answer`); its `D3MLX.system_one` loop runs the layers without a cache or mask and fails on every released mlx-vlm, so `d3_mlx_sidecar.DecisionForward` runs the forward (fresh `make_cache()` per question, causal mask, `fa_idx`/`ssm_idx` from the checkpoint's `layer_types`) and names the path (`deqio-d3-mlx-forward/1`) in `/health`, in answers and in `runtime_metadata.forward`. Never call `D3MLX.system_one`; a checkpoint whose layers do not match `layer_types` is refused. The opt-in `tests/test_decision3_mlx_runtime.py` exercises the real path on a synthetic checkpoint (`DEQIO_D3_MLX_SNAPSHOT` names a pinned snapshot for its `d3_mlx.py`). Decision 3.0 probabilities are native and preserved unchanged (no Deqio renormalization), as Decision 2.0's were.
+Decision 3.0 (`decision3`, 0.6.1) replaces the removed Decision 2.0 engine. The official `vllm-sr/d3*` packages ship their own System One server (`d3_server.py`, stdlib HTTP, `POST /v1/systemone`); the CUDA launcher runs it from the pinned snapshot path (`--model <snapshot> --verify fast`), so the pinned commit is the code that runs, and `_decision3_runtime_metadata` refuses a snapshot whose `MODEL_MANIFEST.json` identity differs from the catalog's `d3_model_sha256`. GGUF profiles use the `ggml-org/vllm-<model>-GGUF` Q8_0 files through the shared llama.cpp runtime; MLX profiles are the community BF16 conversions by `ahmedandaloes` (`source: community`, choice and noul only, served by `deqio.d3_mlx_sidecar`). The community `d3_mlx.py` is used as a loader and prompt contract only (`D3MLX.__init__`, `options`, `render`, `to_answer`); its `D3MLX.system_one` loop runs the layers without a cache or mask and fails on every released mlx-vlm, and it reads the readout softmax at the codes' tokenizer ids instead of by option position, so `d3_mlx_sidecar.DecisionForward` runs the forward itself and follows the checkpoint's official `decision_config.json` (`d3-code-readout-v1`, the contract of the official `d3_runtime.py`): a fresh `make_cache()` per question, `fa_idx`/`ssm_idx` from the checkpoint's `layer_types`, the full-attention layers with no mask when `attention_mode` is `noncausal_full_attention` (every published Decision 3.0 checkpoint; the Gated DeltaNet layers stay causal) or with the causal mask when it is `causal`, the readout read by option position (row `i` = option `i`) with the softmax over the first `n` rows divided by the config's `temperature`. The sidecar refuses a snapshot without `decision_config.json`, with another `format_id`, `pooling` or `attention_mode`, or whose `codes`/`token_ids` differ from the loader's. The path is named (`deqio-d3-mlx-forward/2`) in `/health`, in answers and in `runtime_metadata.forward`; results produced by `/1` (0.6.1 fix 2: token-id readout, causal attention) are not comparable. Never call `D3MLX.system_one`; a checkpoint whose layers do not match `layer_types` is refused. The opt-in `tests/test_decision3_mlx_runtime.py` exercises the real path on a synthetic checkpoint (`DEQIO_D3_MLX_SNAPSHOT` names a pinned snapshot for its `d3_mlx.py`). Decision 3.0 probabilities are native and preserved unchanged (no Deqio renormalization), as Decision 2.0's were.
 
 Clef Flash and Clef use pinned `mlx-community` 8-bit snapshots on MLX, retaining the BF16 joint schema head and the snapshot-bundled `clef_mlx.py` System One server with truncation disabled. They also expose audited official `ggml-org` Q8_0 GGUF profiles through llama.cpp's native SystemOne endpoint. Do not replace the decision head with a normal text-generation path, and do not alias MPS to MLX.
 
@@ -262,14 +276,14 @@ git status --short
 After changes:
 
 ```bash
-uv run ruff check src tests
-uv run python -m compileall -q src tests
+uv run ruff check src tests clients
+uv run python -m compileall -q src tests clients
 uv run pytest
 git diff --check
 git diff
 ```
 
-Record user-visible changes in `CHANGELOG.md` (Keep a Changelog). `.github/workflows/ci.yml` runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12; keep tests runnable on 3.10 (no stdlib-only-in-3.11 imports without an explicit version check).
+Record user-visible changes in `CHANGELOG.md` (Keep a Changelog). `.github/workflows/ci.yml` runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12; keep tests runnable on 3.10 (no stdlib-only-in-3.11 imports without an explicit version check). A release follows `docs/RELEASE_CHECKLIST.md`.
 
 Produce a patch with:
 
@@ -293,8 +307,8 @@ Do not use destructive Git commands unless explicitly requested.
 Minimum validation after Python changes:
 
 ```bash
-uv run ruff check src tests
-uv run python -m compileall -q src tests
+uv run ruff check src tests clients
+uv run python -m compileall -q src tests clients
 uv run pytest
 ```
 

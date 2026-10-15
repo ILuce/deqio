@@ -178,9 +178,12 @@ def test_live_server_serves_every_decision_route_over_http(tmp_path: Path) -> No
             ("/v1/soam", {"state": "s", "questions": {"q": {"type": "noul", "instructions": "Is it?"}}}),
             ("/v1/systemone", {"state": "s", "questions": {"q": {"type": "choice", **question}}}),
         ]
+        from deqio.openapi import validate_response
+
         for path, body in successes:
             status, payload = _call(base, path, body)
             assert status == 200, (path, payload)
+            validate_response(path, payload)  # D13: every documented route answers in its documented shape
             if path in ("/v1/noul", "/v1/choice", "/v1/decision"):
                 assert payload["provenance"]["runtime"]["runtime_instance_id"] == "stub-runtime-1"
                 assert payload["input_tokens"] == 21
@@ -200,6 +203,57 @@ def test_live_server_serves_every_decision_route_over_http(tmp_path: Path) -> No
         assert status == 200, payload
         assert payload["input_receipt"]["status"] == "unknown"
         assert payload["provenance"]["schema_version"] == 2
+        validate_response("/v1/noul", payload)
+
+        # D13: the SDK and `deqio decide` over the same real server, through their own urllib transport.
+        from deqio_client import DeqioClient, DeqioError
+
+        sdk = DeqioClient(base, timeout=10)
+        assert sdk.health()["runtime_instance_id"] == "stub-runtime-1"
+        sdk_calls = [
+            ("/v1/noul", lambda: sdk.noul("s", "Is it?")),
+            ("/v1/choice", lambda: sdk.choice("s", "Which?", {"a": "A", "b": "B"})),
+            ("/v1/decision", lambda: sdk.decision("s", "Which?", options)),
+            ("/v1/shared", lambda: sdk.shared("s", [{"id": "d1", "question": "A?", "options": options}, {"id": "d2", "question": "B?", "options": options}])),
+            ("/v1/score", lambda: sdk.score("s", question)),
+            ("/v1/multi", lambda: sdk.multi("s", question)),
+            ("/v1/act", lambda: sdk.act("s", question)),
+            ("/v1/soam", lambda: sdk.soam("s", {"q": {"type": "noul", "instructions": "Is it?"}})),
+            ("/v1/systemone", lambda: sdk.systemone("s", {"q": {"type": "choice", **question}})),
+        ]
+        for path, call in sdk_calls:
+            payload = call()
+            validate_response(path, payload)
+            block = payload["provenance"] if path in ("/v1/noul", "/v1/choice", "/v1/decision", "/v1/shared") else payload["deqio"]
+            assert block["runtime"]["runtime_instance_id"] == "stub-runtime-1" and block["provider"]["name"] == "local", path
+            assert block["remote_request_id"] is None and block["cost_estimate"] is None, path
+        negotiated = sdk.noul("s", "Is it?", id="n-3", input_policy={"require_complete": False}, contract=True)
+        assert negotiated["input_receipt"]["status"] == "unknown" and negotiated["provenance"]["schema_version"] == 2
+        try:
+            sdk.choice("s", "Which?", [{"id": "x", "description": "X"}, {"id": "x", "description": "X"}])
+        except DeqioError as rejected:
+            assert rejected.status == 400, rejected.detail  # the server's own rejection, surfaced unchanged
+        else:
+            raise AssertionError("duplicate option ids must be rejected by the server")
+
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        from deqio.cli import main as deqio_main
+
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = deqio_main(["decide", "choice", "--url", base, "--state", "s", "--question", "Which?",
+                               "--option", "a=A", "--option", "b=B", "--json"])
+        assert code == 0, err.getvalue()
+        decided = json.loads(out.getvalue())
+        validate_response("/v1/choice", decided)
+        assert decided["decision"] == "a" and decided["provenance"]["runtime"]["runtime_instance_id"] == "stub-runtime-1"
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = deqio_main(["decide", "soam", "--url", base, "--state", "s", "--questions-json", '{"q": {"type": "noul"}}'])
+        assert code == 0 and "q: " in out.getvalue() and "provider=local" in out.getvalue(), err.getvalue()
+        sdk_requests = len(sdk_calls) + 1 + 1 + 2  # + negotiated noul + rejected choice + two `deqio decide` calls
 
         # Rejections that reach a handler: counted once each.
         rejections = [
@@ -226,19 +280,19 @@ def test_live_server_serves_every_decision_route_over_http(tmp_path: Path) -> No
 
         status, stats = _call(base, "/v1/stats")
         assert status == 200
-        assert stats["requests"] == len(successes) + 1
-        assert stats["errors"] == len(rejections)
-        assert stats["decisions"] == len(successes) + 1 + 1  # shared carries two decisions
+        assert stats["requests"] == len(successes) + 1 + sdk_requests - 1  # the SDK's rejected choice is an error, not a request
+        assert stats["errors"] == len(rejections) + 1
+        assert stats["decisions"] == len(successes) + 1 + 1 + (sdk_requests - 1) + 1  # shared carries two decisions (twice)
 
         status, watch = _call(base, "/v1/watch?limit=100")
         assert status == 200
-        assert len(watch["events"]) == len(successes) + 1 + len(rejections)
+        assert len(watch["events"]) == len(successes) + 1 + len(rejections) + sdk_requests
         shared_rows = [row for row in watch["events"] if row["endpoint"] == "/v1/shared" and row["status_code"] == 200]
         assert shared_rows and shared_rows[0]["input_tokens"] == 120
 
         status, recent = _call(base, "/v1/recent")
         assert status == 200
-        assert len(recent) == len(successes) + 1 if isinstance(recent, list) else True
+        assert isinstance(recent, list) and len(recent) == stats["requests"]  # every successful decision request (50 max)
     finally:
         if process.poll() is None:
             # Ctrl-C equivalent: step 6 of the audit acceptance protocol. (A

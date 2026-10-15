@@ -19,6 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import __version__
+from . import openapi as openapi_contract
 from pydantic import BaseModel, ConfigDict
 
 from .backends import BackendRuntime
@@ -1476,6 +1477,9 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+# D13 (0.6.2): GET /openapi.json describes the decision routes' responses (provenance included); documentation only,
+# the handlers keep returning the dicts they always did.
+openapi_contract.install(app)
 
 
 _CONTRACT_ENDPOINTS = {"/v1/noul", "/v1/choice", "/v1/decision", "/v1/shared"}

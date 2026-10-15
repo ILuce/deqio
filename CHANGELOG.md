@@ -8,7 +8,65 @@ production audit.
 
 ## [Unreleased]
 
-## [0.6.1] — 2026-10-14 (not tagged yet)
+## [0.6.2] — 2026-10-15 (not tagged yet)
+
+D13 plus the Decision 3.0 MLX fix 3, on top of the tagged 0.6.1. Public HTTP routes and response fields are
+unchanged; nothing was removed or renamed and no response field was added. New: the OpenAPI 3.1 document of the
+decision routes, the Python SDK `deqio-client`, `deqio decide`, `deqio openapi`, the release checklist. The core
+package gains one dependency, `deqio-client` (the workspace member `clients/python`, itself dependency-free).
+
+### Added
+- `GET /openapi.json` (and `/docs`) now describes the responses of the eight decision routes and the `/v1/decision`
+  alias (`deqio.openapi`): the portable result with `provenance` (`provider`, `remote_request_id`, `cost_estimate`,
+  attestation, runtime identity, score provenance), the `/v1/shared` batch, the native System One reply with its
+  `deqio` block, the `Deqio-Contract` header on the portable routes and the 400/422/502/503 error shapes. OpenAPI
+  version `3.1.0`; tag `decisions`; `operationId`s `decide_<route>`. The models document and validate — they are
+  not FastAPI `response_model`s, so the handlers serialise exactly what they did before. `deqio openapi [--out FILE]`
+  writes the document; `docs/openapi.json` is the committed copy and a test keeps it equal to the generated one.
+- Python SDK `deqio-client` (`clients/python`, package `deqio_client`, no dependencies, never imports `deqio`;
+  version in lockstep with Deqio): `DeqioClient(base_url)` with `noul`, `choice`, `decision`, `shared`, `score`,
+  `multi`, `act`, `soam`, `systemone` and `health`; `contract=True` negotiates `input-completeness-v1`; option
+  mappings `{id: description}` are accepted next to the explicit list; every method returns the server's JSON
+  unchanged and raises `DeqioError` (status, `detail`) on a rejection or `DeqioConnectionError` when the server
+  cannot be reached — no retry, no fallback.
+- `deqio decide ROUTE [--url URL] --state TEXT|--state-file F|--state-json J ...`: one decision from the command line
+  through the SDK (`--question`/`--option ID[=DESCRIPTION]` for noul/choice/decision, `--decisions-json` for shared,
+  `--instructions`/`--criterion KEY[=DESCRIPTION]` or `--question-json` for score/multi/act, `--questions-json` for
+  soam/systemone, `--contract`/`--require-complete`, `--facts`); prints a summary with a provenance line or the
+  full response with `--json`; exit 0 decision, 1 server rejection or unreachable server, 2 usage error.
+- `docs/RELEASE_CHECKLIST.md`: the release procedure for both distributions (version bump places, gates, tag,
+  state ZIP, Trusted Publishing order). `tests/test_live_server_smoke.py` validates every decision route's response
+  against the OpenAPI models and drives the SDK and `deqio decide` over the real server; `tests/package_smoke.py`
+  checks both distributions, `deqio decide --help`, the exit code against a closed port and `deqio openapi`.
+
+### Changed
+- `pyproject.toml`: uv workspace with the member `clients/python`; core dependency `deqio-client>=0.6.2,<0.7`
+  (`uv.lock` regenerated with uv 0.12.18, no other resolution change). `ci.yml` lints and byte-compiles `clients`
+  too; `publish.yml`/`release-test.yml` build both distributions (`uv build --no-sources --all-packages`), smoke
+  each wheel and sdist pair in isolation and publish `dist/*` (`deqio-client` before `deqio`); the release tag check
+  also requires the two versions to match. The README gains the "Python SDK, `deqio decide` and the OpenAPI
+  document" section. Version 0.6.2.
+
+### Fixed (0.6.2 fix 3, 2026-10-15, after the owner's first Decision 3.0 MLX benchmark)
+- Decision 3.0 MLX: with fix 2 `d3-lite` answered the second option / "yes" on 60 of 60 `deqio-pl-60` cases
+  (decision accuracy 54.8 %, Basal 2.0 main 94.6 % on the same run) — the readout did not depend on the state. Two
+  causes, both verified against the official `vllm-sr/d3-*` package (`d3_runtime.py`, `decision_config.json`): the
+  community `d3_mlx.py` selects the option probabilities as `probs[code_ids[i]]`, the codes' *tokenizer ids* (`A` = 32,
+  `B` = 33 …), from the 255-way softmax of the `[255, hidden]` readout — rows of codes `AG`/`AH`/… instead of rows
+  0..n-1 — and fix 2 copied that line; and `decision_config.json` declares `attention_mode: noncausal_full_attention`
+  (the official runtime runs the full-attention layers without a causal mask while the Gated DeltaNet layers stay
+  causal), whereas fix 2 ran mlx-vlm's causal path. `deqio.d3_mlx_sidecar.DecisionForward` now follows the
+  checkpoint's `decision_config.json` (`d3-code-readout-v1`): readout row `i` is option `i`, softmax over the first `n`
+  rows divided by the config's `temperature`, the full-attention layers get no mask in `noncausal_full_attention` mode
+  and the causal mask in `causal` mode, the linear-attention layers never get one; a snapshot without the file, with
+  another `format_id`/`pooling`/`attention_mode`, or whose `codes`/`token_ids` differ from the loader's is refused
+  with the cause in the sidecar reply. The forward marker is `deqio-d3-mlx-forward/2` (`/health`, answers,
+  `runtime_metadata.forward`; `/1` results are not comparable). The opt-in runtime tests prove on a synthetic
+  checkpoint that an earlier position now sees later tokens through the full-attention layers only, that `causal`
+  mode equals mlx-vlm's own path, and that the probabilities equal the positional readout. No catalog, pin or
+  dependency change; the MLX profiles stay `source: community` and unverified until the owner's benchmark.
+
+## [0.6.1] — 2026-10-14
 
 Public HTTP routes and response fields are unchanged; nothing was removed or renamed. The catalog families Decision 2.0
 and Basal 1.5 and the 0.6.0.dev0 provider configuration (`provider*` in `config.json`, `DEQIO_PROVIDER*`,

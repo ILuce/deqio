@@ -1,6 +1,6 @@
 [project]
 name = "deqio"
-version = "0.6.1"
+version = "0.6.2"
 description = "Unified runtime for fast typed AI decisions across multiple decision engines"
 readme = "README.md"
 license = "MIT"
@@ -12,6 +12,7 @@ dependencies = [
     "huggingface-hub>=1,<2",
     "pydantic>=2,<3",
     "keyring>=25,<26",
+    "deqio-client>=0.6.2,<0.7",
 ]
 keywords = ["ai", "llm", "decision", "jev", "system-one", "inference", "mlx", "mps", "cuda"]
 classifiers = [
@@ -50,6 +51,14 @@ url = "https://test.pypi.org/simple/"
 publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
+# D13 (0.6.2): the dependency-free SDK `deqio-client` (clients/python) is a workspace member; `deqio decide` is built
+# on it. `uv build --no-sources --all-packages` builds both distributions; the client is published first.
+[tool.uv.workspace]
+members = ["clients/python"]
+
+[tool.uv.sources]
+deqio-client = { workspace = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -62,7 +71,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py310"
-src = ["src", "tests"]
+src = ["src", "tests", "clients/python/src"]
 
 [tool.ruff.lint]
 # Correctness-only rule set (pyflakes + pycodestyle error classes). Style and

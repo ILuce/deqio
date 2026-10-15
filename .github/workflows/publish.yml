@@ -33,6 +33,9 @@ jobs:
           from pathlib import Path
 
           version = tomllib.loads(Path("pyproject.toml").read_text())['project']['version']
+          client = tomllib.loads(Path("clients/python/pyproject.toml").read_text())['project']['version']
+          if client != version:
+              raise SystemExit(f"deqio-client version {client!r} does not match deqio version {version!r}")
           expected = f"v{version}"
           actual = os.environ["RELEASE_TAG"]
           if actual != expected:
@@ -45,14 +48,14 @@ jobs:
           uv sync --frozen --extra dev
           uv run --frozen pytest
 
-      - name: Build wheel and source distribution
-        run: uv build --no-sources
+      - name: Build wheels and source distributions (deqio-client, then deqio)
+        run: uv build --no-sources --all-packages
 
-      - name: Smoke test wheel from an isolated environment
-        run: uv run --isolated --no-project --with dist/*.whl tests/package_smoke.py
+      - name: Smoke test wheels from an isolated environment
+        run: uv run --isolated --no-project --with dist/deqio_client-*.whl --with dist/deqio-*.whl tests/package_smoke.py
 
-      - name: Smoke test source distribution from an isolated environment
-        run: uv run --isolated --no-project --with dist/*.tar.gz tests/package_smoke.py
+      - name: Smoke test source distributions from an isolated environment
+        run: uv run --isolated --no-project --with dist/deqio_client-*.tar.gz --with dist/deqio-*.tar.gz tests/package_smoke.py
 
       - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

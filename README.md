@@ -43,7 +43,9 @@ POST /v1/choice    exactly one option
 POST /v1/shared    several Deqio decisions over one shared state
 ```
 
-`POST /v1/decision` remains a compatibility alias for `/v1/choice`.
+`POST /v1/decision` remains a compatibility alias for `/v1/choice`. Every route is described by the server's OpenAPI
+3.1 document (`/openapi.json`, `/docs`, `deqio openapi`), and the Python SDK `deqio-client` / `deqio decide` call
+them (see "Python SDK, `deqio decide` and the OpenAPI document").
 
 ### Native typed endpoints
 
@@ -120,7 +122,7 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
 
 - `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile; `✓ bf16 (community)` marks the Decision 3.0 MLX conversions by `ahmedandaloes` (BF16, choice and noul only; no 8-bit MLX conversion of Decision 3.0 exists yet).
-- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`, whose own causal forward (`deqio-d3-mlx-forward/1`, named in the answer provenance) drives the community checkpoint.
+- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`, whose own forward (`deqio-d3-mlx-forward/2`, named in the answer provenance) drives the community checkpoint with the official `decision_config.json` semantics (non-causal full attention, readout by option position).
 - Basal 2.0 (official `rkinas/basal` v2.0.0 runtime; replacing Basal 1.5 in 0.6.1) is catalogued as MLX 8-bit and GGUF Q8_0 with Deqio's broadest native feature set (no evidence head). Remove an old Basal 1.5 installation with `deqio models delete` before upgrading, or delete `.model-runtimes/basal15-*` by hand afterwards.
 - Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
 - Run `deqio models list` for the full catalog and `deqio models installed` for profiles available locally.
@@ -293,13 +295,68 @@ From a source checkout:
 
 ```bash
 uv sync --frozen --extra dev
-uv run ruff check src tests
+uv run ruff check src tests clients
 uv run pytest
 uv run deqio models setup
 uv run deqio serve
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12. Release notes live in [CHANGELOG.md](CHANGELOG.md); security reporting in [SECURITY.md](SECURITY.md).
+CI (`.github/workflows/ci.yml`) runs the same lint, byte-compile and test steps on every push and pull request with Python 3.10 and 3.12. Release notes live in [CHANGELOG.md](CHANGELOG.md); the release procedure in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md); security reporting in [SECURITY.md](SECURITY.md).
+
+---
+
+# Python SDK, `deqio decide` and the OpenAPI document
+
+Three ways to call a running server besides `curl` and the browser UI (all since 0.6.2):
+
+**`deqio-client`** — a dependency-free Python SDK (`pip install deqio-client`, also installed with `deqio`) with one
+method per decision route; every method returns the server's JSON unchanged and raises `DeqioError` (status +
+`detail`) on a rejection:
+
+```python
+from deqio_client import DeqioClient, DeqioError
+
+client = DeqioClient("http://127.0.0.1:8787")
+yes_no = client.noul("Checkout works after retry, but payment latency is elevated.", "Is checkout degraded?")
+pick = client.choice("The API returns HTTP 500 after the latest deployment.", "Classify the report.",
+                     {"bug": "An existing function no longer works", "feature": "A request for new functionality"})
+batch = client.shared("Tests passed, migration passed, the security scan is still running.", [
+    {"id": "release", "question": "Can we release?", "options": {"yes": "All checks done", "no": "A mandatory check is pending"}},
+    {"id": "scan", "question": "Scan state?", "options": {"done": "Finished", "pending": "Running"}},
+])
+severity = client.score("Payment latency is elevated for some customers.",
+                        {"instructions": "Rate the operational severity.", "criteria": ["low", "medium", "high", "critical"]})
+views = client.soam("One confirmed state.", {"ok": {"type": "noul", "instructions": "Is it fine?"},
+                                            "kind": {"type": "choice", "criteria": {"a": "A", "b": "B"}}})
+print(pick["decision"], pick["probabilities"], pick["provenance"]["provider"]["name"])
+print(severity["answers"]["decision"], severity["deqio"]["cost_estimate"])
+```
+
+`client.multi`, `client.act` and `client.systemone` cover the remaining routes; `contract=True` negotiates
+`Deqio-Contract: input-completeness-v1` on the portable routes. The SDK lives in `clients/python` and is released in
+lockstep with Deqio (`deqio_client.__version__`).
+
+**`deqio decide`** — the same routes from the command line, through the SDK:
+
+```bash
+deqio decide noul   --state "Payment latency is elevated." --question "Is checkout degraded?"
+deqio decide choice --state "API returns 500 after deploy." --question "Classify." --option bug="Broken function" --option feature="New request"
+deqio decide score  --state "Payment latency is elevated." --instructions "Rate the severity." --criterion low --criterion medium --criterion high
+deqio decide multi  --state "Cracked screen, damaged box, refund asked." --criterion damage="Product damage" --criterion refund="Refund requested"
+deqio decide shared --state "Tests passed, scan pending." --decisions-json @decisions.json
+deqio decide soam   --state-file state.txt --questions-json @questions.json --json      # full JSON response
+deqio decide act    --state "..." --question-json @act_question.json --url http://127.0.0.1:8787
+```
+
+The summary prints the decision, the probabilities and a provenance line (engine, model, backend, provider, remote
+request id and cost estimate when a remote profile answered); `--json` prints the whole response. Exit code 1 means
+the server rejected the request or is not running (its `detail` is printed), 2 a usage error.
+
+**OpenAPI 3.1** — `GET /openapi.json` (rendered at `/docs`) documents every route, and the eight decision routes
+plus the `/v1/decision` alias carry their response schemas: the portable result with `provenance`
+(`provider`, `remote_request_id`, `cost_estimate`, attestation), the shared batch, and the native System One reply
+with its `deqio` block, plus the 400/422/502/503 error shapes. `deqio openapi --out openapi.json` writes the same
+document; the committed copy is [docs/openapi.json](docs/openapi.json).
 
 ---
 
@@ -674,6 +731,8 @@ deqio models install MODEL_ID --backend BACKEND   # install / update / delete
 deqio models update MODEL_ID --backend BACKEND
 deqio models delete MODEL_ID --backend BACKEND
 deqio serve                                       # server (127.0.0.1:8787)
+deqio decide ROUTE --state TEXT ...               # one decision through a running server (see "Python SDK, deqio decide")
+deqio openapi [--out FILE]                        # OpenAPI 3.1 document of the decision routes
 deqio benchmark                                   # benchmark, see "Benchmarks" for flags
 deqio benchmark compare
 ```
