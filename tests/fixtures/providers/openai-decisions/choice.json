@@ -1,8 +1,7 @@
 {
   "provider": "openai-decisions",
   "wire": "openai-decisions-v1",
-  "synthetic": true,
-  "note": "Synthetic example in the shape documented at https://developers.openai.com/api/docs/guides/decisions (read 2026-10-14); replace with `python -m deqio.provider_record --provider openai-decisions` output recorded from the real API.",
+  "synthetic": false,
   "request": {
     "url": "https://api.openai.com/v1/decisions",
     "system_one": {
@@ -49,9 +48,11 @@
     "status": 200,
     "headers": {
       "content-type": "application/json",
-      "x-request-id": "req_synthetic_0001"
+      "openai-processing-ms": "891",
+      "x-request-id": "req_f18c0e2e69534a11999dc44d37db6b52"
     },
     "json": {
+      "model": "gpt-6-luna",
       "answers": [
         {
           "type": "choice",
@@ -60,23 +61,22 @@
           "probabilities": [
             {
               "value": "bug",
-              "probability": 0.91
+              "probability": 1.0
             },
             {
               "value": "feature",
-              "probability": 0.03
+              "probability": 0.0
             },
             {
               "value": "support",
-              "probability": 0.06
+              "probability": 0.0
             }
           ],
-          "confidence": 0.91
+          "confidence": 1.0
         }
       ],
-      "model": "gpt-6-luna",
       "usage": {
-        "input_tokens": 412,
+        "input_tokens": 147,
         "input_tokens_details": {
           "cached_tokens": 0,
           "cache_write_tokens": 0
@@ -85,8 +85,9 @@
         "output_tokens_details": {
           "reasoning_tokens": 0
         },
-        "total_tokens": 412
+        "total_tokens": 147
       }
     }
-  }
+  },
+  "recorded_latency_ms": 2228.755
 }

@@ -1,8 +1,7 @@
 {
   "provider": "typesafe-jev",
   "wire": "typesafe-systemone-v1",
-  "synthetic": true,
-  "note": "Synthetic example in the shape documented at https://docs.typesafe.ai/api (read 2026-10-14); replace with `python -m deqio.provider_record --provider typesafe-jev` output recorded from the real API.",
+  "synthetic": false,
   "request": {
     "url": "https://api.typesafe.ai/v1/systemone",
     "system_one": {
@@ -46,18 +45,19 @@
         "decision": {
           "type": "choice",
           "choice": "bug",
-          "confidence": 0.91,
+          "confidence": 1.0,
           "probabilities": {
-            "bug": 0.91,
-            "feature": 0.03,
-            "support": 0.06
+            "bug": 1.0,
+            "feature": 0.0,
+            "support": 0.0
           }
         }
       },
       "usage": {
-        "input_tokens": 412,
-        "output_tokens": 0
+        "input_tokens": 351,
+        "output_tokens": 38
       }
     }
-  }
+  },
+  "recorded_latency_ms": 484.257
 }
