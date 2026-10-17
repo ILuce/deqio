@@ -1,4 +1,4 @@
-# PL Bench — Deqio 0.5 current benchmark summary
+# PL Bench — Deqio benchmark summary (0.6.2 snapshot + historical 0.5 tables)
 
 > **Suite:** `deqio-pl-60`<br>
 > **Date:** 2026-10-06<br>
@@ -9,6 +9,84 @@
 > **Execution errors:** 0 across 660 model-case records
 
 PL Bench is a dedicated Polish-native suite rather than a mechanical translation of ENG Bench. The ENG and PL suites differ in size and scenario composition, so cross-suite deltas should not be interpreted as a pure language-quality measurement.
+
+## 0.6.2 snapshot (run `20261015T120300Z`)
+
+Rendered by `deqio benchmark tables` from the run's `summary.json`/`results.jsonl` (Deqio 0.6.1 fix 2 on the same
+Apple Silicon / 16 GiB host; the listed profiles are unchanged in 0.6.2). The run also contained `basal-2.0-main`
+(MLX 8-bit, 91.7 % / 94.6 %), reported with the 3B+ group, and `d3-lite` MLX with the superseded forward `/1`,
+excluded. The 0.5 tables below stay as the reference for the groups without a 0.6.2 run yet.
+
+### Models up to 1B — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
+- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |
+| Kev 0.8B | MLX | 66.7% | 78.5% | 80.0% | 70.0% | 50.0% | 81.1% |
+| Von | MPS | 51.7% | 62.4% | 50.0% | 70.0% | 35.0% | 64.2% |
+| Laya English 421M | MLX | 38.3% | 53.8% | 45.0% | 55.0% | 15.0% | 56.6% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decider 0.8B | MPS | 330.7 ms | 395.7 ms | 4.90/s | — |
+| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |
+| Von | MPS | 72.7 ms | 131.3 ms | 19.99/s | — |
+| Laya English 421M | MLX | 36.4 ms | 100.0 ms | 30.84/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decider 0.8B | MPS | decider | — | — | official | `Mapika/decider-0.8b` | a0a01d6f |
+| Kev 0.8B | MLX | kev | — | — | official | `jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f` | bf75a6a8 |
+| Von | MPS | von | — | — | official | `von` | 498ceba3 |
+| Laya English 421M | MLX | laya | — | — | community | `aac6fef/laya-mlx` | 04767856 |
+
+### Remote decision APIs — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TypeSafe Jev (remote) | remote | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| OpenAI Decisions API (remote) | remote | 98.3% | 98.9% | 100.0% | 100.0% | 95.0% | 98.1% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| TypeSafe Jev (remote) | remote | 317.7 ms | 424.8 ms | 4.64/s | $0.0108 |
+| OpenAI Decisions API (remote) | remote | 314.1 ms | 487.7 ms | 4.56/s | $0.0156 |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| TypeSafe Jev (remote) | remote | typesafe-jev | — | — | official | `jev-latest` · `https://api.typesafe.ai/v1/systemone` | — |
+| OpenAI Decisions API (remote) | remote | openai-decisions | — | — | official | `gpt-6-luna` · `https://api.openai.com/v1/decisions` | — |
 
 ## Small models
 

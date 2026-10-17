@@ -129,9 +129,96 @@ The table below is generated from the model profiles shipped in the current Deqi
 
 ## Benchmark snapshot
 
-The snapshots below come from completed Deqio 0.5 runs on **2026-10-06** using the same local Apple Silicon macOS / 16 GiB setup. Small and large models were benchmarked in separate runs so each group could use the same machine without competing for memory.
+Every table in this section is rendered by `deqio benchmark tables` from a completed run's `summary.json` and
+`results.jsonl` (`deqio benchmark tables --run RUN_ID --models MODEL_ID:BACKEND ... --title "..."`): the numbers
+are the run's own, rows are sorted by decision accuracy, a profile that did not load is listed as such, and a
+Decision 3.0 MLX row produced by an older Deqio forward than the current `deqio-d3-mlx-forward/2` is excluded by
+name because its numbers are not comparable. Latency and throughput are machine-specific (Apple Silicon macOS, 16 GiB
+unified memory, one profile resident at a time).
 
 The ENG and PL suites differ in size, difficulty, domains, and question composition, so ENG-vs-PL deltas are descriptive differences between the listed runs — **not** a pure measurement of language quality.
+
+### 0.6.2 snapshot
+
+The 0.6.2 tables are filled in three steps as the owner's runs complete: models up to 1B (below), models from 1B to
+3B, models above 3B. Until a group has its 0.6.2 run, the historical 0.5 tables further down remain the reference
+for it. The PL run below was made on Deqio 0.6.1 fix 2 — the profiles listed did not change in 0.6.2; its `d3-lite`
+MLX row is excluded (forward `/1`), and the ENG run of this group is pending.
+
+### Models up to 1B — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
+- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |
+| Kev 0.8B | MLX | 66.7% | 78.5% | 80.0% | 70.0% | 50.0% | 81.1% |
+| Von | MPS | 51.7% | 62.4% | 50.0% | 70.0% | 35.0% | 64.2% |
+| Laya English 421M | MLX | 38.3% | 53.8% | 45.0% | 55.0% | 15.0% | 56.6% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decider 0.8B | MPS | 330.7 ms | 395.7 ms | 4.90/s | — |
+| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |
+| Von | MPS | 72.7 ms | 131.3 ms | 19.99/s | — |
+| Laya English 421M | MLX | 36.4 ms | 100.0 ms | 30.84/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decider 0.8B | MPS | decider | — | — | official | `Mapika/decider-0.8b` | a0a01d6f |
+| Kev 0.8B | MLX | kev | — | — | official | `jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f` | bf75a6a8 |
+| Von | MPS | von | — | — | official | `von` | 498ceba3 |
+| Laya English 421M | MLX | laya | — | — | community | `aac6fef/laya-mlx` | 04767856 |
+
+### Remote decision APIs — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| TypeSafe Jev (remote) | remote | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% |
+| OpenAI Decisions API (remote) | remote | 98.3% | 98.9% | 100.0% | 100.0% | 95.0% | 98.1% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| TypeSafe Jev (remote) | remote | 317.7 ms | 424.8 ms | 4.64/s | $0.0108 |
+| OpenAI Decisions API (remote) | remote | 314.1 ms | 487.7 ms | 4.56/s | $0.0156 |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| TypeSafe Jev (remote) | remote | typesafe-jev | — | — | official | `jev-latest` · `https://api.typesafe.ai/v1/systemone` | — |
+| OpenAI Decisions API (remote) | remote | openai-decisions | — | — | official | `gpt-6-luna` · `https://api.openai.com/v1/decisions` | — |
+
+### Historical 0.5 snapshot (2026-10-06)
+
+The tables below come from completed Deqio 0.5 runs on **2026-10-06** using the same local Apple Silicon macOS / 16 GiB setup. Small and large models were benchmarked in separate runs so each group could use the same machine without competing for memory. Some listed profiles (Decider 2B, Basal 1.5, SemIf) are no longer in the 0.6 catalog; the rows stay until their group has a 0.6.2 run.
 
 ### Small models (up to 2.5B)
 
@@ -671,6 +758,12 @@ deqio benchmark --all --output runs/today         # results directory (default: 
 
 `--all` and `--model` are mutually exclusive; `--config PATH` selects another workspace `config.json`. The benchmark gets exclusive inference ownership for the workspace. If `deqio serve` is running, the HTTP server and `/ui/watch` stay alive while its active model is temporarily unloaded. The previous server model is restored when the benchmark completes.
 
+`deqio benchmark tables --run RUN_ID [--models MODEL_ID[:BACKEND] ...] [--title "..."] [--json] [--out FILE]` renders
+the quality, performance and identity tables of a completed run (the ones in "Benchmark snapshot") from its
+`summary.json` and `results.jsonl`; `--summary PATH` takes a run directory outside the workspace. Rows are sorted by
+decision accuracy; remote profiles get the estimated cost per 1 000 scored decisions; profiles that did not load and
+Decision 3.0 MLX rows from a superseded Deqio forward are listed, never silently dropped or merged.
+
 Compare two completed runs:
 
 ```bash
@@ -735,6 +828,7 @@ deqio decide ROUTE --state TEXT ...               # one decision through a runni
 deqio openapi [--out FILE]                        # OpenAPI 3.1 document of the decision routes
 deqio benchmark                                   # benchmark, see "Benchmarks" for flags
 deqio benchmark compare
+deqio benchmark tables --run RUN_ID               # README / benchmarks/summary_*.md tables from a completed run
 ```
 
 ---

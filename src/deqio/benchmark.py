@@ -753,6 +753,10 @@ def main(argv: list[str] | None = None) -> int:
     values = list(argv or [])
     if values and values[0] == "compare":
         return compare_main(values[1:])
+    if values and values[0] == "tables":
+        from .benchmark_tables import main as tables_main
+
+        return tables_main(values[1:])
     parser = build_parser()
     args = parser.parse_args(values if argv is not None else None)
     try:

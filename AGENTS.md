@@ -377,6 +377,8 @@ A benchmark must have exclusive inference ownership for its workspace without ki
 
 `deqio benchmark compare` compares concrete completed run directories, not suite names. New benchmark summaries must persist canonical profile identity including at least model ID, backend, precision/quantization where relevant, significant runtime identity/version, and pinned artifact revisions. Only exact canonical-profile intersections are common. Never merge the same model across different backends or quantizations. Show only-A/only-B explicitly. Comparison output must include accuracy, decision accuracy, median/P95 latency, throughput, rank/rank shift, and per-decision-type breakdown only where both runs have the metric. Different suites may be compared factually but must not be interpreted automatically as a pure language/quality delta. JSON output is part of the agent/automation contract. Legacy summaries without canonical identity must not be silently treated as common profiles. A profile whose runtime failed to load (`load_error` in the summary) is reported as such — CLI table, UI and `load_failed_left`/`load_failed_right` in the comparison — never as `0 cases` or as a legacy profile.
 
+`deqio benchmark tables` (0.6.2, `deqio.benchmark_tables`) renders the README / `benchmarks/summary_*.md` tables of a completed run from its `summary.json` (schema 2) and `results.jsonl`: every number is the run's own, rows are sorted by decision accuracy, remote profiles carry the estimated cost per 1 000 scored decisions computed from the per-row `cost_estimate` amounts (`n/a` when any decision lacks one), profiles with `load_error` are listed under "did not load", and a Decision 3.0 MLX row whose `runtime_metadata.forward` is not the current `d3_mlx_sidecar.D3_MLX_FORWARD` is excluded by name (its numbers are not comparable). README benchmark tables are pasted from this command, never typed by hand; `--json` is an additive automation contract.
+
 ## Logging
 
 Console logging is part of the developer-facing interface.
@@ -424,6 +426,7 @@ to load, as for local profiles). Every answer names its provider in provenance (
 bill, and `amount` stays `null` when usage is not reported. The wire mapping of each API (OpenAI Decisions:
 `input` + `questions` array, `predicate` for noul, `answers` array, `refusal` is an error; TypeSafe: the native
 System One wire at `/v1/systemone`) lives in `deqio.providers` only, is corrected from recorded cassettes, never
-guessed twice, and the contract tests replay the cassettes under `tests/fixtures/providers/` (synthetic in the
-documented shapes until `python -m deqio.provider_record` replaces them). Unsupported request options and question
-types are refused with an explicit error.
+guessed twice, and the contract tests replay the cassettes under `tests/fixtures/providers/` — real exchanges
+recorded by the owner with `python -m deqio.provider_record` (0.6.2; both confirmed the documented wires), whose
+expectations the tests read from the recording itself, never from numbers typed into the test. Unsupported request
+options and question types are refused with an explicit error.

@@ -5,8 +5,10 @@ array (``name``, ``choices``/``levels``, ``predicate`` for yes/no) and answers w
 array and ``usage``.  TypeSafe (``POST https://api.typesafe.ai/v1/systemone``) is the native System One
 wire: ``state``, ``model`` and questions keyed by id, answers keyed by id, ``usage``.  ``deqio.providers``
 maps both to the System One shape the rest of Deqio consumes; the cassettes under
-``tests/fixtures/providers`` replay the documented shapes (synthetic until ``python -m
-deqio.provider_record`` replaces them with real recordings).
+``tests/fixtures/providers`` are real exchanges recorded by the owner with ``python -m deqio.provider_record``
+(2026-10-15: OpenAI ``gpt-6-luna`` HTTP 200, 147 input tokens, request id from ``x-request-id``; TypeSafe
+``jev-1.13.0`` HTTP 200, 351 input tokens) and the replay test takes every expectation from the recording itself —
+never from numbers typed into the test.
 """
 
 from __future__ import annotations
@@ -194,25 +196,51 @@ def test_typesafe_parse_response_keeps_answers_and_reports_the_versioned_model()
     assert with_header.remote_request_id == "ts_1"
 
 
+def _recorded_expectations(name: str, cassette: dict) -> dict:
+    """What the recorded reply says, read directly in the vendor's own shape (not through ``parse_response``)."""
+    reply = cassette["response"]["json"]
+    if name == "openai-decisions":
+        answer = next(item for item in reply["answers"] if item["name"] == "decision")
+        probabilities = {item["value"]: item["probability"] for item in answer["probabilities"]}
+        request_id = cassette["response"]["headers"].get("x-request-id")
+    else:
+        answer = reply["answers"]["decision"]
+        probabilities = dict(answer["probabilities"])
+        request_id = cassette["response"]["headers"].get("x-request-id")
+    return {"choice": answer["choice"], "probabilities": probabilities, "input_tokens": reply["usage"]["input_tokens"],
+            "model": reply["model"], "remote_request_id": request_id}
+
+
 @pytest.mark.parametrize("name", sorted(ENDPOINT))
 def test_recorded_cassettes_replay_through_the_provider_mapping(name: str) -> None:
     cassette = _cassette(name)
     spec = providers.provider_spec(name)
     assert cassette["provider"] == name and cassette["wire"] == spec.wire
+    assert cassette.get("synthetic") is False, "the shipped cassettes are the owner's real recordings (0.6.2)"
+    assert cassette["recorded_latency_ms"] > 0
     provider = _provider(name, model=cassette["request"]["body"]["model"])
     system_one = cassette["request"]["system_one"]
     url, _headers, body = provider.build_request(system_one["state"], system_one["questions"])
     assert url == cassette["request"]["url"] == spec.default_endpoint
-    assert body == cassette["request"]["body"]
+    assert body == cassette["request"]["body"]  # the request Deqio builds is byte-for-byte what was sent to the real API
     parsed = provider.parse_response(
         cassette["response"]["status"], cassette["response"]["headers"], cassette["response"]["json"], questions=system_one["questions"]
     )
-    assert parsed.answers["decision"]["choice"] == "bug"
-    assert parsed.answers["decision"]["probabilities"]["bug"] == pytest.approx(0.91)
-    assert parsed.input_tokens == 412
+    expected = _recorded_expectations(name, cassette)
+    assert parsed.answers["decision"]["choice"] == expected["choice"] == "bug"
+    assert parsed.answers["decision"]["probabilities"] == pytest.approx(expected["probabilities"])
+    assert set(parsed.answers["decision"]["probabilities"]) == set(system_one["questions"]["decision"]["criteria"])
+    assert abs(sum(parsed.answers["decision"]["probabilities"].values()) - 1.0) < 1e-6
+    assert parsed.input_tokens == expected["input_tokens"] > 0
+    assert parsed.model == expected["model"]
+    assert parsed.remote_request_id == expected["remote_request_id"]
+    if name == "openai-decisions":
+        assert parsed.remote_request_id.startswith("req_")  # from the x-request-id header; the body has no id
+    else:
+        assert parsed.remote_request_id is None  # TypeSafe returns no request id (documented)
     estimate = providers.cost_estimate(spec, parsed.input_tokens)
     assert estimate["currency"] == "USD" and estimate["estimate"] is True
-    assert estimate["amount"] == pytest.approx(412 * RATE[name] / 1_000_000)
+    assert estimate["amount"] == pytest.approx(expected["input_tokens"] * RATE[name] / 1_000_000)
 
 
 def test_cost_estimate_without_reported_usage_has_no_amount() -> None:

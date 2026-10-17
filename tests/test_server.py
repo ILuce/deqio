@@ -4425,15 +4425,28 @@ def test_patch4_benchmark_compare_uses_responsive_cards_not_wide_metric_table() 
 
 def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    assert len(readme.splitlines()) < 800  # 0.6.2: +61 lines for the SDK / `deqio decide` / OpenAPI section (D13)
+    assert len(readme.splitlines()) < 900  # 0.6.2: D13 section (+61) and the 0.6.2 benchmark snapshot (+87, `deqio benchmark tables`)
     for heading in (
         "## API at a glance",
+        "### 0.6.2 snapshot",
+        "### Models up to 1B — PL Bench (0.6.2 snapshot)",
+        "### Remote decision APIs — PL Bench (0.6.2 snapshot)",
+        "### Historical 0.5 snapshot (2026-10-06)",
         "### Small models (up to 2.5B)",
         "### Large models",
         "## Installation",
         "# API examples",
     ):
         assert heading in readme
+    # 0.6.2 tables: rendered by `deqio benchmark tables` from run 20261015T120300Z; the D3 MLX /1 row is excluded by name
+    assert "- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15" in readme
+    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported" in readme
+    assert "| Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |" in readme
+    assert "| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |" in readme
+    assert "| TypeSafe Jev (remote) | remote | 317.7 ms | 424.8 ms | 4.64/s | $0.0108 |" in readme
+    assert "| OpenAI Decisions API (remote) | remote | 314.1 ms | 487.7 ms | 4.56/s | $0.0156 |" in readme
+    assert "deqio benchmark tables" in readme
+    assert readme.index("### 0.6.2 snapshot") < readme.index("### Historical 0.5 snapshot (2026-10-06)") < readme.index("### Small models (up to 2.5B)")
     for path in ("/v1/noul", "/v1/choice", "/v1/shared", "/v1/score", "/v1/multi", "/v1/act", "/v1/soam", "/v1/systemone"):
         assert path in readme
     assert '`facts: "auto"`' in readme
@@ -4462,8 +4475,9 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "`openai-decisions`" in readme and "`typesafe-jev`" in readme
     assert "`laya-english`" in readme
     assert "DEQIO_PROVIDER" not in readme
-    benchmark_snapshot = readme[readme.index("## Benchmark snapshot"):readme.index("## Installation")]
-    assert "Laya English 421M" not in benchmark_snapshot
+    historical_snapshot = readme[readme.index("### Historical 0.5 snapshot (2026-10-06)"):readme.index("## Installation")]
+    assert "Laya English 421M" not in historical_snapshot  # the 0.5 runs used laya-typed; the 0.6.2 run above uses laya-english
+    assert "Laya English 421M" in readme[readme.index("### 0.6.2 snapshot"):readme.index("### Historical 0.5 snapshot (2026-10-06)")]
     assert "earlier local snapshot from **2026-10-03**" not in readme
 
     eng_summary = Path("benchmarks/summary_eng.md").read_text(encoding="utf-8")

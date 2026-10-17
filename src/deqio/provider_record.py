@@ -6,7 +6,7 @@
 The API key comes from the OS keychain entry written by ``deqio models setup`` (``--key keychain``,
 the default) or, explicitly, from the vendor's conventional environment variable (``--key env``:
 ``OPENAI_API_KEY`` / ``TYPESAFE_API_KEY``).  The key is never written.  The cassette replaces the
-synthetic fixture of the same name, and ``tests/test_providers.py`` replays it.
+fixture of the same name (real recordings since 0.6.2), and ``tests/test_providers.py`` replays it.
 """
 
 from __future__ import annotations

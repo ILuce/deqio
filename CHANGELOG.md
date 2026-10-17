@@ -39,7 +39,21 @@ package gains one dependency, `deqio-client` (the workspace member `clients/pyth
   against the OpenAPI models and drives the SDK and `deqio decide` over the real server; `tests/package_smoke.py`
   checks both distributions, `deqio decide --help`, the exit code against a closed port and `deqio openapi`.
 
+- `deqio benchmark tables --run RUN_ID | --summary PATH [--models MODEL_ID[:BACKEND] ...] [--title] [--json] [--out]`
+  (`deqio.benchmark_tables`): the README / `benchmarks/summary_*.md` tables of a completed run from its `summary.json`
+  and `results.jsonl` — quality (case and decision accuracy, per type), performance (median, P95, throughput,
+  estimated cost per 1 000 scored decisions for remote profiles) and identity (engine, runtime, precision, source,
+  model/endpoint, pinned revision); rows sorted by decision accuracy, profiles that did not load listed, Decision 3.0
+  MLX rows from a superseded Deqio forward excluded by name. README "Benchmark snapshot" now opens with the 0.6.2
+  tables (models up to 1B and the remote APIs from the owner's PL run `20261015T120300Z`; the 1–3B and 3B+ groups
+  follow) above the historical 0.5 tables; `benchmarks/summary_pl.md` carries the same 0.6.2 section.
+
 ### Changed
+- `tests/fixtures/providers/*/choice.json` are the owner's real recordings (2026-10-15, `python -m
+  deqio.provider_record`): OpenAI Decisions `gpt-6-luna` (HTTP 200, 147 input tokens, request id from the
+  `x-request-id` header) and TypeSafe `jev-1.13.0` (HTTP 200, 351 input tokens, no request id). Both equal the
+  documented wires byte for byte on the request and parse unchanged, so no mapping changed (D11c not needed); the
+  replay test now takes every expectation from the recording instead of the former synthetic values (0.91, 412).
 - `pyproject.toml`: uv workspace with the member `clients/python`; core dependency `deqio-client>=0.6.2,<0.7`
   (`uv.lock` regenerated with uv 0.12.18, no other resolution change). `ci.yml` lints and byte-compiles `clients`
   too; `publish.yml`/`release-test.yml` build both distributions (`uv build --no-sources --all-packages`), smoke
