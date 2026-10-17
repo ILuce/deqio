@@ -1,0 +1,751 @@
+{
+  "schema_version": 2,
+  "run_id": "20261017T120524Z",
+  "created_at": "2026-10-17T12:15:13.672665+00:00",
+  "suite": "basic.json",
+  "suite_name": "deqio-basic-150",
+  "suite_cases": 150,
+  "models": [
+    {
+      "model_id": "decider-4b",
+      "backend": "gguf",
+      "engine": "decider",
+      "load_ms": 2731.5161250298843,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "00d5a0f288224627acdb9e845e27046c34356842107c573a4648d521b43ddbf7",
+        "model_id": "decider-4b",
+        "backend": "gguf",
+        "engine": "decider",
+        "family": "decider",
+        "runtime": "decider-gguf-native",
+        "runtime_version": null,
+        "model": "Mapika/decider-4b-GGUF",
+        "source": "official",
+        "precision": "q8_0",
+        "quantization": {
+          "applied": "checkpoint",
+          "kind": "gguf",
+          "quantization": "Q8_0"
+        },
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-4b-GGUF",
+            "revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "role": "decider-gguf-metadata"
+          },
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-4b-GGUF",
+            "revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "role": "decider-gguf-q8_0"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "29c5abe4c09f48f3905c1ae9bc5c82f5",
+        "engine": "decider",
+        "model_id": "decider-4b",
+        "backend": "gguf",
+        "model": "Mapika/decider-4b-GGUF",
+        "requested_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-4b-GGUF",
+            "requested_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "resolved_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "role": "decider-gguf-metadata",
+            "local_dir": "models/decider-4b-GGUF"
+          },
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-4b-GGUF",
+            "requested_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "resolved_revision": "b79f09d9ba7837f1b744295ea267b55d08e958ec",
+            "role": "decider-gguf-q8_0",
+            "filename": "decider-4b-v2.1-Q8_0.gguf",
+            "local_dir": "models/decider-4b-GGUF"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:34:26.577636+00:00",
+        "installation_verified_at": "2026-10-17T12:05:17.694682+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 8192,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decider"
+        },
+        "family": "decider",
+        "runtime": "decider-gguf-native",
+        "platform": "gguf",
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "q8_0",
+        "quantization": {
+          "kind": "gguf",
+          "quantization": "Q8_0",
+          "applied": "checkpoint"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 144,
+          "case_accuracy": 0.96,
+          "assertions": 250,
+          "correct": 244,
+          "decision_accuracy": 0.976,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 412.5593133333333,
+          "median_ms": 274.25,
+          "p95_ms": 832.001,
+          "throughput_decisions_per_s": 4.039823154640698
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 50,
+          "case_accuracy": 1.0,
+          "assertions": 50,
+          "correct": 50,
+          "decision_accuracy": 1.0,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 188.68292000000002,
+          "median_ms": 186.622,
+          "p95_ms": 191.073,
+          "throughput_decisions_per_s": 5.299896779210328
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 49,
+          "case_accuracy": 0.98,
+          "assertions": 50,
+          "correct": 49,
+          "decision_accuracy": 0.98,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 277.73342,
+          "median_ms": 273.74699999999996,
+          "p95_ms": 351.502,
+          "throughput_decisions_per_s": 3.6005749686155886
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 45,
+          "case_accuracy": 0.9,
+          "assertions": 150,
+          "correct": 145,
+          "decision_accuracy": 0.9666666666666667,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 771.2616,
+          "median_ms": 821.6814999999999,
+          "p95_ms": 837.922,
+          "throughput_decisions_per_s": 3.8897307995108275
+        }
+      }
+    },
+    {
+      "model_id": "basal-2.0-main",
+      "backend": "mlx",
+      "engine": "basal",
+      "load_ms": 5387.517208000645,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "8b909b8eb022bc9316fcc20ecb4a84ad88901b3e62ea3d27925997f0eef61023",
+        "model_id": "basal-2.0-main",
+        "backend": "mlx",
+        "engine": "basal",
+        "family": "basal2.0",
+        "runtime": "basal-2.0-mlx",
+        "runtime_version": "2.0.0",
+        "model": "Remek/basal-2.0-4.5B-MLX-8bit",
+        "source": "official",
+        "precision": "mlx-8bit",
+        "quantization": {
+          "applied": "checkpoint",
+          "bits": 8,
+          "group_size": 64,
+          "kind": "mlx-affine",
+          "source_model": "Remek/basal-2.0-4.5B"
+        },
+        "runtime_metadata": {
+          "basal_backend": "mlx",
+          "basal_mode": "mlx",
+          "official_runtime": true
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Remek/basal-2.0-4.5B-MLX-8bit",
+            "revision": "77d3b723e5e2e7835dcea372045fe916097bb13c",
+            "role": "basal-model"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "6274d623dcf24b65840302c76e5ae5f1",
+        "engine": "basal",
+        "model_id": "basal-2.0-main",
+        "backend": "mlx",
+        "model": "Remek/basal-2.0-4.5B-MLX-8bit",
+        "requested_revision": "77d3b723e5e2e7835dcea372045fe916097bb13c",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Remek/basal-2.0-4.5B-MLX-8bit",
+            "requested_revision": "77d3b723e5e2e7835dcea372045fe916097bb13c",
+            "resolved_revision": "77d3b723e5e2e7835dcea372045fe916097bb13c",
+            "role": "basal-model"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:15:37.198571+00:00",
+        "installation_verified_at": "2026-10-17T11:15:37.198571+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "basal"
+        },
+        "family": "basal2.0",
+        "runtime": "basal-2.0-mlx",
+        "platform": "mlx",
+        "source": "official",
+        "capabilities": {
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi": true,
+          "act": true,
+          "facts": true,
+          "soam": true,
+          "multi_question": true,
+          "option_keys": true,
+          "structured_state": true,
+          "evidence": false,
+          "systemone": true
+        },
+        "precision": "mlx-8bit",
+        "runtime_metadata": {
+          "runtime_version": "2.0.0",
+          "basal_mode": "mlx",
+          "basal_backend": "mlx",
+          "official_runtime": true
+        },
+        "runtime_version": "2.0.0",
+        "quantization": {
+          "kind": "mlx-affine",
+          "bits": 8,
+          "group_size": 64,
+          "applied": "checkpoint",
+          "source_model": "Remek/basal-2.0-4.5B"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 140,
+          "case_accuracy": 0.9333333333333333,
+          "assertions": 250,
+          "correct": 240,
+          "decision_accuracy": 0.96,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 847.027928311533,
+          "median_ms": 673.4158545150422,
+          "p95_ms": 1386.6254589520395,
+          "throughput_decisions_per_s": 1.967664360240167
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 45,
+          "case_accuracy": 0.9,
+          "assertions": 50,
+          "correct": 45,
+          "decision_accuracy": 0.9,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 537.7909208578058,
+          "median_ms": 551.5293544740416,
+          "p95_ms": 556.3630419783294,
+          "throughput_decisions_per_s": 1.859458687783248
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 50,
+          "correct": 48,
+          "decision_accuracy": 0.96,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 722.0199825032614,
+          "median_ms": 673.4158545150422,
+          "p95_ms": 891.0474580479786,
+          "throughput_decisions_per_s": 1.3850032190701633
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 150,
+          "correct": 147,
+          "decision_accuracy": 0.98,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 1281.2728815735318,
+          "median_ms": 1304.9203329719603,
+          "p95_ms": 1532.5896660797298,
+          "throughput_decisions_per_s": 2.341421599679608
+        }
+      }
+    },
+    {
+      "model_id": "d3-mini",
+      "backend": "gguf",
+      "engine": "decision3",
+      "load_ms": 3638.0690410733223,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "46fd895886ecc2314c7fde3c0a37773630d1c959fd7417973246df3a1f0edbcd",
+        "model_id": "d3-mini",
+        "backend": "gguf",
+        "engine": "decision3",
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "runtime_version": null,
+        "model": "ggml-org/vllm-d3-mini-GGUF",
+        "source": "official",
+        "precision": "q8_0",
+        "quantization": {
+          "applied": "checkpoint",
+          "bits": 8,
+          "block_size": 32,
+          "kind": "gguf",
+          "quantization": "Q8_0"
+        },
+        "runtime_metadata": {
+          "official_runtime": false
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-mini-GGUF",
+            "revision": "c03ac9c3bdc5ae949111acb945338933f396e4d7",
+            "role": "systemone-gguf-q8_0"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "48c2acc988c94200aa349aa04fb004c2",
+        "engine": "decision3",
+        "model_id": "d3-mini",
+        "backend": "gguf",
+        "model": "ggml-org/vllm-d3-mini-GGUF",
+        "requested_revision": "c03ac9c3bdc5ae949111acb945338933f396e4d7",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-mini-GGUF",
+            "requested_revision": "c03ac9c3bdc5ae949111acb945338933f396e4d7",
+            "resolved_revision": "c03ac9c3bdc5ae949111acb945338933f396e4d7",
+            "role": "systemone-gguf-q8_0",
+            "filename": "vllm-d3-mini-Q8_0.gguf",
+            "local_dir": "models/d3-mini-GGUF"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:22:12.857529+00:00",
+        "installation_verified_at": "2026-10-17T11:22:12.857529+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decision3"
+        },
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "platform": "gguf",
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "q8_0",
+        "runtime_metadata": {
+          "family": "decision3",
+          "official_runtime": false,
+          "launcher": "llama_cpp",
+          "d3_source_sha": "0e78bbdbe3cf480ed1461c185c9e0c4fa9258011"
+        },
+        "quantization": {
+          "kind": "gguf",
+          "quantization": "Q8_0",
+          "bits": 8,
+          "block_size": 32,
+          "applied": "checkpoint"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 146,
+          "case_accuracy": 0.9733333333333334,
+          "assertions": 250,
+          "correct": 246,
+          "decision_accuracy": 0.984,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 735.4457044275478,
+          "median_ms": 476.120000006631,
+          "p95_ms": 1468.1119170272723,
+          "throughput_decisions_per_s": 2.266199471467384
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 50,
+          "correct": 48,
+          "decision_accuracy": 0.96,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 380.089334200602,
+          "median_ms": 380.5109584936872,
+          "p95_ms": 389.1702499240637,
+          "throughput_decisions_per_s": 2.630960434875618
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 50,
+          "case_accuracy": 1.0,
+          "assertions": 50,
+          "correct": 50,
+          "decision_accuracy": 1.0,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 470.5896332580596,
+          "median_ms": 476.120000006631,
+          "p95_ms": 518.9037079690024,
+          "throughput_decisions_per_s": 2.1249936873378275
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 150,
+          "correct": 148,
+          "decision_accuracy": 0.9866666666666667,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 1355.6581458239816,
+          "median_ms": 1365.8028539502993,
+          "p95_ms": 1504.8741250066087,
+          "throughput_decisions_per_s": 2.2129472752709143
+        }
+      }
+    },
+    {
+      "model_id": "jevk5-4b",
+      "backend": "gguf",
+      "engine": "jevk5",
+      "load_ms": 3491.2555830087513,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "16bd32c43410359425b8f397c0775c8e49effbd2c66219ea071638b66f998a3e",
+        "model_id": "jevk5-4b",
+        "backend": "gguf",
+        "engine": "jevk5",
+        "family": "jevk5",
+        "runtime": "jevk5-gguf-native",
+        "runtime_version": null,
+        "model": "alibiserikbay/JevK5-GGUF",
+        "source": "official",
+        "precision": "q8_0",
+        "quantization": {
+          "applied": "checkpoint",
+          "kind": "gguf",
+          "quantization": "Q8_0"
+        },
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
+            "role": "jevk5-gguf-q8_0"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "c6e40bfb9f1c4e7a98cedfa2a79dfbd9",
+        "engine": "jevk5",
+        "model_id": "jevk5-4b",
+        "backend": "gguf",
+        "model": "alibiserikbay/JevK5-GGUF",
+        "requested_revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "alibiserikbay/JevK5-GGUF",
+            "requested_revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
+            "resolved_revision": "ec67b0bfce5119a8b11a2cdb430bb43e3fa3e82a",
+            "role": "jevk5-gguf-q8_0",
+            "filename": "jevk5-4b-v0.3-Q8_0.gguf",
+            "local_dir": "models/jevk5-GGUF"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:28:56.045098+00:00",
+        "installation_verified_at": "2026-10-17T11:28:56.045098+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 8192,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "jevk5"
+        },
+        "family": "jevk5",
+        "runtime": "jevk5-gguf-native",
+        "platform": "gguf",
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "q8_0",
+        "quantization": {
+          "kind": "gguf",
+          "quantization": "Q8_0",
+          "applied": "checkpoint"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 145,
+          "case_accuracy": 0.9666666666666667,
+          "assertions": 250,
+          "correct": 245,
+          "decision_accuracy": 0.98,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 914.5677133333334,
+          "median_ms": 575.1379999999999,
+          "p95_ms": 1826.686,
+          "throughput_decisions_per_s": 1.822354586072311
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 50,
+          "correct": 48,
+          "decision_accuracy": 0.96,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 456.03904,
+          "median_ms": 444.506,
+          "p95_ms": 529.226,
+          "throughput_decisions_per_s": 2.1927947221360697
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 49,
+          "case_accuracy": 0.98,
+          "assertions": 50,
+          "correct": 49,
+          "decision_accuracy": 0.98,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 588.5269000000001,
+          "median_ms": 575.1379999999999,
+          "p95_ms": 670.511,
+          "throughput_decisions_per_s": 1.6991576765649963
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 150,
+          "correct": 148,
+          "decision_accuracy": 0.9866666666666667,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 1699.1372000000001,
+          "median_ms": 1714.3805,
+          "p95_ms": 1963.423,
+          "throughput_decisions_per_s": 1.7656019772858835
+        }
+      }
+    },
+    {
+      "model_id": "kev-4b",
+      "backend": "mlx",
+      "engine": "kev",
+      "load_ms": 70132.68637494184,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "b19d6f985777e0db01a9a350b0594d99a0906f0527c957167d9dfe913a535ab2",
+        "model_id": "kev-4b",
+        "backend": "mlx",
+        "engine": "kev",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-4b",
+            "revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "513357c5ab884873be50b5c2c872fdc4",
+        "engine": "kev",
+        "model_id": "kev-4b",
+        "backend": "mlx",
+        "model": "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+        "requested_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-4b",
+            "requested_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52",
+            "resolved_revision": "6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:14:39.891831+00:00",
+        "installation_verified_at": "2026-10-17T11:14:39.891831+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "kev"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 139,
+          "case_accuracy": 0.9266666666666666,
+          "assertions": 250,
+          "correct": 238,
+          "decision_accuracy": 0.952,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 354.6173333333333,
+          "median_ms": 311.65,
+          "p95_ms": 504.8,
+          "throughput_decisions_per_s": 4.699901866049037
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 50,
+          "case_accuracy": 1.0,
+          "assertions": 50,
+          "correct": 50,
+          "decision_accuracy": 1.0,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 260.30400000000003,
+          "median_ms": 276.6,
+          "p95_ms": 286.5,
+          "throughput_decisions_per_s": 3.841662056672199
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 50,
+          "case_accuracy": 1.0,
+          "assertions": 50,
+          "correct": 50,
+          "decision_accuracy": 1.0,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 313.372,
+          "median_ms": 311.45000000000005,
+          "p95_ms": 334.1,
+          "throughput_decisions_per_s": 3.1910955669300387
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 39,
+          "case_accuracy": 0.78,
+          "assertions": 150,
+          "correct": 138,
+          "decision_accuracy": 0.92,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 490.176,
+          "median_ms": 485.55,
+          "p95_ms": 523.0,
+          "throughput_decisions_per_s": 6.1202506854680765
+        }
+      }
+    }
+  ]
+}

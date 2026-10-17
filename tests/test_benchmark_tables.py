@@ -171,3 +171,27 @@ def test_tables_resolve_run_ids_from_the_workspace_store(tmp_path: Path, monkeyp
     assert "Kev 0.8B" in capsys.readouterr().out
     assert main(["benchmark", "tables", "--config", str(config_path), "--run", "nope"]) == 2
     assert "benchmark run not found" in capsys.readouterr().err
+
+
+def test_identity_revision_lists_each_pinned_commit_once(tmp_path: Path) -> None:
+    """0.6.2 freeze: a profile whose artifacts share one pinned commit (the Decider GGUF metadata + weights files,
+    `Mapika/decider-4b-GGUF@b79f09d9` twice) renders that commit once; distinct commits stay listed in artifact order."""
+    from deqio.benchmark_tables import build_tables, load_run, render_markdown
+
+    same = "b79f09d9ba7837f1b744295ea267b55d08e958ec"
+    models = [
+        _model("decider-4b", "gguf", decision_accuracy=0.976, case_accuracy=0.96, median=274.2, p95=832.0, throughput=4.04,
+               identity={"artifacts": [{"source": "huggingface", "repo_id": "Mapika/decider-4b-GGUF", "revision": same, "role": "decider-gguf-metadata"},
+                                       {"source": "huggingface", "repo_id": "Mapika/decider-4b-GGUF", "revision": same, "role": "decider-gguf-q8_0"}]}),
+        _model("kev-4b", "mlx", decision_accuracy=0.952, case_accuracy=0.927, median=311.6, p95=504.8, throughput=4.7,
+               identity={"artifacts": [{"source": "huggingface", "repo_id": "org/a", "revision": "aaaaaaaa" * 5},
+                                       {"source": "huggingface", "repo_id": "org/b", "revision": "bbbbbbbb" * 5},
+                                       {"source": "huggingface", "repo_id": "org/a", "revision": "aaaaaaaa" * 5}]}),
+    ]
+    tables = build_tables(load_run(_write_run(tmp_path / "run", models)))
+    by_profile = {row["profile"]: row for row in tables["rows"]}
+    assert by_profile["decider-4b:gguf"]["revision"] == "b79f09d9"
+    assert by_profile["kev-4b:mlx"]["revision"] == "aaaaaaaa, bbbbbbbb"
+    text = render_markdown(tables)
+    assert "| `org/decider-4b` | b79f09d9 |" in text and "b79f09d9, b79f09d9" not in text
+    assert "| `org/kev-4b` | aaaaaaaa, bbbbbbbb |" in text

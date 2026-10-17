@@ -108,7 +108,12 @@ def _cost_per_1k(model: dict[str, Any], results: list[dict[str, Any]]) -> dict[s
 def _revision(model: dict[str, Any]) -> str | None:
     identity = model.get("profile_identity") if isinstance(model.get("profile_identity"), dict) else {}
     artifacts = identity.get("artifacts") if isinstance(identity.get("artifacts"), list) else []
-    revisions = [str(item.get("revision"))[:8] for item in artifacts if isinstance(item, dict) and item.get("revision")]
+    revisions: list[str] = []
+    for item in artifacts:
+        if isinstance(item, dict) and item.get("revision"):
+            short = str(item["revision"])[:8]
+            if short not in revisions:  # 0.6.2 freeze: several artifacts of one profile usually pin the same commit
+                revisions.append(short)
     return ", ".join(revisions) if revisions else None
 
 

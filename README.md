@@ -87,41 +87,43 @@ Basal 2.0 currently exposes the broadest native feature set in Deqio: Choice, No
 
 ## Supported models and backends
 
-The table below is generated from the model profiles shipped in the current Deqio 0.6 catalog. A check mark means Deqio has a profile for that model/backend combination; actual availability still depends on the operating system, accelerator, memory, and upstream runtime requirements. Remote decision APIs (`openai-decisions`, `typesafe-jev`, backend `remote`) are described in "Remote decision APIs".
+The table below lists every model profile shipped in the Deqio 0.6.2 catalog (31 profiles). A check mark means Deqio has a profile for that model/backend combination; actual availability still depends on the operating system, accelerator, memory, and upstream runtime requirements. The `Remote` column marks the two remote decision APIs on the `remote` backend — `typesafe-jev` (TypeSafe Jev, default model `jev-latest`) and `openai-decisions` (OpenAI Decisions API, default model `gpt-6-luna`; the model identifier is typed at setup) — described in "Remote decision APIs".
 
-| Model | Model ID | MLX | MPS | CUDA | GGUF |
-| --- | --- | :---: | :---: | :---: | :---: |
-| SemIf / Qwen3.5 4B | `semif-qwen3.5-4b` | ✓ 8-bit | ✓ | ✓ | — |
-| Decision 3.0 d3 26B | `d3` | — | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-flash 8B | `d3-flash` | — | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-mini 4.5B | `d3-mini` | — | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-nano 2.2B | `d3-nano` | — | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-lite 0.85B | `d3-lite` | — | — | ✓ | ✓ Q8_0 |
-| Kev 0.8B | `kev-0.8b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
-| Kev 4B | `kev-4b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
-| Kev 9B | `kev-9b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
-| Kev 27B | `kev-27b` | — | — | ✓ | — |
-| JevK5 4B | `jevk5-4b` | — | — | ✓ | ✓ Q8_0 |
-| JevK5 9B | `jevk5-9b` | — | — | ✓ | ✓ Q8_0 |
-| Open-Jev 2B | `open-jev-2b` | — | — | ✓ | — |
-| Open-Jev 9B | `open-jev-9b` | — | — | ✓ | — |
-| Open-Jev 27B v1.1 | `open-jev-27b-v1.1` | — | — | ✓ | — |
-| CLM 8B | `clm-8b` | — | — | ✓ | — |
-| Basal 2.0 Mini — 1.5B | `basal-2.0-mini` | ✓ 8-bit | — | — | ✓ Q8_0 |
-| Basal 2.0 — 4.5B | `basal-2.0-main` | ✓ 8-bit | — | — | ✓ Q8_0 |
-| Basal 2.0 Max — 11B | `basal-2.0-max` | ✓ 8-bit | — | — | ✓ Q8_0 |
-| Clef Flash 9B | `clef-flash` | ✓ 8-bit | — | — | ✓ Q8_0 |
-| Clef 27B | `clef` | ✓ 8-bit | — | — | ✓ Q8_0 |
-| Decider 0.8B | `decider-0.8b` | — | ✓ | ✓ | — |
-| Decider 2B | `decider-2b` | — | ✓ | ✓ | ✓ Q8_0 |
-| Decider 4B | `decider-4b` | — | ✓ | ✓ | ✓ Q8_0 |
-| Laya English 421M | `laya-english` | ✓ | ✓ | ✓ | ✓ Q8_0 |
-| Laya Multilingual 322M | `laya-multilingual` | ✓ | ✓ | ✓ | — |
-| Laya Typed Decisions 421M | `laya-typed-decisions` | ✓ | ✓ | ✓ | — |
-| Von | `von` | — | ✓ | ✓ | — |
-| Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
+| Model | Model ID | MLX | MPS | CUDA | GGUF | Remote |
+| --- | --- | :---: | :---: | :---: | :---: | :---: |
+| SemIf / Qwen3.5 4B | `semif-qwen3.5-4b` | ✓ 8-bit | ✓ | ✓ | — | — |
+| Decision 3.0 d3 26B | `d3` | — | — | ✓ | ✓ Q8_0 | — |
+| Decision 3.0 d3-flash 8B | `d3-flash` | — | — | ✓ | ✓ Q8_0 | — |
+| Decision 3.0 d3-mini 4.5B | `d3-mini` | — | — | ✓ | ✓ Q8_0 | — |
+| Decision 3.0 d3-nano 2.2B | `d3-nano` | — | — | ✓ | ✓ Q8_0 | — |
+| Decision 3.0 d3-lite 0.85B | `d3-lite` | — | — | ✓ | ✓ Q8_0 | — |
+| Kev 0.8B | `kev-0.8b` | ✓ | ✓ | ✓ | ✓ Q8_0 | — |
+| Kev 4B | `kev-4b` | ✓ | ✓ | ✓ | ✓ Q8_0 | — |
+| Kev 9B | `kev-9b` | ✓ | ✓ | ✓ | ✓ Q8_0 | — |
+| Kev 27B | `kev-27b` | — | — | ✓ | — | — |
+| JevK5 4B | `jevk5-4b` | — | — | ✓ | ✓ Q8_0 | — |
+| JevK5 9B | `jevk5-9b` | — | — | ✓ | ✓ Q8_0 | — |
+| Open-Jev 2B | `open-jev-2b` | — | — | ✓ | — | — |
+| Open-Jev 9B | `open-jev-9b` | — | — | ✓ | — | — |
+| Open-Jev 27B v1.1 | `open-jev-27b-v1.1` | — | — | ✓ | — | — |
+| CLM 8B | `clm-8b` | — | — | ✓ | — | — |
+| Basal 2.0 Mini — 1.5B | `basal-2.0-mini` | ✓ 8-bit | — | — | ✓ Q8_0 | — |
+| Basal 2.0 — 4.5B | `basal-2.0-main` | ✓ 8-bit | — | — | ✓ Q8_0 | — |
+| Basal 2.0 Max — 11B | `basal-2.0-max` | ✓ 8-bit | — | — | ✓ Q8_0 | — |
+| Clef Flash 9B | `clef-flash` | ✓ 8-bit | — | — | ✓ Q8_0 | — |
+| Clef 27B | `clef` | ✓ 8-bit | — | — | ✓ Q8_0 | — |
+| Decider 0.8B | `decider-0.8b` | — | ✓ | ✓ | — | — |
+| Decider 2B | `decider-2b` | — | ✓ | ✓ | ✓ Q8_0 | — |
+| Decider 4B | `decider-4b` | — | ✓ | ✓ | ✓ Q8_0 | — |
+| Laya English 421M | `laya-english` | ✓ | ✓ | ✓ | ✓ Q8_0 | — |
+| Laya Multilingual 322M | `laya-multilingual` | ✓ | ✓ | ✓ | — | — |
+| Laya Typed Decisions 421M | `laya-typed-decisions` | ✓ | ✓ | ✓ | — | — |
+| Von | `von` | — | ✓ | ✓ | — | — |
+| Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — | — |
+| TypeSafe Jev (remote) | `typesafe-jev` | — | — | — | — | ✓ |
+| OpenAI Decisions API (remote) | `openai-decisions` | — | — | — | — | ✓ |
 
-- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile.
+- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile; `✓` under `Remote` marks a remote decision API (no runtime directory, no weights; the API key lives in the OS keychain; choice, noul and score over HTTPS through `deqio.remote_runtime`).
 - Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA and the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408). On Apple Silicon use the GGUF profiles: the community BF16 MLX conversions were catalogued in 0.6.1 and removed in 0.6.2 after the owner's benchmark (d3-lite MLX 41.9 % / 56.8 % decision accuracy against 90.3 % / 90.8 % for the same model on GGUF); no MLX path for Decision 3.0 is offered until a conversion reproduces the official readout.
 - Basal 2.0 (official `rkinas/basal` v2.0.0 runtime; replacing Basal 1.5 in 0.6.1) is catalogued as MLX 8-bit and GGUF Q8_0 with Deqio's broadest native feature set (no evidence head). Remove an old Basal 1.5 installation with `deqio models delete` before upgrading, or delete `.model-runtimes/basal15-*` by hand afterwards.
 - Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
@@ -130,26 +132,30 @@ The table below is generated from the model profiles shipped in the current Deqi
 ## Benchmark snapshot
 
 Every table in this section is rendered by `deqio benchmark tables` from a completed run's `summary.json` and
-`results.jsonl` (`deqio benchmark tables --run RUN_ID --models MODEL_ID:BACKEND ... --title "..."`): the numbers
-are the run's own, rows are sorted by decision accuracy, a profile that did not load is listed as such, and a row of a
-profile removed from the catalog (the Decision 3.0 MLX conversions, 0.6.2) is excluded by name. Latency and throughput
-are machine-specific (Apple Silicon macOS, 16 GiB unified memory, one profile resident at a time).
+`results.jsonl` (`deqio benchmark tables --summary runs/small-pl --title "..."`): the numbers are the run's own, rows
+are sorted by decision accuracy, a profile that did not load is listed as such, and a row of a profile removed from
+the catalog (the Decision 3.0 MLX conversions, 0.6.2) is excluded by name. The summaries of the six local runs are
+committed under `runs/<group>-<lang>/summary.json` (the suite path reduced to its file name; `results.jsonl` stays
+git-ignored) and `tests/test_benchmark_snapshot.py` keeps the tables below equal to the generator's output over
+them. Latency and throughput are machine-specific (Apple Silicon macOS, 16 GiB unified memory, one profile resident
+at a time).
 
 The ENG and PL suites differ in size, difficulty, domains, and question composition, so ENG-vs-PL deltas are descriptive differences between the listed runs — **not** a pure measurement of language quality.
 
 ### 0.6.2 snapshot
 
-The 0.6.2 tables are filled in three steps as the owner's runs complete: models up to 1B (below), models from 1B to
-3B, models above 3B. Until a group has its 0.6.2 run, the historical 0.5 tables further down remain the reference
-for it. The PL run below was made on Deqio 0.6.1 fix 2 — the profiles listed did not change in 0.6.2; its `d3-lite`
-MLX row is excluded (the MLX profiles were removed in 0.6.2), and the ENG run of this group is pending.
+Three groups, each measured on PL Bench and ENG Bench with Deqio 0.6.2 on 2026-10-17, no runtime errors in any run:
+models up to 1B (`d3-lite` GGUF, Decider 0.8B, Kev 0.8B, Von, Laya English), models from 1B to 3B (`d3-nano` GGUF,
+Decider 2B, Basal 2.0 Mini) and models above 3B (`d3-mini` GGUF, JevK5 4B, Decider 4B, Kev 4B, Basal 2.0). The remote
+decision APIs were measured on PL Bench on 2026-10-15 with Deqio 0.6.1 (both remote profiles are unchanged in 0.6.2;
+that run's summary is not committed). The historical 0.5 tables (2026-10-06) moved to `benchmarks/summary_eng.md` and
+`benchmarks/summary_pl.md`, below the same 0.6.2 tables.
 
 ### Models up to 1B — PL Bench (0.6.2 snapshot)
 
 #### Run
 
-- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
-- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported
+- `20261017T105442Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.2 · 2026-10-17
 - runtime errors across the listed profiles: 0
 
 #### Quality
@@ -158,6 +164,7 @@ MLX row is excluded (the MLX profiles were removed in 0.6.2), and the ENG run of
 
 | Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
 | --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | 85.0% | 90.3% | 95.0% | 80.0% | 80.0% | 92.5% |
 | Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |
 | Kev 0.8B | MLX | 66.7% | 78.5% | 80.0% | 70.0% | 50.0% | 81.1% |
 | Von | MPS | 51.7% | 62.4% | 50.0% | 70.0% | 35.0% | 64.2% |
@@ -169,19 +176,214 @@ Median and P95 are per-request latencies; throughput is scored decisions per sec
 
 | Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
 | --- | :---: | ---: | ---: | ---: | ---: |
-| Decider 0.8B | MPS | 330.7 ms | 395.7 ms | 4.90/s | — |
-| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |
-| Von | MPS | 72.7 ms | 131.3 ms | 19.99/s | — |
-| Laya English 421M | MLX | 36.4 ms | 100.0 ms | 30.84/s | — |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | 83.2 ms | 244.3 ms | 12.35/s | — |
+| Decider 0.8B | MPS | 299.8 ms | 390.0 ms | 5.13/s | — |
+| Kev 0.8B | MLX | 60.2 ms | 94.1 ms | 23.07/s | — |
+| Von | MPS | 75.3 ms | 140.0 ms | 19.44/s | — |
+| Laya English 421M | MLX | 39.5 ms | 102.7 ms | 29.69/s | — |
 
 #### Identity
 
 | Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
 | --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-lite-GGUF` | a1f9fa12 |
 | Decider 0.8B | MPS | decider | — | — | official | `Mapika/decider-0.8b` | a0a01d6f |
 | Kev 0.8B | MLX | kev | — | — | official | `jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f` | bf75a6a8 |
 | Von | MPS | von | — | — | official | `von` | 498ceba3 |
 | Laya English 421M | MLX | laya | — | — | community | `aac6fef/laya-mlx` | 04767856 |
+
+### Models up to 1B — ENG Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261017T105226Z` · suite `deqio-basic-150` — 150 cases / 250 scored decisions · Deqio 0.6.2 · 2026-10-17
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | 86.0% | 90.8% | 94.0% | 94.0% | 70.0% | 88.7% |
+| Decider 0.8B | MPS | 84.0% | 88.8% | 88.0% | 94.0% | 70.0% | 87.3% |
+| Kev 0.8B | MLX | 76.7% | 84.0% | 84.0% | 86.0% | 60.0% | 83.3% |
+| Von | MPS | 64.0% | 73.2% | 86.0% | 58.0% | 48.0% | 74.0% |
+| Laya English 421M | MLX | 54.7% | 66.8% | 68.0% | 66.0% | 30.0% | 66.7% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | 81.4 ms | 241.9 ms | 13.36/s | — |
+| Decider 0.8B | MPS | 293.4 ms | 371.7 ms | 5.94/s | — |
+| Kev 0.8B | MLX | 56.1 ms | 90.7 ms | 26.27/s | — |
+| Von | MPS | 61.0 ms | 116.4 ms | 21.22/s | — |
+| Laya English 421M | MLX | 34.8 ms | 73.8 ms | 41.52/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-lite-GGUF` | a1f9fa12 |
+| Decider 0.8B | MPS | decider | — | — | official | `Mapika/decider-0.8b` | a0a01d6f |
+| Kev 0.8B | MLX | kev | — | — | official | `jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f` | bf75a6a8 |
+| Von | MPS | von | — | — | official | `von` | 498ceba3 |
+| Laya English 421M | MLX | laya | — | — | community | `aac6fef/laya-mlx` | 04767856 |
+
+### Models from 1B to 3B — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261017T110819Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.2 · 2026-10-17
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | 91.7% | 94.6% | 95.0% | 95.0% | 85.0% | 94.3% |
+| Decider 2B | MPS | 91.7% | 93.5% | 95.0% | 95.0% | 85.0% | 92.5% |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | 88.3% | 92.5% | 85.0% | 95.0% | 85.0% | 94.3% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | 173.7 ms | 520.2 ms | 5.87/s | — |
+| Decider 2B | MPS | 189.3 ms | 524.4 ms | 5.76/s | — |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | 181.5 ms | 291.6 ms | 7.89/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-nano-GGUF` | 67baf946 |
+| Decider 2B | MPS | decider | — | — | official | `Mapika/decider-2b` | ff99089b |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | basal | basal-2.0-mlx 2.0.0 | mlx-8bit | official | `Remek/basal-2.0-mini-MLX-8bit` | f26d1e2d |
+
+### Models from 1B to 3B — ENG Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261017T110454Z` · suite `deqio-basic-150` — 150 cases / 250 scored decisions · Deqio 0.6.2 · 2026-10-17
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decider 2B | MPS | 90.7% | 94.0% | 94.0% | 94.0% | 84.0% | 94.0% |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | 88.7% | 92.4% | 96.0% | 90.0% | 80.0% | 92.0% |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | 80.7% | 85.6% | 78.0% | 94.0% | 70.0% | 85.3% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decider 2B | MPS | 278.8 ms | 527.0 ms | 5.25/s | — |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | 171.5 ms | 521.5 ms | 6.30/s | — |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | 223.4 ms | 444.7 ms | 6.01/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decider 2B | MPS | decider | — | — | official | `Mapika/decider-2b` | ff99089b |
+| Decision 3.0 d3-nano 2.2B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-nano-GGUF` | 67baf946 |
+| Basal 2.0 Mini — 1.5B | MLX 8-bit | basal | basal-2.0-mlx 2.0.0 | mlx-8bit | official | `Remek/basal-2.0-mini-MLX-8bit` | f26d1e2d |
+
+### Models above 3B — PL Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261017T121613Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.2 · 2026-10-17
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | 98.3% | 98.9% | 100.0% | 100.0% | 95.0% | 98.1% |
+| JevK5 4B | GGUF Q8_0 | 98.3% | 98.9% | 100.0% | 100.0% | 95.0% | 98.1% |
+| Decider 4B | GGUF Q8_0 | 96.7% | 97.8% | 100.0% | 95.0% | 95.0% | 98.1% |
+| Kev 4B | MLX | 96.7% | 97.8% | 100.0% | 100.0% | 90.0% | 96.2% |
+| Basal 2.0 — 4.5B | MLX 8-bit | 91.7% | 94.6% | 95.0% | 95.0% | 85.0% | 94.3% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | 487.1 ms | 1,465.3 ms | 2.10/s | — |
+| JevK5 4B | GGUF Q8_0 | 618.2 ms | 1,875.3 ms | 1.67/s | — |
+| Decider 4B | GGUF Q8_0 | 283.7 ms | 854.4 ms | 3.55/s | — |
+| Kev 4B | MLX | 354.1 ms | 554.4 ms | 3.95/s | — |
+| Basal 2.0 — 4.5B | MLX 8-bit | 560.1 ms | 913.2 ms | 2.58/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-mini-GGUF` | c03ac9c3 |
+| JevK5 4B | GGUF Q8_0 | jevk5 | jevk5-gguf-native | q8_0 | official | `alibiserikbay/JevK5-GGUF` | ec67b0bf |
+| Decider 4B | GGUF Q8_0 | decider | decider-gguf-native | q8_0 | official | `Mapika/decider-4b-GGUF` | b79f09d9 |
+| Kev 4B | MLX | kev | — | — | official | `jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52` | 6cfce5c2 |
+| Basal 2.0 — 4.5B | MLX 8-bit | basal | basal-2.0-mlx 2.0.0 | mlx-8bit | official | `Remek/basal-2.0-4.5B-MLX-8bit` | 77d3b723 |
+
+### Models above 3B — ENG Bench (0.6.2 snapshot)
+
+#### Run
+
+- `20261017T120524Z` · suite `deqio-basic-150` — 150 cases / 250 scored decisions · Deqio 0.6.2 · 2026-10-17
+- runtime errors across the listed profiles: 0
+
+#### Quality
+
+`Accuracy` is whole-case accuracy; `Decision accuracy` scores every decision/assertion (a Shared case holds several).
+
+| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | 97.3% | 98.4% | 96.0% | 100.0% | 96.0% | 98.7% |
+| JevK5 4B | GGUF Q8_0 | 96.7% | 98.0% | 96.0% | 98.0% | 96.0% | 98.7% |
+| Decider 4B | GGUF Q8_0 | 96.0% | 97.6% | 100.0% | 98.0% | 90.0% | 96.7% |
+| Basal 2.0 — 4.5B | MLX 8-bit | 93.3% | 96.0% | 90.0% | 96.0% | 94.0% | 98.0% |
+| Kev 4B | MLX | 92.7% | 95.2% | 100.0% | 100.0% | 78.0% | 92.0% |
+
+#### Performance
+
+Median and P95 are per-request latencies; throughput is scored decisions per second over the whole run; cost is the estimated USD per 1 000 scored decisions from the API's reported input tokens and its published input price (remote profiles only; an estimate, not a bill).
+
+| Model | Backend | Median | P95 | Throughput | Cost / 1k decisions |
+| --- | :---: | ---: | ---: | ---: | ---: |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | 476.1 ms | 1,468.1 ms | 2.27/s | — |
+| JevK5 4B | GGUF Q8_0 | 575.1 ms | 1,826.7 ms | 1.82/s | — |
+| Decider 4B | GGUF Q8_0 | 274.2 ms | 832.0 ms | 4.04/s | — |
+| Basal 2.0 — 4.5B | MLX 8-bit | 673.4 ms | 1,386.6 ms | 1.97/s | — |
+| Kev 4B | MLX | 311.6 ms | 504.8 ms | 4.70/s | — |
+
+#### Identity
+
+| Model | Backend | Engine | Runtime | Precision | Source | Model / endpoint | Revision |
+| --- | :---: | --- | --- | --- | --- | --- | --- |
+| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | decision3 | llama.cpp-systemone | q8_0 | official | `ggml-org/vllm-d3-mini-GGUF` | c03ac9c3 |
+| JevK5 4B | GGUF Q8_0 | jevk5 | jevk5-gguf-native | q8_0 | official | `alibiserikbay/JevK5-GGUF` | ec67b0bf |
+| Decider 4B | GGUF Q8_0 | decider | decider-gguf-native | q8_0 | official | `Mapika/decider-4b-GGUF` | b79f09d9 |
+| Basal 2.0 — 4.5B | MLX 8-bit | basal | basal-2.0-mlx 2.0.0 | mlx-8bit | official | `Remek/basal-2.0-4.5B-MLX-8bit` | 77d3b723 |
+| Kev 4B | MLX | kev | — | — | official | `jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52` | 6cfce5c2 |
 
 ### Remote decision APIs — PL Bench (0.6.2 snapshot)
 
@@ -215,106 +417,7 @@ Median and P95 are per-request latencies; throughput is scored decisions per sec
 | TypeSafe Jev (remote) | remote | typesafe-jev | — | — | official | `jev-latest` · `https://api.typesafe.ai/v1/systemone` | — |
 | OpenAI Decisions API (remote) | remote | openai-decisions | — | — | official | `gpt-6-luna` · `https://api.openai.com/v1/decisions` | — |
 
-### Historical 0.5 snapshot (2026-10-06)
-
-The tables below come from completed Deqio 0.5 runs on **2026-10-06** using the same local Apple Silicon macOS / 16 GiB setup. Small and large models were benchmarked in separate runs so each group could use the same machine without competing for memory. Some listed profiles (Decider 2B, Basal 1.5, SemIf) are no longer in the 0.6 catalog; the rows stay until their group has a 0.6.2 run.
-
-### Small models (up to 2.5B)
-
-#### Runs
-
-- **ENG:** run `20261006T082750Z`, suite `deqio-basic-150` — 150 cases / 250 scored decisions.
-- **PL:** run `20261006T083557Z`, suite `deqio-pl-60` — 60 cases / 93 scored decisions.
-
-All six profiles below completed both runs with **0 runtime errors**.
-
-#### Quality
-
-`Accuracy` is whole-case accuracy. `Decision accuracy` scores individual decisions/assertions, which matters especially for shared-state cases containing several decisions.
-
-| Model | Backend | ENG accuracy | ENG decision accuracy | PL accuracy | PL decision accuracy |
-| --- | :---: | ---: | ---: | ---: | ---: |
-| **Decider 2B** | MPS | **90.7%** | **94.0%** | **91.7%** | **93.5%** |
-| **Basal 1.5 Mini 1.5B** | MLX 8-bit | 84.7% | 90.0% | 83.3% | 89.2% |
-| **Decider 0.8B** | MPS | 84.0% | 88.8% | 75.0% | 83.9% |
-| **Kev 0.8B** | MLX | 76.7% | 84.0% | 66.7% | 78.5% |
-| **Von** | MPS | 64.0% | 73.2% | 51.7% | 62.4% |
-| **Laya Typed Decisions 421M** | MLX | 62.0% | 72.4% | 31.7% | 44.1% |
-
-The quality ranking is stable across both runs: **Decider 2B → Basal 1.5 Mini → Decider 0.8B → Kev 0.8B → Von → Laya Typed Decisions**.
-
-#### Performance
-
-Throughput is completed scored decisions per second for the whole run. Lower latency is better; higher throughput is better.
-
-| Model | ENG median | PL median | ENG P95 | PL P95 | ENG throughput | PL throughput |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Decider 2B | 301.6 ms | 334.3 ms | 578.6 ms | 512.2 ms | 5.14/s | 4.96/s |
-| Basal 1.5 Mini 1.5B | 403.8 ms | 318.9 ms | 880.9 ms | 572.9 ms | 3.28/s | 4.29/s |
-| Decider 0.8B | 310.6 ms | 316.6 ms | 369.1 ms | 403.2 ms | 5.72/s | 4.87/s |
-| Kev 0.8B | 58.3 ms | 59.5 ms | 94.3 ms | 92.5 ms | 25.38/s | 23.85/s |
-| Von | 61.7 ms | 75.7 ms | 116.2 ms | 138.9 ms | 21.29/s | 18.83/s |
-| Laya Typed Decisions 421M | **32.9 ms** | **36.5 ms** | **70.6 ms** | 99.2 ms | **42.87/s** | **30.99/s** |
-
-#### What this small-model snapshot shows
-
-- **Decider 2B is the quality-first small-model leader in this snapshot.** It is #1 in whole-case accuracy on both suites (90.7% ENG / 91.7% PL) and stays near 94% decision accuracy in both languages/suites.
-- **Basal 1.5 Mini is the strongest broader-SystemOne profile in this group.** It ranks #2 on both suites while exposing native capabilities beyond the basic benchmark shape, including Multi, Act, Facts and SOAM on the MLX profile. These ENG/PL suites exercise Noul, Choice and shared-state decisions; they do **not** by themselves benchmark Basal's Multi/Act/Facts capabilities.
-- **Decider 0.8B remains strong for its size**, especially on ENG (84.0% case / 88.8% decision accuracy), but drops to 75.0% case accuracy on the PL suite.
-- **Kev 0.8B stands out as a speed/quality compromise:** about 58–60 ms median latency and 23.85–25.38 decisions/s while retaining 76.7% ENG and 66.7% PL case accuracy.
-- **Laya Typed Decisions is the latency/throughput specialist:** it is the fastest profile here, but its quality is much lower on this PL suite (31.7% case / 44.1% decision accuracy). Use it when latency matters more than maximum decision quality and validate against your own domain.
-- **Von sits between the ultra-fast and quality-first profiles:** 61.7–75.7 ms median latency with 64.0% ENG / 51.7% PL case accuracy.
-- **Runtime stability was clean for this snapshot:** every listed profile recorded zero runtime errors in both runs.
-
-Per-type results also show why a single aggregate number is not enough. Decider 2B stays unusually even across Choice, Noul and Shared; Basal Mini is very strong on ENG Choice and PL Noul while keeping Shared decision accuracy around 90%; Laya and Von vary much more strongly by suite and decision type. Use `deqio benchmark compare` for the full breakdown.
-
-### Large models (4B–4.5B in this snapshot)
-
-#### Runs
-
-- **ENG:** run `20261006T090441Z`, suite `deqio-basic-150` — 150 cases / 250 scored decisions.
-- **PL:** run `20261006T091845Z`, suite `deqio-pl-60` — 60 cases / 93 scored decisions.
-
-All five profiles below completed both runs with **0 runtime errors**.
-
-#### Quality
-
-`Accuracy` is whole-case accuracy. `Decision accuracy` scores individual decisions/assertions, which matters especially for shared-state cases containing several decisions.
-
-| Model | Backend | ENG accuracy | ENG decision accuracy | PL accuracy | PL decision accuracy |
-| --- | :---: | ---: | ---: | ---: | ---: |
-| **JevK5 4B** | GGUF Q8_0 | **96.7%** | **98.0%** | **98.3%** | **98.9%** |
-| **Decider 4B** | MPS | 95.3% | 97.2% | 96.7% | 97.8% |
-| **Basal 1.5 Main 4.5B** | MLX 8-bit | 93.3% | 96.0% | 95.0% | 96.8% |
-| **SemIf / Qwen3.5 4B** | MLX 8-bit | 93.3% | 95.6% | 95.0% | 96.8% |
-| **Kev 4B** | MLX | 92.7% | 95.2% | 96.7% | 97.8% |
-
-**JevK5 4B** ranks first on whole-case and decision accuracy in both runs. The rest of the ordering is suite-dependent: Decider 4B is second on ENG, while Kev 4B rises to a tie with Decider on PL case and decision accuracy. Treat those changes as properties of these two benchmark suites, not as a pure language ranking.
-
-#### Performance
-
-Throughput is completed scored decisions per second for the whole run. Lower latency is better; higher throughput is better.
-
-| Model | ENG median | PL median | ENG P95 | PL P95 | ENG throughput | PL throughput |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Basal 1.5 Main 4.5B | 1,213.7 ms | 987.9 ms | 2,775.6 ms | 1,860.0 ms | 1.07/s | 1.37/s |
-| Decider 4B | 436.7 ms | 438.9 ms | 1,361.1 ms | 1,330.6 ms | 2.54/s | 2.27/s |
-| JevK5 4B Q8_0 | 594.9 ms | 570.6 ms | 1,864.5 ms | 1,817.6 ms | 1.76/s | 1.72/s |
-| **Kev 4B** | **315.9 ms** | **358.8 ms** | **518.4 ms** | **541.2 ms** | **4.59/s** | **3.92/s** |
-| SemIf / Qwen3.5 4B | 594.7 ms | 599.4 ms | 1,216.7 ms | 1,113.4 ms | 2.22/s | 2.19/s |
-
-#### What this large-model snapshot shows
-
-- **JevK5 4B Q8_0 is the quality leader in this snapshot.** It reaches 96.7% ENG / 98.3% PL case accuracy and 98.0% / 98.9% decision accuracy, with no runtime errors in either run.
-- **Decider 4B is a strong quality/latency balance.** It stays at 95.3–96.7% case accuracy with roughly 437–439 ms median latency, and reaches 100% Noul accuracy in both suites.
-- **Kev 4B is the fastest profile in this group.** Its median latency is about 316–359 ms with 3.92–4.59 decisions/s. It also scores 100% on both Choice and Noul in both runs; its lower aggregate score comes mainly from Shared cases.
-- **Basal 1.5 Main is the broadest SystemOne profile in this group.** It scores 93.3% ENG / 95.0% PL case accuracy, but this basic benchmark measures Noul, Choice and Shared only. It does **not** measure Basal-specific Multi, Act, Facts, option keys or Evidence-capable native profiles, so the table should not be read as a complete comparison of Basal's feature value.
-- **SemIf / Qwen3.5 4B is stable across both suites**, with 93.3% ENG / 95.0% PL case accuracy and about 595–599 ms median latency.
-- **Runtime stability was clean:** all five profiles recorded zero runtime errors in both runs.
-
-The decision-type breakdown adds useful context. JevK5 is consistently strong across Choice, Noul and Shared; Decider is perfect on Noul in both runs; Kev is perfect on Choice and Noul in both runs but weaker on Shared; Basal and SemIf remain strong but show more of their errors in Shared cases. Use `deqio benchmark compare` for the full per-type breakdown.
-
-The bundled historical benchmark reports remain available for reference, but they may contain older model selections or measurements and should not be treated as the source for the fresh 2026-10-06 tables above:
+The bundled reports carry the same 0.6.2 tables and, below them, the historical 0.5 tables (2026-10-06, Deqio 0.5):
 
 - [ENG benchmark summary](benchmarks/summary_eng.md)
 - [PL benchmark summary](benchmarks/summary_pl.md)
@@ -324,6 +427,7 @@ Run your own current comparison with:
 ```bash
 deqio benchmark
 deqio benchmark compare
+deqio benchmark tables --run RUN_ID --title "..."
 ```
 
 ---
@@ -759,7 +863,8 @@ deqio benchmark --all --output runs/today         # results directory (default: 
 
 `deqio benchmark tables --run RUN_ID [--models MODEL_ID[:BACKEND] ...] [--title "..."] [--json] [--out FILE]` renders
 the quality, performance and identity tables of a completed run (the ones in "Benchmark snapshot") from its
-`summary.json` and `results.jsonl`; `--summary PATH` takes a run directory outside the workspace. Rows are sorted by
+`summary.json` and `results.jsonl`; `--summary PATH` takes a run directory outside the workspace (the committed
+`runs/<group>-<lang>` summaries re-render the README tables). Rows are sorted by
 decision accuracy; remote profiles get the estimated cost per 1 000 scored decisions; profiles that did not load and
 rows of profiles removed from the catalog (the Decision 3.0 MLX conversions) are listed by name, never silently dropped
 or merged.

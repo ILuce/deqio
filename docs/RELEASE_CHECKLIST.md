@@ -13,6 +13,8 @@ as passed.
       Removed), with the public-contract statement in the section intro: nothing removed or renamed; additive
       response fields named.
 - [ ] `AGENTS.md`, `README.md`, `SECURITY.md` describe the behaviour being released (routes, CLI, catalog rules).
+- [ ] README benchmark tables are `deqio benchmark tables` output over the committed `runs/<group>-<lang>/summary.json`
+      (suite path reduced to its file name, no `results.jsonl`); `tests/test_benchmark_snapshot.py` is green.
 - [ ] Every runtime pin and Hub revision that changed has its before/after benchmark on the same suite
       (`deqio benchmark compare`); a profile whose benchmark did not run stays unverified and says so in the CHANGELOG.
 - [ ] Remote providers: the real cassettes recorded with `python -m deqio.provider_record` replace the synthetic

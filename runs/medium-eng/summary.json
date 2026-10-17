@@ -1,0 +1,451 @@
+{
+  "schema_version": 2,
+  "run_id": "20261017T110454Z",
+  "created_at": "2026-10-17T11:07:20.243362+00:00",
+  "suite": "basic.json",
+  "suite_name": "deqio-basic-150",
+  "suite_cases": 150,
+  "models": [
+    {
+      "model_id": "d3-nano",
+      "backend": "gguf",
+      "engine": "decision3",
+      "load_ms": 774.9909999547526,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "991671ff5f32f1ecb36f5e580e4053a5e3b02e3e474909fe557fcedbf8420b1b",
+        "model_id": "d3-nano",
+        "backend": "gguf",
+        "engine": "decision3",
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "runtime_version": null,
+        "model": "ggml-org/vllm-d3-nano-GGUF",
+        "source": "official",
+        "precision": "q8_0",
+        "quantization": {
+          "applied": "checkpoint",
+          "bits": 8,
+          "block_size": 32,
+          "kind": "gguf",
+          "quantization": "Q8_0"
+        },
+        "runtime_metadata": {
+          "official_runtime": false
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-nano-GGUF",
+            "revision": "67baf946c0042cd74ca7106929ed57db699a5f4b",
+            "role": "systemone-gguf-q8_0"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "1fc9fa68b0184045ae87ec7e35750892",
+        "engine": "decision3",
+        "model_id": "d3-nano",
+        "backend": "gguf",
+        "model": "ggml-org/vllm-d3-nano-GGUF",
+        "requested_revision": "67baf946c0042cd74ca7106929ed57db699a5f4b",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-nano-GGUF",
+            "requested_revision": "67baf946c0042cd74ca7106929ed57db699a5f4b",
+            "resolved_revision": "67baf946c0042cd74ca7106929ed57db699a5f4b",
+            "role": "systemone-gguf-q8_0",
+            "filename": "vllm-d3-nano-Q8_0.gguf",
+            "local_dir": "models/d3-nano-GGUF"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:03:54.976266+00:00",
+        "installation_verified_at": "2026-10-17T11:04:42.340012+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 8192,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decision3"
+        },
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "platform": "gguf",
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "q8_0",
+        "runtime_metadata": {
+          "family": "decision3",
+          "official_runtime": false,
+          "launcher": "llama_cpp",
+          "d3_source_sha": "9d9b937f5f117f78c030ea7ba677c0b3d328ec58"
+        },
+        "quantization": {
+          "kind": "gguf",
+          "quantization": "Q8_0",
+          "bits": 8,
+          "block_size": 32,
+          "applied": "checkpoint"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 133,
+          "case_accuracy": 0.8866666666666667,
+          "assertions": 250,
+          "correct": 231,
+          "decision_accuracy": 0.924,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 264.61163085109246,
+          "median_ms": 171.50918749393895,
+          "p95_ms": 521.5317499823868,
+          "throughput_decisions_per_s": 6.298538961821246
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 48,
+          "case_accuracy": 0.96,
+          "assertions": 50,
+          "correct": 48,
+          "decision_accuracy": 0.96,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 141.23927416512743,
+          "median_ms": 139.53856244916096,
+          "p95_ms": 153.65987492259592,
+          "throughput_decisions_per_s": 7.080183652252896
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 45,
+          "case_accuracy": 0.9,
+          "assertions": 50,
+          "correct": 45,
+          "decision_accuracy": 0.9,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 169.51532507082447,
+          "median_ms": 171.50918749393895,
+          "p95_ms": 178.75574994832277,
+          "throughput_decisions_per_s": 5.8991716505996985
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 40,
+          "case_accuracy": 0.8,
+          "assertions": 150,
+          "correct": 138,
+          "decision_accuracy": 0.92,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 483.0802933173254,
+          "median_ms": 491.42333294730633,
+          "p95_ms": 523.9399159327149,
+          "throughput_decisions_per_s": 6.210147757009335
+        }
+      }
+    },
+    {
+      "model_id": "basal-2.0-mini",
+      "backend": "mlx",
+      "engine": "basal",
+      "load_ms": 3148.58020900283,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "0d4b1f9709116377fe4365e1e977488bf365933cc2bd84db84e00d7cf41bed72",
+        "model_id": "basal-2.0-mini",
+        "backend": "mlx",
+        "engine": "basal",
+        "family": "basal2.0",
+        "runtime": "basal-2.0-mlx",
+        "runtime_version": "2.0.0",
+        "model": "Remek/basal-2.0-mini-MLX-8bit",
+        "source": "official",
+        "precision": "mlx-8bit",
+        "quantization": {
+          "applied": "checkpoint",
+          "bits": 8,
+          "group_size": 64,
+          "kind": "mlx-affine",
+          "source_model": "Remek/basal-2.0-mini"
+        },
+        "runtime_metadata": {
+          "basal_backend": "mlx",
+          "basal_mode": "mlx",
+          "official_runtime": true
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Remek/basal-2.0-mini-MLX-8bit",
+            "revision": "f26d1e2df8002665a54583f74d954569fe99ec96",
+            "role": "basal-model"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "c0ad69d5a6ea4298a4434ba04ccaeff5",
+        "engine": "basal",
+        "model_id": "basal-2.0-mini",
+        "backend": "mlx",
+        "model": "Remek/basal-2.0-mini-MLX-8bit",
+        "requested_revision": "f26d1e2df8002665a54583f74d954569fe99ec96",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Remek/basal-2.0-mini-MLX-8bit",
+            "requested_revision": "f26d1e2df8002665a54583f74d954569fe99ec96",
+            "resolved_revision": "f26d1e2df8002665a54583f74d954569fe99ec96",
+            "role": "basal-model"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T10:59:11.315891+00:00",
+        "installation_verified_at": "2026-10-17T10:59:11.315891+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 8192,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "basal"
+        },
+        "family": "basal2.0",
+        "runtime": "basal-2.0-mlx",
+        "platform": "mlx",
+        "source": "official",
+        "capabilities": {
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi": true,
+          "act": true,
+          "facts": true,
+          "soam": true,
+          "multi_question": true,
+          "option_keys": true,
+          "structured_state": true,
+          "evidence": false,
+          "systemone": true
+        },
+        "precision": "mlx-8bit",
+        "runtime_metadata": {
+          "runtime_version": "2.0.0",
+          "basal_mode": "mlx",
+          "basal_backend": "mlx",
+          "official_runtime": true
+        },
+        "runtime_version": "2.0.0",
+        "quantization": {
+          "kind": "mlx-affine",
+          "bits": 8,
+          "group_size": 64,
+          "applied": "checkpoint",
+          "source_model": "Remek/basal-2.0-mini"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 121,
+          "case_accuracy": 0.8066666666666666,
+          "assertions": 250,
+          "correct": 214,
+          "decision_accuracy": 0.856,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 277.2889922644633,
+          "median_ms": 223.37264596717432,
+          "p95_ms": 444.66779206413776,
+          "throughput_decisions_per_s": 6.010576377576107
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 39,
+          "case_accuracy": 0.78,
+          "assertions": 50,
+          "correct": 39,
+          "decision_accuracy": 0.78,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 178.0124741862528,
+          "median_ms": 182.23704147385433,
+          "p95_ms": 185.72591606061906,
+          "throughput_decisions_per_s": 5.617583849509947
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 238.66995251737535,
+          "median_ms": 223.37264596717432,
+          "p95_ms": 294.02362497057766,
+          "throughput_decisions_per_s": 4.189886449687039
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 35,
+          "case_accuracy": 0.7,
+          "assertions": 150,
+          "correct": 128,
+          "decision_accuracy": 0.8533333333333334,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 415.1845500897616,
+          "median_ms": 406.3075205194764,
+          "p95_ms": 476.61933407653123,
+          "throughput_decisions_per_s": 7.225702399936147
+        }
+      }
+    },
+    {
+      "model_id": "decider-2b",
+      "backend": "mps",
+      "engine": "decider",
+      "load_ms": 7775.962834013626,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "0339fff598e75286acb6d31809b6f9690afca7d6111c8d72c9fd25b9b95c4294",
+        "model_id": "decider-2b",
+        "backend": "mps",
+        "engine": "decider",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "Mapika/decider-2b",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-2b",
+            "revision": "ff99089b6810691bd79134ec6febb5d9afa6e619",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "37ac71e405294b71993e57366e71495e",
+        "engine": "decider",
+        "model_id": "decider-2b",
+        "backend": "mps",
+        "model": "Mapika/decider-2b",
+        "requested_revision": "ff99089b6810691bd79134ec6febb5d9afa6e619",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-2b",
+            "requested_revision": "ff99089b6810691bd79134ec6febb5d9afa6e619",
+            "resolved_revision": "ff99089b6810691bd79134ec6febb5d9afa6e619"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T11:00:07.036244+00:00",
+        "installation_verified_at": "2026-10-17T11:00:07.036244+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 8192,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decider"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 136,
+          "case_accuracy": 0.9066666666666666,
+          "assertions": 250,
+          "correct": 235,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 317.1914257559304,
+          "median_ms": 278.7841875106096,
+          "p95_ms": 527.0210000453517,
+          "throughput_decisions_per_s": 5.254450566230369
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 209.8646540637128,
+          "median_ms": 183.72181191807613,
+          "p95_ms": 355.80891591962427,
+          "throughput_decisions_per_s": 4.764975810059039
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 236.5374599979259,
+          "median_ms": 195.97156200325117,
+          "p95_ms": 403.66945799905807,
+          "throughput_decisions_per_s": 4.227660176991706
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 42,
+          "case_accuracy": 0.84,
+          "assertions": 150,
+          "correct": 141,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 505.1721632061526,
+          "median_ms": 523.4275624970905,
+          "p95_ms": 532.407958060503,
+          "throughput_decisions_per_s": 5.938569498683458
+        }
+      }
+    }
+  ]
+}

@@ -4425,29 +4425,38 @@ def test_patch4_benchmark_compare_uses_responsive_cards_not_wide_metric_table() 
 
 def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
-    assert len(readme.splitlines()) < 900  # 0.6.2: D13 section (+61) and the 0.6.2 benchmark snapshot (+87, `deqio benchmark tables`)
+    # 0.6.2 freeze: D13 section (+61) and the complete 0.6.2 benchmark snapshot — seven blocks rendered by
+    # `deqio benchmark tables` (three groups × PL/ENG + the remote APIs), the historical 0.5 tables dropped
+    assert len(readme.splitlines()) < 1000
     for heading in (
         "## API at a glance",
         "### 0.6.2 snapshot",
         "### Models up to 1B — PL Bench (0.6.2 snapshot)",
+        "### Models up to 1B — ENG Bench (0.6.2 snapshot)",
+        "### Models from 1B to 3B — PL Bench (0.6.2 snapshot)",
+        "### Models from 1B to 3B — ENG Bench (0.6.2 snapshot)",
+        "### Models above 3B — PL Bench (0.6.2 snapshot)",
+        "### Models above 3B — ENG Bench (0.6.2 snapshot)",
         "### Remote decision APIs — PL Bench (0.6.2 snapshot)",
-        "### Historical 0.5 snapshot (2026-10-06)",
-        "### Small models (up to 2.5B)",
-        "### Large models",
         "## Installation",
         "# API examples",
     ):
         assert heading in readme
-    # 0.6.2 tables: rendered by `deqio benchmark tables` from run 20261015T120300Z; the D3 MLX /1 row is excluded by name
+    # 0.6.2 tables: rendered by `deqio benchmark tables` from the committed runs/<group>-<lang>/summary.json
+    # (tests/test_benchmark_snapshot.py keeps them equal to the generator); the remote block is the owner's
+    # 2026-10-15 run on 0.6.1 (no committed summary), pinned here row by row
+    assert "- `20261017T105442Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.2 · 2026-10-17" in readme
+    assert "- `20261017T105226Z` · suite `deqio-basic-150` — 150 cases / 250 scored decisions · Deqio 0.6.2 · 2026-10-17" in readme
     assert "- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15" in readme
-    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported" in readme
-    assert "✓ bf16 (community)" not in readme and "d3_mlx_sidecar" not in readme  # 0.6.2: no Decision 3.0 MLX profile
+    assert "✓ bf16 (community)" not in readme and "d3_mlx_sidecar" not in readme and "d3-lite:mlx" not in readme  # 0.6.2: no Decision 3.0 MLX profile
+    assert "| Decision 3.0 d3-lite 0.85B | GGUF Q8_0 | 85.0% | 90.3% | 95.0% | 80.0% | 80.0% | 92.5% |" in readme
     assert "| Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |" in readme
-    assert "| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |" in readme
+    assert "| Kev 0.8B | MLX | 60.2 ms | 94.1 ms | 23.07/s | — |" in readme
+    assert "| Decision 3.0 d3-mini 4.5B | GGUF Q8_0 | 98.3% | 98.9% | 100.0% | 100.0% | 95.0% | 98.1% |" in readme
+    assert "| Decider 4B | GGUF Q8_0 | decider | decider-gguf-native | q8_0 | official | `Mapika/decider-4b-GGUF` | b79f09d9 |" in readme
     assert "| TypeSafe Jev (remote) | remote | 317.7 ms | 424.8 ms | 4.64/s | $0.0108 |" in readme
     assert "| OpenAI Decisions API (remote) | remote | 314.1 ms | 487.7 ms | 4.56/s | $0.0156 |" in readme
     assert "deqio benchmark tables" in readme
-    assert readme.index("### 0.6.2 snapshot") < readme.index("### Historical 0.5 snapshot (2026-10-06)") < readme.index("### Small models (up to 2.5B)")
     for path in ("/v1/noul", "/v1/choice", "/v1/shared", "/v1/score", "/v1/multi", "/v1/act", "/v1/soam", "/v1/systemone"):
         assert path in readme
     assert '`facts: "auto"`' in readme
@@ -4457,18 +4466,10 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "`/v1/soam` vs `/v1/systemone`" in readme
     assert "Extra inference layer" in readme
     assert "**Decision in, probabilities out.**" in readme
-    assert "20261006T082750Z" in readme
-    assert "20261006T083557Z" in readme
-    assert "20261006T090441Z" in readme
-    assert "20261006T091845Z" in readme
-    assert "Basal 1.5 Mini 1.5B" in readme
     assert "Decider 0.8B" in readme
-    assert "Laya Typed Decisions 421M" in readme
-    assert "Basal 1.5 Main 4.5B" in readme
     assert "JevK5 4B" in readme
-    assert "### Large models (4B–4.5B in this snapshot)" in readme
-    assert readme.count("#### Runs") == 2
-    assert "0 runtime errors" in readme
+    assert "0 runtime errors" not in readme  # the generator prints "runtime errors across the listed profiles: 0"
+    assert readme.count("runtime errors across the listed profiles: 0") == 7
     assert "## Supported models and backends" in readme
     assert readme.index("## Supported models and backends") < readme.index("## Benchmark snapshot")
     assert "`d3-mini`" in readme
@@ -4476,17 +4477,14 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
     assert "`openai-decisions`" in readme and "`typesafe-jev`" in readme
     assert "`laya-english`" in readme
     assert "DEQIO_PROVIDER" not in readme
-    historical_snapshot = readme[readme.index("### Historical 0.5 snapshot (2026-10-06)"):readme.index("## Installation")]
-    assert "Laya English 421M" not in historical_snapshot  # the 0.5 runs used laya-typed; the 0.6.2 run above uses laya-english
-    assert "Laya English 421M" in readme[readme.index("### 0.6.2 snapshot"):readme.index("### Historical 0.5 snapshot (2026-10-06)")]
     assert "earlier local snapshot from **2026-10-03**" not in readme
 
     eng_summary = Path("benchmarks/summary_eng.md").read_text(encoding="utf-8")
     pl_summary = Path("benchmarks/summary_pl.md").read_text(encoding="utf-8")
-    assert "20261006T082750Z" in eng_summary
-    assert "20261006T090441Z" in eng_summary
-    assert "20261006T083557Z" in pl_summary
-    assert "20261006T091845Z" in pl_summary
+    for run_id in ("20261017T105226Z", "20261017T110454Z", "20261017T120524Z", "20261006T082750Z", "20261006T090441Z"):
+        assert run_id in eng_summary
+    for run_id in ("20261017T105442Z", "20261017T110819Z", "20261017T121613Z", "20261015T120300Z", "20261006T083557Z", "20261006T091845Z"):
+        assert run_id in pl_summary
     assert "2026-10-03" not in eng_summary
     assert "2026-10-03" not in pl_summary
 

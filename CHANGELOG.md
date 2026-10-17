@@ -8,14 +8,14 @@ production audit.
 
 ## [Unreleased]
 
-## [0.6.2] — 2026-10-17 (not tagged yet)
+## [0.6.2] — 2026-10-17
 
 D13 on top of the tagged 0.6.1, plus the removal of the Decision 3.0 MLX backend. Public HTTP routes and response
 fields are unchanged; nothing was removed or renamed and no response field was added. New: the OpenAPI 3.1 document
 of the decision routes, the Python SDK `deqio-client`, `deqio decide`, `deqio openapi`, `deqio benchmark tables`, the
 release checklist. The core package gains one dependency, `deqio-client` (the workspace member `clients/python`,
 itself dependency-free). Catalog: the five `d3-*:mlx` profiles are gone (see "Removed"); every other profile and pin
-is unchanged.
+is unchanged. The README benchmark snapshot is the owner's 0.6.2 measurement of every group (2026-10-17).
 
 ### Added
 - `GET /openapi.json` (and `/docs`) now describes the responses of the eight decision routes and the `/v1/decision`
@@ -46,9 +46,13 @@ is unchanged.
   and `results.jsonl` — quality (case and decision accuracy, per type), performance (median, P95, throughput,
   estimated cost per 1 000 scored decisions for remote profiles) and identity (engine, runtime, precision, source,
   model/endpoint, pinned revision); rows sorted by decision accuracy, profiles that did not load listed, rows of the
-  removed Decision 3.0 MLX profiles excluded by name. README "Benchmark snapshot" now opens with the 0.6.2
-  tables (models up to 1B and the remote APIs from the owner's PL run `20261015T120300Z`; the 1–3B and 3B+ groups
-  follow) above the historical 0.5 tables; `benchmarks/summary_pl.md` carries the same 0.6.2 section.
+  removed Decision 3.0 MLX profiles excluded by name. README "Benchmark snapshot" is the 0.6.2 snapshot: three
+  groups (models up to 1B, 1–3B, above 3B) × PL Bench / ENG Bench from the owner's six runs of 2026-10-17 on Deqio
+  0.6.2 (`runs/small-pl`, `runs/small-eng`, `runs/medium-pl`, `runs/medium-eng`, `runs/max-pl`, `runs/max-eng`;
+  each `summary.json` committed with the suite path reduced to its file name, `results.jsonl` git-ignored) plus the
+  remote APIs from the PL run `20261015T120300Z` (Deqio 0.6.1); `benchmarks/summary_pl.md` and `summary_eng.md`
+  carry the same tables, and `tests/test_benchmark_snapshot.py` keeps all three files equal to the generator's output
+  over the committed summaries.
 
 ### Changed
 - `tests/fixtures/providers/*/choice.json` are the owner's real recordings (2026-10-15, `python -m
@@ -62,6 +66,11 @@ is unchanged.
   each wheel and sdist pair in isolation and publish `dist/*` (`deqio-client` before `deqio`); the release tag check
   also requires the two versions to match. The README gains the "Python SDK, `deqio decide` and the OpenAPI
   document" section. Version 0.6.2.
+- README: the "Supported models and backends" table gains a `Remote` column and the two remote profiles
+  (`typesafe-jev`, `openai-decisions`), so every one of the 31 catalog profiles is listed; the historical 0.5 tables
+  (2026-10-06) left the README for `benchmarks/summary_eng.md` / `summary_pl.md`, below the 0.6.2 tables (the README
+  line guard is 1 000 for the seven rendered blocks). `runs/small-pl` and `runs/small-eng` (the owner's first 0.6.2
+  runs, which still contained the removed `d3-lite:mlx` row) are replaced by the six post-removal runs.
 
 ### Removed (2026-10-17, after the owner's MLX-vs-GGUF benchmark)
 - Decision 3.0 on MLX: the catalog profiles `d3:mlx`, `d3-flash:mlx`, `d3-mini:mlx`, `d3-nano:mlx`, `d3-lite:mlx`
@@ -69,7 +78,8 @@ is unchanged.
   installer `d3_mlx`, the launcher branch, Deqio's own forward `deqio.d3_mlx_sidecar` (`DecisionForward`,
   `deqio-d3-mlx-forward/2`) with `runtime_metadata.forward`, and the opt-in runtime tests
   (`tests/test_decision3_mlx_runtime.py`, `tests/_d3_mlx_synthetic.py`). On the owner's Mac the MLX path scored
-  41.9 % / 56.8 % decision accuracy (PL / ENG, runs `small-pl` / `small-eng`, 2026-10-17) against 90.3 % / 90.8 % for
+  41.9 % / 56.8 % decision accuracy (PL / ENG, the owner's first 0.6.2 runs of 2026-10-17; the committed `runs/small-*`
+  summaries are the later post-removal runs) against 90.3 % / 90.8 % for
   the same `d3-lite` on GGUF: even with the official `decision_config.json` semantics the community conversion does
   not reproduce the official readout, and no verified MLX conversion of Decision 3.0 exists. `decision3` on `mlx` is
   refused by the launcher by name ("Decision 3.0 runs on CUDA (official server) or GGUF (llama.cpp); backend 'mlx'
@@ -77,6 +87,12 @@ is unchanged.
   way; `deqio benchmark tables` excludes such rows by name. On Apple Silicon the Decision 3.0 GGUF profiles are the
   supported path. Also dropped as dead code: `providers.remote_provider_names`, `providers.local_provider_descriptor`,
   `credentials.keychain_backend_name`, `openapi.RESPONSE_SCHEMAS` (never referenced).
+
+### Fixed (0.6.2 freeze, 2026-10-17)
+- `deqio benchmark tables`: in the identity table each pinned commit is listed once. A profile whose artifacts share
+  one commit — the Decider GGUF profiles pin the metadata and the weight file of `Mapika/decider-4b-GGUF` at the same
+  `b79f09d9` — rendered it twice (`b79f09d9, b79f09d9`); distinct commits stay listed in artifact order. The `--json`
+  row field `revision` changes the same way (0.6.2, never published).
 
 ### Fixed (0.6.2 fix 3, 2026-10-15, after the owner's first Decision 3.0 MLX benchmark; superseded by the removal above)
 - Decision 3.0 MLX: with fix 2 `d3-lite` answered the second option / "yes" on 60 of 60 `deqio-pl-60` cases

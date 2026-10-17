@@ -1,525 +1,16 @@
 {
   "schema_version": 2,
-  "run_id": "small-pl",
-  "created_at": "2026-10-17T08:58:52.303424+00:00",
-  "suite": "/Users/euuki/deqio-ecosystem/deqio/benchmarks/pl.json",
+  "run_id": "20261017T105442Z",
+  "created_at": "2026-10-17T10:55:42.559214+00:00",
+  "suite": "pl.json",
   "suite_name": "deqio-pl-60",
   "suite_cases": 60,
   "models": [
     {
-      "model_id": "decider-0.8b",
-      "backend": "mps",
-      "engine": "decider",
-      "load_ms": 5621.335375006311,
-      "load_error": null,
-      "profile_identity": {
-        "schema_version": 1,
-        "canonical_id": "bb2bba19bf7b2192584022e5aaacab8cee4e1b7fe79c93c8e7c3392a86cc7afe",
-        "model_id": "decider-0.8b",
-        "backend": "mps",
-        "engine": "decider",
-        "family": null,
-        "runtime": null,
-        "runtime_version": null,
-        "model": "Mapika/decider-0.8b",
-        "source": "official",
-        "precision": null,
-        "quantization": null,
-        "runtime_metadata": {},
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "Mapika/decider-0.8b",
-            "revision": "a0a01d6f8135298f400a8c856b355793012ae971",
-            "role": null
-          }
-        ]
-      },
-      "runtime_identity": {
-        "deqio_version": "0.6.2",
-        "runtime_instance_id": "2e6cffd7bb224d76b74b0d17bb377c57",
-        "engine": "decider",
-        "model_id": "decider-0.8b",
-        "backend": "mps",
-        "model": "Mapika/decider-0.8b",
-        "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "Mapika/decider-0.8b",
-            "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
-            "resolved_revision": "a0a01d6f8135298f400a8c856b355793012ae971"
-          }
-        ],
-        "artifact_revisions_resolved": true,
-        "installation_installed_at": "2026-10-14T21:25:56.848734+00:00",
-        "installation_verified_at": "2026-10-14T21:25:56.848734+00:00",
-        "artifact_verification_status": "verified",
-        "max_input_tokens": 4096,
-        "provider": {
-          "name": "local",
-          "kind": "local",
-          "engine": "decider"
-        },
-        "source": "official",
-        "capabilities": {
-          "systemone": true,
-          "choice": true,
-          "noul": true,
-          "score": true,
-          "multi_question": true,
-          "multi": false,
-          "act": false,
-          "facts": false,
-          "evidence": false
-        }
-      },
-      "summary": {
-        "overall": {
-          "cases": 60,
-          "passed_cases": 45,
-          "case_accuracy": 0.75,
-          "assertions": 93,
-          "correct": 78,
-          "decision_accuracy": 0.8387096774193549,
-          "runtime_errors": 0,
-          "completed_assertions": 93,
-          "mean_ms": 319.31312986610766,
-          "median_ms": 312.258853984531,
-          "p95_ms": 410.14099994208664,
-          "throughput_decisions_per_s": 4.854169324793928
-        },
-        "noul": {
-          "cases": 20,
-          "passed_cases": 15,
-          "case_accuracy": 0.75,
-          "assertions": 20,
-          "correct": 15,
-          "decision_accuracy": 0.75,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 286.26092081540264,
-          "median_ms": 303.3425830071792,
-          "p95_ms": 361.1404160037637,
-          "throughput_decisions_per_s": 3.4933165070228256
-        },
-        "choice": {
-          "cases": 20,
-          "passed_cases": 15,
-          "case_accuracy": 0.75,
-          "assertions": 20,
-          "correct": 15,
-          "decision_accuracy": 0.75,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 323.5680332989432,
-          "median_ms": 314.16287447791547,
-          "p95_ms": 411.39399993699044,
-          "throughput_decisions_per_s": 3.0905401556652046
-        },
-        "shared": {
-          "cases": 20,
-          "passed_cases": 15,
-          "case_accuracy": 0.75,
-          "assertions": 53,
-          "correct": 48,
-          "decision_accuracy": 0.9056603773584906,
-          "runtime_errors": 0,
-          "completed_assertions": 53,
-          "mean_ms": 348.1104354839772,
-          "median_ms": 353.33691694540903,
-          "p95_ms": 410.14099994208664,
-          "throughput_decisions_per_s": 7.612526744036589
-        }
-      }
-    },
-    {
-      "model_id": "kev-0.8b",
-      "backend": "mlx",
-      "engine": "kev",
-      "load_ms": 5291.931749903597,
-      "load_error": null,
-      "profile_identity": {
-        "schema_version": 1,
-        "canonical_id": "95d8fdc32c96d9bb24f6a52200b756756253191caaa7f34edb495ec28ff7131f",
-        "model_id": "kev-0.8b",
-        "backend": "mlx",
-        "engine": "kev",
-        "family": null,
-        "runtime": null,
-        "runtime_version": null,
-        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
-        "source": "official",
-        "precision": null,
-        "quantization": null,
-        "runtime_metadata": {},
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "jaredpalmer/kev-0.8b",
-            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
-            "role": null
-          }
-        ]
-      },
-      "runtime_identity": {
-        "deqio_version": "0.6.2",
-        "runtime_instance_id": "13d4974b3b774e00adc310d3384f30bc",
-        "engine": "kev",
-        "model_id": "kev-0.8b",
-        "backend": "mlx",
-        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
-        "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "jaredpalmer/kev-0.8b",
-            "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
-            "resolved_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
-          }
-        ],
-        "artifact_revisions_resolved": true,
-        "installation_installed_at": "2026-10-14T21:20:33.765790+00:00",
-        "installation_verified_at": "2026-10-14T21:23:02.602004+00:00",
-        "artifact_verification_status": "verified",
-        "max_input_tokens": 4096,
-        "provider": {
-          "name": "local",
-          "kind": "local",
-          "engine": "kev"
-        },
-        "source": "official",
-        "capabilities": {
-          "systemone": true,
-          "choice": true,
-          "noul": true,
-          "score": true,
-          "multi_question": true,
-          "multi": false,
-          "act": false,
-          "facts": false,
-          "evidence": false
-        }
-      },
-      "summary": {
-        "overall": {
-          "cases": 60,
-          "passed_cases": 40,
-          "case_accuracy": 0.6666666666666666,
-          "assertions": 93,
-          "correct": 73,
-          "decision_accuracy": 0.7849462365591398,
-          "runtime_errors": 0,
-          "completed_assertions": 93,
-          "mean_ms": 65.79166666666667,
-          "median_ms": 57.900000000000006,
-          "p95_ms": 91.2,
-          "throughput_decisions_per_s": 23.55921469284357
-        },
-        "noul": {
-          "cases": 20,
-          "passed_cases": 16,
-          "case_accuracy": 0.8,
-          "assertions": 20,
-          "correct": 16,
-          "decision_accuracy": 0.8,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 53.239999999999995,
-          "median_ms": 52.849999999999994,
-          "p95_ms": 56.1,
-          "throughput_decisions_per_s": 18.782870022539445
-        },
-        "choice": {
-          "cases": 20,
-          "passed_cases": 14,
-          "case_accuracy": 0.7,
-          "assertions": 20,
-          "correct": 14,
-          "decision_accuracy": 0.7,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 58.489999999999995,
-          "median_ms": 57.900000000000006,
-          "p95_ms": 62.4,
-          "throughput_decisions_per_s": 17.096939647803044
-        },
-        "shared": {
-          "cases": 20,
-          "passed_cases": 10,
-          "case_accuracy": 0.5,
-          "assertions": 53,
-          "correct": 43,
-          "decision_accuracy": 0.8113207547169812,
-          "runtime_errors": 0,
-          "completed_assertions": 53,
-          "mean_ms": 85.645,
-          "median_ms": 87.5,
-          "p95_ms": 92.6,
-          "throughput_decisions_per_s": 30.94167785626715
-        }
-      }
-    },
-    {
-      "model_id": "laya-english",
-      "backend": "mlx",
-      "engine": "laya",
-      "load_ms": 1018.204916967079,
-      "load_error": null,
-      "profile_identity": {
-        "schema_version": 1,
-        "canonical_id": "2087afc943a1321fddefb07b1201b672a1875dfec7ada044436e796d026b218b",
-        "model_id": "laya-english",
-        "backend": "mlx",
-        "engine": "laya",
-        "family": null,
-        "runtime": null,
-        "runtime_version": null,
-        "model": "aac6fef/laya-mlx",
-        "source": "community",
-        "precision": null,
-        "quantization": null,
-        "runtime_metadata": {},
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "aac6fef/laya-mlx",
-            "revision": "047678560251f28113ee8f5df4be82102c7bf336",
-            "role": null
-          }
-        ]
-      },
-      "runtime_identity": {
-        "deqio_version": "0.6.2",
-        "runtime_instance_id": "9d809654c8d94562ad58ac6cca94871d",
-        "engine": "laya",
-        "model_id": "laya-english",
-        "backend": "mlx",
-        "model": "aac6fef/laya-mlx",
-        "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "aac6fef/laya-mlx",
-            "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
-            "resolved_revision": "047678560251f28113ee8f5df4be82102c7bf336"
-          }
-        ],
-        "artifact_revisions_resolved": true,
-        "installation_installed_at": "2026-10-14T21:25:13.768138+00:00",
-        "installation_verified_at": "2026-10-14T21:25:13.768138+00:00",
-        "artifact_verification_status": "verified",
-        "max_input_tokens": 4096,
-        "provider": {
-          "name": "local",
-          "kind": "local",
-          "engine": "laya"
-        },
-        "source": "community",
-        "capabilities": {
-          "systemone": true,
-          "choice": true,
-          "noul": true,
-          "score": true,
-          "multi_question": true,
-          "multi": false,
-          "act": false,
-          "facts": false,
-          "evidence": false
-        }
-      },
-      "summary": {
-        "overall": {
-          "cases": 60,
-          "passed_cases": 23,
-          "case_accuracy": 0.38333333333333336,
-          "assertions": 93,
-          "correct": 50,
-          "decision_accuracy": 0.5376344086021505,
-          "runtime_errors": 0,
-          "completed_assertions": 93,
-          "mean_ms": 52.67586666666667,
-          "median_ms": 39.1365,
-          "p95_ms": 101.643,
-          "throughput_decisions_per_s": 29.425239641682847
-        },
-        "noul": {
-          "cases": 20,
-          "passed_cases": 9,
-          "case_accuracy": 0.45,
-          "assertions": 20,
-          "correct": 9,
-          "decision_accuracy": 0.45,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 37.3691,
-          "median_ms": 35.185500000000005,
-          "p95_ms": 52.224,
-          "throughput_decisions_per_s": 26.760077176062573
-        },
-        "choice": {
-          "cases": 20,
-          "passed_cases": 11,
-          "case_accuracy": 0.55,
-          "assertions": 20,
-          "correct": 11,
-          "decision_accuracy": 0.55,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 39.56575,
-          "median_ms": 38.815,
-          "p95_ms": 51.53,
-          "throughput_decisions_per_s": 25.274385042618928
-        },
-        "shared": {
-          "cases": 20,
-          "passed_cases": 3,
-          "case_accuracy": 0.15,
-          "assertions": 53,
-          "correct": 30,
-          "decision_accuracy": 0.5660377358490566,
-          "runtime_errors": 0,
-          "completed_assertions": 53,
-          "mean_ms": 81.09275,
-          "median_ms": 85.2595,
-          "p95_ms": 103.315,
-          "throughput_decisions_per_s": 32.67863033378446
-        }
-      }
-    },
-    {
-      "model_id": "von",
-      "backend": "mps",
-      "engine": "von",
-      "load_ms": 5876.224417006597,
-      "load_error": null,
-      "profile_identity": {
-        "schema_version": 1,
-        "canonical_id": "7c48b1576357be508776201a65f5c584a00ca23a733a2aeb3aa881af686337ad",
-        "model_id": "von",
-        "backend": "mps",
-        "engine": "von",
-        "family": null,
-        "runtime": null,
-        "runtime_version": null,
-        "model": "von",
-        "source": "official",
-        "precision": null,
-        "quantization": null,
-        "runtime_metadata": {},
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "wfzyx/von",
-            "revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
-            "role": null
-          }
-        ]
-      },
-      "runtime_identity": {
-        "deqio_version": "0.6.2",
-        "runtime_instance_id": "21a14d5b9a124b2e995c4aec9596262d",
-        "engine": "von",
-        "model_id": "von",
-        "backend": "mps",
-        "model": "von",
-        "requested_revision": null,
-        "artifacts": [
-          {
-            "source": "huggingface",
-            "repo_id": "wfzyx/von",
-            "requested_revision": null,
-            "resolved_revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
-            "filename": "option_marker.pt"
-          }
-        ],
-        "artifact_revisions_resolved": true,
-        "installation_installed_at": "2026-10-14T21:26:45.544237+00:00",
-        "installation_verified_at": "2026-10-14T21:32:04.664544+00:00",
-        "artifact_verification_status": "verified",
-        "max_input_tokens": 4096,
-        "provider": {
-          "name": "local",
-          "kind": "local",
-          "engine": "von"
-        },
-        "source": "official",
-        "capabilities": {
-          "systemone": true,
-          "choice": true,
-          "noul": true,
-          "score": true,
-          "multi_question": true,
-          "multi": false,
-          "act": false,
-          "facts": false,
-          "evidence": false
-        }
-      },
-      "summary": {
-        "overall": {
-          "cases": 60,
-          "passed_cases": 31,
-          "case_accuracy": 0.5166666666666667,
-          "assertions": 93,
-          "correct": 58,
-          "decision_accuracy": 0.6236559139784946,
-          "runtime_errors": 0,
-          "completed_assertions": 93,
-          "mean_ms": 85.71445765943888,
-          "median_ms": 77.54570798715577,
-          "p95_ms": 150.17387503758073,
-          "throughput_decisions_per_s": 18.08329705775504
-        },
-        "noul": {
-          "cases": 20,
-          "passed_cases": 10,
-          "case_accuracy": 0.5,
-          "assertions": 20,
-          "correct": 10,
-          "decision_accuracy": 0.5,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 80.09399601141922,
-          "median_ms": 77.21293752547354,
-          "p95_ms": 92.59258408565074,
-          "throughput_decisions_per_s": 12.485330359312167
-        },
-        "choice": {
-          "cases": 20,
-          "passed_cases": 14,
-          "case_accuracy": 0.7,
-          "assertions": 20,
-          "correct": 14,
-          "decision_accuracy": 0.7,
-          "runtime_errors": 0,
-          "completed_assertions": 20,
-          "mean_ms": 55.50243114703335,
-          "median_ms": 54.30672847433016,
-          "p95_ms": 63.901874935254455,
-          "throughput_decisions_per_s": 18.017228783201702
-        },
-        "shared": {
-          "cases": 20,
-          "passed_cases": 7,
-          "case_accuracy": 0.35,
-          "assertions": 53,
-          "correct": 34,
-          "decision_accuracy": 0.6415094339622641,
-          "runtime_errors": 0,
-          "completed_assertions": 53,
-          "mean_ms": 121.54694581986405,
-          "median_ms": 124.446916510351,
-          "p95_ms": 158.06975006125867,
-          "throughput_decisions_per_s": 21.80227550865304
-        }
-      }
-    },
-    {
       "model_id": "d3-lite",
       "backend": "gguf",
       "engine": "decision3",
-      "load_ms": 1359.6506249159575,
+      "load_ms": 708.7372919777408,
       "load_error": null,
       "profile_identity": {
         "schema_version": 1,
@@ -554,7 +45,7 @@
       },
       "runtime_identity": {
         "deqio_version": "0.6.2",
-        "runtime_instance_id": "8de165d80e234e29a9190d045d5013eb",
+        "runtime_instance_id": "d676b713e5514a1b835a6ece5f175c09",
         "engine": "decision3",
         "model_id": "d3-lite",
         "backend": "gguf",
@@ -573,7 +64,7 @@
         ],
         "artifact_revisions_resolved": true,
         "installation_installed_at": "2026-10-17T08:52:55.738669+00:00",
-        "installation_verified_at": "2026-10-17T08:54:04.482613+00:00",
+        "installation_verified_at": "2026-10-17T10:54:19.176752+00:00",
         "artifact_verification_status": "verified",
         "max_input_tokens": 4096,
         "provider": {
@@ -621,10 +112,10 @@
           "decision_accuracy": 0.9032258064516129,
           "runtime_errors": 0,
           "completed_assertions": 93,
-          "mean_ms": 127.81597353362788,
-          "median_ms": 85.65525047015399,
-          "p95_ms": 247.36087501514703,
-          "throughput_decisions_per_s": 12.126809796525166
+          "mean_ms": 125.48556186569233,
+          "median_ms": 83.22320849401876,
+          "p95_ms": 244.32104197330773,
+          "throughput_decisions_per_s": 12.352018646248489
         },
         "noul": {
           "cases": 20,
@@ -635,10 +126,10 @@
           "decision_accuracy": 0.95,
           "runtime_errors": 0,
           "completed_assertions": 20,
-          "mean_ms": 77.4440435518045,
-          "median_ms": 73.70752049610019,
-          "p95_ms": 84.9972500000149,
-          "throughput_decisions_per_s": 12.912548908052198
+          "mean_ms": 77.74913345929235,
+          "median_ms": 79.69308295287192,
+          "p95_ms": 83.73479207511991,
+          "throughput_decisions_per_s": 12.861879682859447
         },
         "choice": {
           "cases": 20,
@@ -649,10 +140,10 @@
           "decision_accuracy": 0.8,
           "runtime_errors": 0,
           "completed_assertions": 20,
-          "mean_ms": 88.04543119622394,
-          "median_ms": 85.65525047015399,
-          "p95_ms": 100.36337503697723,
-          "throughput_decisions_per_s": 11.35777275905814
+          "mean_ms": 84.99309999751858,
+          "median_ms": 82.5550205190666,
+          "p95_ms": 98.12695800792426,
+          "throughput_decisions_per_s": 11.76566097752871
         },
         "shared": {
           "cases": 20,
@@ -663,108 +154,477 @@
           "decision_accuracy": 0.9245283018867925,
           "runtime_errors": 0,
           "completed_assertions": 53,
-          "mean_ms": 217.95844585285522,
-          "median_ms": 241.00966699188575,
-          "p95_ms": 248.9717499120161,
-          "throughput_decisions_per_s": 12.15828085776051
+          "mean_ms": 213.71445214026608,
+          "median_ms": 229.89237506408244,
+          "p95_ms": 253.97737498860806,
+          "throughput_decisions_per_s": 12.399722964269817
         }
       }
     },
     {
-      "model_id": "d3-lite",
-      "backend": "mlx",
-      "engine": "decision3",
-      "load_ms": 2402.3104169173166,
+      "model_id": "decider-0.8b",
+      "backend": "mps",
+      "engine": "decider",
+      "load_ms": 5026.781834079884,
       "load_error": null,
       "profile_identity": {
         "schema_version": 1,
-        "canonical_id": "233b2e113488387e12495089338ec9de952812aed157060acb43620ff4b92455",
-        "model_id": "d3-lite",
-        "backend": "mlx",
-        "engine": "decision3",
-        "family": "decision3",
-        "runtime": "d3-mlx-community",
+        "canonical_id": "bb2bba19bf7b2192584022e5aaacab8cee4e1b7fe79c93c8e7c3392a86cc7afe",
+        "model_id": "decider-0.8b",
+        "backend": "mps",
+        "engine": "decider",
+        "family": null,
+        "runtime": null,
         "runtime_version": null,
-        "model": "ahmedandaloes/d3-lite-mlx",
-        "source": "community",
-        "precision": "bf16",
+        "model": "Mapika/decider-0.8b",
+        "source": "official",
+        "precision": null,
         "quantization": null,
-        "runtime_metadata": {
-          "official_runtime": false
-        },
+        "runtime_metadata": {},
         "artifacts": [
           {
             "source": "huggingface",
-            "repo_id": "ahmedandaloes/d3-lite-mlx",
-            "revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
+            "repo_id": "Mapika/decider-0.8b",
+            "revision": "a0a01d6f8135298f400a8c856b355793012ae971",
             "role": null
           }
         ]
       },
       "runtime_identity": {
         "deqio_version": "0.6.2",
-        "runtime_instance_id": "343d03868aa14a52b136d8316881c43f",
-        "engine": "decision3",
-        "model_id": "d3-lite",
-        "backend": "mlx",
-        "model": "ahmedandaloes/d3-lite-mlx",
-        "requested_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
+        "runtime_instance_id": "9cd66599a3734b6b94884762014a0cb8",
+        "engine": "decider",
+        "model_id": "decider-0.8b",
+        "backend": "mps",
+        "model": "Mapika/decider-0.8b",
+        "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
         "artifacts": [
           {
             "source": "huggingface",
-            "repo_id": "ahmedandaloes/d3-lite-mlx",
-            "requested_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
-            "resolved_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a"
+            "repo_id": "Mapika/decider-0.8b",
+            "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
+            "resolved_revision": "a0a01d6f8135298f400a8c856b355793012ae971"
           }
         ],
         "artifact_revisions_resolved": true,
-        "installation_installed_at": "2026-10-14T21:19:09.188960+00:00",
-        "installation_verified_at": "2026-10-15T18:18:20.071268+00:00",
+        "installation_installed_at": "2026-10-14T21:25:56.848734+00:00",
+        "installation_verified_at": "2026-10-14T21:25:56.848734+00:00",
         "artifact_verification_status": "verified",
         "max_input_tokens": 4096,
         "provider": {
           "name": "local",
           "kind": "local",
-          "engine": "decision3"
+          "engine": "decider"
         },
-        "family": "decision3",
-        "runtime": "d3-mlx-community",
-        "platform": "mlx",
-        "source": "community",
+        "source": "official",
         "capabilities": {
           "systemone": true,
           "choice": true,
           "noul": true,
-          "score": false,
+          "score": true,
           "multi_question": true,
           "multi": false,
           "act": false,
           "facts": false,
           "evidence": false
-        },
-        "precision": "bf16",
-        "runtime_metadata": {
-          "family": "decision3",
-          "official_runtime": false,
-          "launcher": "d3_mlx",
-          "d3_source_model": "vllm-sr/d3-lite",
-          "forward": "deqio-d3-mlx-forward/2"
         }
       },
       "summary": {
         "overall": {
           "cases": 60,
-          "passed_cases": 17,
-          "case_accuracy": 0.2833333333333333,
+          "passed_cases": 45,
+          "case_accuracy": 0.75,
           "assertions": 93,
-          "correct": 39,
-          "decision_accuracy": 0.41935483870967744,
+          "correct": 78,
+          "decision_accuracy": 0.8387096774193549,
           "runtime_errors": 0,
           "completed_assertions": 93,
-          "mean_ms": 177.81730000000002,
-          "median_ms": 119.4725,
-          "p95_ms": 355.296,
-          "throughput_decisions_per_s": 8.716812143700304
+          "mean_ms": 302.03559929893044,
+          "median_ms": 299.84085401520133,
+          "p95_ms": 389.98208299744874,
+          "throughput_decisions_per_s": 5.1318453970253195
+        },
+        "noul": {
+          "cases": 20,
+          "passed_cases": 15,
+          "case_accuracy": 0.75,
+          "assertions": 20,
+          "correct": 15,
+          "decision_accuracy": 0.75,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 279.8087333503645,
+          "median_ms": 273.8775829784572,
+          "p95_ms": 359.7737499512732,
+          "throughput_decisions_per_s": 3.5738698646973357
+        },
+        "choice": {
+          "cases": 20,
+          "passed_cases": 15,
+          "case_accuracy": 0.75,
+          "assertions": 20,
+          "correct": 15,
+          "decision_accuracy": 0.75,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 328.57571044005454,
+          "median_ms": 329.9568119691685,
+          "p95_ms": 381.44170795567334,
+          "throughput_decisions_per_s": 3.0434385994653135
+        },
+        "shared": {
+          "cases": 20,
+          "passed_cases": 15,
+          "case_accuracy": 0.75,
+          "assertions": 53,
+          "correct": 48,
+          "decision_accuracy": 0.9056603773584906,
+          "runtime_errors": 0,
+          "completed_assertions": 53,
+          "mean_ms": 297.7223541063722,
+          "median_ms": 291.46395850693807,
+          "p95_ms": 443.0464159231633,
+          "throughput_decisions_per_s": 8.900910406791928
+        }
+      }
+    },
+    {
+      "model_id": "kev-0.8b",
+      "backend": "mlx",
+      "engine": "kev",
+      "load_ms": 3989.5296250469983,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "95d8fdc32c96d9bb24f6a52200b756756253191caaa7f34edb495ec28ff7131f",
+        "model_id": "kev-0.8b",
+        "backend": "mlx",
+        "engine": "kev",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "ba6686fee9c84c6888a019ee17045979",
+        "engine": "kev",
+        "model_id": "kev-0.8b",
+        "backend": "mlx",
+        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+            "resolved_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:20:33.765790+00:00",
+        "installation_verified_at": "2026-10-14T21:23:02.602004+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "kev"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 60,
+          "passed_cases": 40,
+          "case_accuracy": 0.6666666666666666,
+          "assertions": 93,
+          "correct": 73,
+          "decision_accuracy": 0.7849462365591398,
+          "runtime_errors": 0,
+          "completed_assertions": 93,
+          "mean_ms": 67.17833333333333,
+          "median_ms": 60.150000000000006,
+          "p95_ms": 94.1,
+          "throughput_decisions_per_s": 23.07291537450071
+        },
+        "noul": {
+          "cases": 20,
+          "passed_cases": 16,
+          "case_accuracy": 0.8,
+          "assertions": 20,
+          "correct": 16,
+          "decision_accuracy": 0.8,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 53.504999999999995,
+          "median_ms": 53.3,
+          "p95_ms": 58.4,
+          "throughput_decisions_per_s": 18.689842070834505
+        },
+        "choice": {
+          "cases": 20,
+          "passed_cases": 14,
+          "case_accuracy": 0.7,
+          "assertions": 20,
+          "correct": 14,
+          "decision_accuracy": 0.7,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 60.73,
+          "median_ms": 60.150000000000006,
+          "p95_ms": 67.5,
+          "throughput_decisions_per_s": 16.466326362588507
+        },
+        "shared": {
+          "cases": 20,
+          "passed_cases": 10,
+          "case_accuracy": 0.5,
+          "assertions": 53,
+          "correct": 43,
+          "decision_accuracy": 0.8113207547169812,
+          "runtime_errors": 0,
+          "completed_assertions": 53,
+          "mean_ms": 87.3,
+          "median_ms": 89.25,
+          "p95_ms": 94.7,
+          "throughput_decisions_per_s": 30.355097365406642
+        }
+      }
+    },
+    {
+      "model_id": "laya-english",
+      "backend": "mlx",
+      "engine": "laya",
+      "load_ms": 775.1000419957563,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "2087afc943a1321fddefb07b1201b672a1875dfec7ada044436e796d026b218b",
+        "model_id": "laya-english",
+        "backend": "mlx",
+        "engine": "laya",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "aac6fef/laya-mlx",
+        "source": "community",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "aac6fef/laya-mlx",
+            "revision": "047678560251f28113ee8f5df4be82102c7bf336",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "1d4a62eefadf4275ae2b937a2b49801c",
+        "engine": "laya",
+        "model_id": "laya-english",
+        "backend": "mlx",
+        "model": "aac6fef/laya-mlx",
+        "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "aac6fef/laya-mlx",
+            "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
+            "resolved_revision": "047678560251f28113ee8f5df4be82102c7bf336"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:25:13.768138+00:00",
+        "installation_verified_at": "2026-10-14T21:25:13.768138+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "laya"
+        },
+        "source": "community",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 60,
+          "passed_cases": 23,
+          "case_accuracy": 0.38333333333333336,
+          "assertions": 93,
+          "correct": 50,
+          "decision_accuracy": 0.5376344086021505,
+          "runtime_errors": 0,
+          "completed_assertions": 93,
+          "mean_ms": 52.20871666666667,
+          "median_ms": 39.540499999999994,
+          "p95_ms": 102.679,
+          "throughput_decisions_per_s": 29.68852902277174
+        },
+        "noul": {
+          "cases": 20,
+          "passed_cases": 9,
+          "case_accuracy": 0.45,
+          "assertions": 20,
+          "correct": 9,
+          "decision_accuracy": 0.45,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 35.4369,
+          "median_ms": 33.7405,
+          "p95_ms": 39.538,
+          "throughput_decisions_per_s": 28.21917267029565
+        },
+        "choice": {
+          "cases": 20,
+          "passed_cases": 11,
+          "case_accuracy": 0.55,
+          "assertions": 20,
+          "correct": 11,
+          "decision_accuracy": 0.55,
+          "runtime_errors": 0,
+          "completed_assertions": 20,
+          "mean_ms": 40.015,
+          "median_ms": 39.3705,
+          "p95_ms": 53.281,
+          "throughput_decisions_per_s": 24.990628514307136
+        },
+        "shared": {
+          "cases": 20,
+          "passed_cases": 3,
+          "case_accuracy": 0.15,
+          "assertions": 53,
+          "correct": 30,
+          "decision_accuracy": 0.5660377358490566,
+          "runtime_errors": 0,
+          "completed_assertions": 53,
+          "mean_ms": 81.17425,
+          "median_ms": 85.83500000000001,
+          "p95_ms": 103.878,
+          "throughput_decisions_per_s": 32.64582056501908
+        }
+      }
+    },
+    {
+      "model_id": "von",
+      "backend": "mps",
+      "engine": "von",
+      "load_ms": 5258.645750000142,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "7c48b1576357be508776201a65f5c584a00ca23a733a2aeb3aa881af686337ad",
+        "model_id": "von",
+        "backend": "mps",
+        "engine": "von",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "von",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "wfzyx/von",
+            "revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "c6841059a54f4fddb5bf28a37b509ade",
+        "engine": "von",
+        "model_id": "von",
+        "backend": "mps",
+        "model": "von",
+        "requested_revision": null,
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "wfzyx/von",
+            "requested_revision": null,
+            "resolved_revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
+            "filename": "option_marker.pt"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:26:45.544237+00:00",
+        "installation_verified_at": "2026-10-14T21:32:04.664544+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "von"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 60,
+          "passed_cases": 31,
+          "case_accuracy": 0.5166666666666667,
+          "assertions": 93,
+          "correct": 58,
+          "decision_accuracy": 0.6236559139784946,
+          "runtime_errors": 0,
+          "completed_assertions": 93,
+          "mean_ms": 79.71988407274087,
+          "median_ms": 75.27979149017483,
+          "p95_ms": 139.9949589977041,
+          "throughput_decisions_per_s": 19.443078951114547
         },
         "noul": {
           "cases": 20,
@@ -775,38 +635,38 @@
           "decision_accuracy": 0.5,
           "runtime_errors": 0,
           "completed_assertions": 20,
-          "mean_ms": 106.67784999999999,
-          "median_ms": 106.793,
-          "p95_ms": 120.296,
-          "throughput_decisions_per_s": 9.374017192884935
+          "mean_ms": 75.18155836150981,
+          "median_ms": 75.27979149017483,
+          "p95_ms": 86.45979198627174,
+          "throughput_decisions_per_s": 13.301134238153317
         },
         "choice": {
           "cases": 20,
-          "passed_cases": 6,
-          "case_accuracy": 0.3,
+          "passed_cases": 14,
+          "case_accuracy": 0.7,
           "assertions": 20,
-          "correct": 6,
-          "decision_accuracy": 0.3,
+          "correct": 14,
+          "decision_accuracy": 0.7,
           "runtime_errors": 0,
           "completed_assertions": 20,
-          "mean_ms": 119.8253,
-          "median_ms": 119.13499999999999,
-          "p95_ms": 123.902,
-          "throughput_decisions_per_s": 8.345482965617444
+          "mean_ms": 46.92196456599049,
+          "median_ms": 44.84697902807966,
+          "p95_ms": 54.893249995075166,
+          "throughput_decisions_per_s": 21.311980631024344
         },
         "shared": {
           "cases": 20,
-          "passed_cases": 1,
-          "case_accuracy": 0.05,
+          "passed_cases": 7,
+          "case_accuracy": 0.35,
           "assertions": 53,
-          "correct": 23,
-          "decision_accuracy": 0.4339622641509434,
+          "correct": 34,
+          "decision_accuracy": 0.6415094339622641,
           "runtime_errors": 0,
           "completed_assertions": 53,
-          "mean_ms": 306.94875,
-          "median_ms": 351.495,
-          "p95_ms": 368.441,
-          "throughput_decisions_per_s": 8.63336306142312
+          "mean_ms": 117.05612929072231,
+          "median_ms": 121.60464597400278,
+          "p95_ms": 159.71095801796764,
+          "throughput_decisions_per_s": 22.63871200984633
         }
       }
     }
