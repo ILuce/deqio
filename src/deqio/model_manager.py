@@ -555,32 +555,6 @@ def _install_decision3(
     return env_dir
 
 
-def _install_d3_mlx(
-    config_path: Path,
-    data: dict[str, Any],
-    profile: dict[str, Any],
-    *,
-    upgrade: bool,
-) -> Path:
-    """Install the community Decision 3.0 MLX runtime (mlx-vlm) plus Deqio's sidecar transport (0.6.1)."""
-
-    if str(profile.get("platform")) != "mlx":
-        raise RuntimeError("The Decision 3.0 MLX runtime requires the mlx profile")
-    runtime_key = str(profile.get("runtime_key", "d3-mlx"))
-    env_dir = _runtime_root(config_path, data) / runtime_key
-    python_path = _ensure_venv(env_dir, str(profile.get("python", "3.12")))
-    packages = [str(package) for package in (profile.get("packages") or [])]
-    if not packages:
-        raise RuntimeError("Decision 3.0 MLX profile does not declare its pinned runtime packages")
-    command = _pip_install(python_path, profile, upgrade=upgrade)
-    command.extend(packages)
-    for transport in SIDECAR_TRANSPORT_PACKAGES:
-        if transport not in packages:
-            command.append(transport)
-    _run(command)
-    return env_dir
-
-
 
 def _install_llama_cpp_runtime(
     config_path: Path,
@@ -727,8 +701,6 @@ def _install_runtime(config_path: Path, data: dict[str, Any], profile: dict[str,
         return _install_basal(config_path, data, profile, upgrade=upgrade)
     if profile.get("installer") == "decision3":
         return _install_decision3(config_path, data, profile, upgrade=upgrade)
-    if profile.get("installer") == "d3_mlx":
-        return _install_d3_mlx(config_path, data, profile, upgrade=upgrade)
     if str(data.get("backend")) == "remote" or profile.get("platform") == "remote":
         raise RuntimeError("Remote profiles have no runtime to install; deqio models setup verifies them with a probe")
     if profile.get("installer") == "llama_cpp":

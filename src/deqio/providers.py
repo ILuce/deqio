@@ -101,17 +101,6 @@ def provider_spec(name: str) -> ProviderSpec:
     return spec
 
 
-def remote_provider_names() -> list[str]:
-    return sorted(name for name, spec in PROVIDERS.items() if spec.kind == "remote")
-
-
-def local_provider_descriptor(engine: str | None = None) -> dict[str, Any]:
-    descriptor: dict[str, Any] = {"name": LOCAL_PROVIDER, "kind": "local"}
-    if engine:
-        descriptor["engine"] = str(engine)
-    return descriptor
-
-
 def cost_estimate(spec: ProviderSpec, input_tokens: int | None, *, scope: str = "decision") -> dict[str, Any]:
     """Estimated input cost of one call; ``amount`` is None when the API reported no token usage."""
     rate = spec.usd_per_million_input_tokens

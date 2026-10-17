@@ -100,7 +100,7 @@
       "id": "d3",
       "engine": "decision3",
       "label": "Decision 3.0 d3 26B",
-      "description": "Official Decision 3.0 d3 (26.09B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp, community BF16 MLX conversion (choice and noul).",
+      "description": "Official Decision 3.0 d3 (26.09B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp.",
       "source": "https://huggingface.co/vllm-sr/d3",
       "backends": {
         "cuda": {
@@ -210,52 +210,6 @@
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "vllm-d3-Q8_0.gguf"
           }
-        },
-        "mlx": {
-          "model": "ahmedandaloes/d3-mlx",
-          "model_revision": "cbc374ff4bc8e2ee17cb78df4725231f97dc1e17",
-          "wire_model": "ahmedandaloes/d3-mlx",
-          "runtime_key": "d3-mlx",
-          "exclude_newer": "2026-10-10T00:00:00Z",
-          "source": "community",
-          "source_url": "https://huggingface.co/ahmedandaloes/d3-mlx",
-          "installer": "d3_mlx",
-          "launcher": "d3_mlx",
-          "python": "3.12",
-          "packages": [
-            "mlx-vlm==0.7.6",
-            "mlx==0.32.3",
-            "transformers==5.17.0",
-            "fastapi==0.141.1",
-            "uvicorn[standard]==0.53.0"
-          ],
-          "systems": [
-            "Darwin"
-          ],
-          "min_memory_gib": 54.0,
-          "recommended_memory_gib": 58.2,
-          "default_max_input_tokens": 4096,
-          "family": "decision3",
-          "runtime": "d3-mlx-community",
-          "platform": "mlx",
-          "precision": "bf16",
-          "d3_source_model": "vllm-sr/d3",
-          "capabilities": {
-            "systemone": true,
-            "choice": true,
-            "noul": true,
-            "score": false,
-            "multi_question": true,
-            "multi": false,
-            "act": false,
-            "facts": false,
-            "evidence": false
-          },
-          "download": {
-            "type": "snapshot",
-            "repo_id": "ahmedandaloes/d3-mlx",
-            "revision": "cbc374ff4bc8e2ee17cb78df4725231f97dc1e17"
-          }
         }
       }
     },
@@ -263,7 +217,7 @@
       "id": "d3-flash",
       "engine": "decision3",
       "label": "Decision 3.0 d3-flash 8B",
-      "description": "Official Decision 3.0 d3-flash (8.39B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp, community BF16 MLX conversion (choice and noul).",
+      "description": "Official Decision 3.0 d3-flash (8.39B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp.",
       "source": "https://huggingface.co/vllm-sr/d3-flash",
       "backends": {
         "cuda": {
@@ -373,52 +327,6 @@
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "vllm-d3-flash-Q8_0.gguf"
           }
-        },
-        "mlx": {
-          "model": "ahmedandaloes/d3-flash-mlx",
-          "model_revision": "77adb3bea9abde92d1f32158743a0cbbb0bf7aa3",
-          "wire_model": "ahmedandaloes/d3-flash-mlx",
-          "runtime_key": "d3-mlx",
-          "exclude_newer": "2026-10-10T00:00:00Z",
-          "source": "community",
-          "source_url": "https://huggingface.co/ahmedandaloes/d3-flash-mlx",
-          "installer": "d3_mlx",
-          "launcher": "d3_mlx",
-          "python": "3.12",
-          "packages": [
-            "mlx-vlm==0.7.6",
-            "mlx==0.32.3",
-            "transformers==5.17.0",
-            "fastapi==0.141.1",
-            "uvicorn[standard]==0.53.0"
-          ],
-          "systems": [
-            "Darwin"
-          ],
-          "min_memory_gib": 18.6,
-          "recommended_memory_gib": 22.8,
-          "default_max_input_tokens": 4096,
-          "family": "decision3",
-          "runtime": "d3-mlx-community",
-          "platform": "mlx",
-          "precision": "bf16",
-          "d3_source_model": "vllm-sr/d3-flash",
-          "capabilities": {
-            "systemone": true,
-            "choice": true,
-            "noul": true,
-            "score": false,
-            "multi_question": true,
-            "multi": false,
-            "act": false,
-            "facts": false,
-            "evidence": false
-          },
-          "download": {
-            "type": "snapshot",
-            "repo_id": "ahmedandaloes/d3-flash-mlx",
-            "revision": "77adb3bea9abde92d1f32158743a0cbbb0bf7aa3"
-          }
         }
       }
     },
@@ -426,7 +334,7 @@
       "id": "d3-mini",
       "engine": "decision3",
       "label": "Decision 3.0 d3-mini 4.5B",
-      "description": "Official Decision 3.0 d3-mini (4.54B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp, community BF16 MLX conversion (choice and noul).",
+      "description": "Official Decision 3.0 d3-mini (4.54B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp.",
       "source": "https://huggingface.co/vllm-sr/d3-mini",
       "backends": {
         "cuda": {
@@ -536,52 +444,6 @@
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "vllm-d3-mini-Q8_0.gguf"
           }
-        },
-        "mlx": {
-          "model": "ahmedandaloes/d3-mini-mlx",
-          "model_revision": "c645173f5729051d473916283f9e37208b5113bb",
-          "wire_model": "ahmedandaloes/d3-mini-mlx",
-          "runtime_key": "d3-mlx",
-          "exclude_newer": "2026-10-10T00:00:00Z",
-          "source": "community",
-          "source_url": "https://huggingface.co/ahmedandaloes/d3-mini-mlx",
-          "installer": "d3_mlx",
-          "launcher": "d3_mlx",
-          "python": "3.12",
-          "packages": [
-            "mlx-vlm==0.7.6",
-            "mlx==0.32.3",
-            "transformers==5.17.0",
-            "fastapi==0.141.1",
-            "uvicorn[standard]==0.53.0"
-          ],
-          "systems": [
-            "Darwin"
-          ],
-          "min_memory_gib": 10.9,
-          "recommended_memory_gib": 15.1,
-          "default_max_input_tokens": 4096,
-          "family": "decision3",
-          "runtime": "d3-mlx-community",
-          "platform": "mlx",
-          "precision": "bf16",
-          "d3_source_model": "vllm-sr/d3-mini",
-          "capabilities": {
-            "systemone": true,
-            "choice": true,
-            "noul": true,
-            "score": false,
-            "multi_question": true,
-            "multi": false,
-            "act": false,
-            "facts": false,
-            "evidence": false
-          },
-          "download": {
-            "type": "snapshot",
-            "repo_id": "ahmedandaloes/d3-mini-mlx",
-            "revision": "c645173f5729051d473916283f9e37208b5113bb"
-          }
         }
       }
     },
@@ -589,7 +451,7 @@
       "id": "d3-nano",
       "engine": "decision3",
       "label": "Decision 3.0 d3-nano 2.2B",
-      "description": "Official Decision 3.0 d3-nano (2.21B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp, community BF16 MLX conversion (choice and noul).",
+      "description": "Official Decision 3.0 d3-nano (2.21B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp.",
       "source": "https://huggingface.co/vllm-sr/d3-nano",
       "backends": {
         "cuda": {
@@ -699,52 +561,6 @@
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "vllm-d3-nano-Q8_0.gguf"
           }
-        },
-        "mlx": {
-          "model": "ahmedandaloes/d3-nano-mlx",
-          "model_revision": "b503613cd2bdbbaef1cfbd09c6e348a5758b255b",
-          "wire_model": "ahmedandaloes/d3-nano-mlx",
-          "runtime_key": "d3-mlx",
-          "exclude_newer": "2026-10-10T00:00:00Z",
-          "source": "community",
-          "source_url": "https://huggingface.co/ahmedandaloes/d3-nano-mlx",
-          "installer": "d3_mlx",
-          "launcher": "d3_mlx",
-          "python": "3.12",
-          "packages": [
-            "mlx-vlm==0.7.6",
-            "mlx==0.32.3",
-            "transformers==5.17.0",
-            "fastapi==0.141.1",
-            "uvicorn[standard]==0.53.0"
-          ],
-          "systems": [
-            "Darwin"
-          ],
-          "min_memory_gib": 6.2,
-          "recommended_memory_gib": 10.4,
-          "default_max_input_tokens": 4096,
-          "family": "decision3",
-          "runtime": "d3-mlx-community",
-          "platform": "mlx",
-          "precision": "bf16",
-          "d3_source_model": "vllm-sr/d3-nano",
-          "capabilities": {
-            "systemone": true,
-            "choice": true,
-            "noul": true,
-            "score": false,
-            "multi_question": true,
-            "multi": false,
-            "act": false,
-            "facts": false,
-            "evidence": false
-          },
-          "download": {
-            "type": "snapshot",
-            "repo_id": "ahmedandaloes/d3-nano-mlx",
-            "revision": "b503613cd2bdbbaef1cfbd09c6e348a5758b255b"
-          }
         }
       }
     },
@@ -752,7 +568,7 @@
       "id": "d3-lite",
       "engine": "decision3",
       "label": "Decision 3.0 d3-lite 0.85B",
-      "description": "Official Decision 3.0 d3-lite (0.85B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp, community BF16 MLX conversion (choice and noul).",
+      "description": "Official Decision 3.0 d3-lite (0.85B, text input only in Deqio): native System One server on CUDA, ggml-org GGUF Q8_0 through llama.cpp.",
       "source": "https://huggingface.co/vllm-sr/d3-lite",
       "backends": {
         "cuda": {
@@ -861,52 +677,6 @@
             "local_dir": "models/d3-lite-GGUF",
             "role": "systemone-gguf-q8_0",
             "filename_pattern": "vllm-d3-lite-Q8_0.gguf"
-          }
-        },
-        "mlx": {
-          "model": "ahmedandaloes/d3-lite-mlx",
-          "model_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
-          "wire_model": "ahmedandaloes/d3-lite-mlx",
-          "runtime_key": "d3-mlx",
-          "exclude_newer": "2026-10-10T00:00:00Z",
-          "source": "community",
-          "source_url": "https://huggingface.co/ahmedandaloes/d3-lite-mlx",
-          "installer": "d3_mlx",
-          "launcher": "d3_mlx",
-          "python": "3.12",
-          "packages": [
-            "mlx-vlm==0.7.6",
-            "mlx==0.32.3",
-            "transformers==5.17.0",
-            "fastapi==0.141.1",
-            "uvicorn[standard]==0.53.0"
-          ],
-          "systems": [
-            "Darwin"
-          ],
-          "min_memory_gib": 3.5,
-          "recommended_memory_gib": 7.7,
-          "default_max_input_tokens": 4096,
-          "family": "decision3",
-          "runtime": "d3-mlx-community",
-          "platform": "mlx",
-          "precision": "bf16",
-          "d3_source_model": "vllm-sr/d3-lite",
-          "capabilities": {
-            "systemone": true,
-            "choice": true,
-            "noul": true,
-            "score": false,
-            "multi_question": true,
-            "multi": false,
-            "act": false,
-            "facts": false,
-            "evidence": false
-          },
-          "download": {
-            "type": "snapshot",
-            "repo_id": "ahmedandaloes/d3-lite-mlx",
-            "revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a"
           }
         }
       }

@@ -14,15 +14,15 @@ PL Bench is a dedicated Polish-native suite rather than a mechanical translation
 
 Rendered by `deqio benchmark tables` from the run's `summary.json`/`results.jsonl` (Deqio 0.6.1 fix 2 on the same
 Apple Silicon / 16 GiB host; the listed profiles are unchanged in 0.6.2). The run also contained `basal-2.0-main`
-(MLX 8-bit, 91.7 % / 94.6 %), reported with the 3B+ group, and `d3-lite` MLX with the superseded forward `/1`,
-excluded. The 0.5 tables below stay as the reference for the groups without a 0.6.2 run yet.
+(MLX 8-bit, 91.7 % / 94.6 %), reported with the 3B+ group, and `d3-lite` MLX, excluded (the Decision 3.0 MLX profiles were
+removed in 0.6.2). The 0.5 tables below stay as the reference for the groups without a 0.6.2 run yet.
 
 ### Models up to 1B — PL Bench (0.6.2 snapshot)
 
 #### Run
 
 - `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
-- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported
+- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported
 - runtime errors across the listed profiles: 0
 
 #### Quality

@@ -4440,7 +4440,8 @@ def test_patch4_readme_is_simplified_and_documents_public_api_and_benchmarks() -
         assert heading in readme
     # 0.6.2 tables: rendered by `deqio benchmark tables` from run 20261015T120300Z; the D3 MLX /1 row is excluded by name
     assert "- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15" in readme
-    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported" in readme
+    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported" in readme
+    assert "✓ bf16 (community)" not in readme and "d3_mlx_sidecar" not in readme  # 0.6.2: no Decision 3.0 MLX profile
     assert "| Decider 0.8B | MPS | 75.0% | 83.9% | 75.0% | 75.0% | 75.0% | 90.6% |" in readme
     assert "| Kev 0.8B | MLX | 54.0 ms | 84.2 ms | 25.13/s | — |" in readme
     assert "| TypeSafe Jev (remote) | remote | 317.7 ms | 424.8 ms | 4.64/s | $0.0108 |" in readme
@@ -5546,3 +5547,19 @@ def test_native_requests_reject_more_questions_than_the_limit_before_inference(
         assert f"at most {limit}" in json.dumps(body)
         assert server.stats["errors"] == errors_before + 1
     assert len(watch.events) == 2
+
+
+def test_published_sdist_excludes_the_benchmark_run_directories() -> None:
+    """0.6.2: `runs/` holds the owner's benchmark summaries (local suite paths included) for the README tables; the
+    source distribution ships the project, not those measurements, and `results.jsonl` files never enter git."""
+    import sys
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"] == ["/runs"]
+    ignored = Path(".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "*.jsonl" in ignored and ".deqio/" in ignored

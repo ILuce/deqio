@@ -92,11 +92,11 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Model | Model ID | MLX | MPS | CUDA | GGUF |
 | --- | --- | :---: | :---: | :---: | :---: |
 | SemIf / Qwen3.5 4B | `semif-qwen3.5-4b` | ✓ 8-bit | ✓ | ✓ | — |
-| Decision 3.0 d3 26B | `d3` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-flash 8B | `d3-flash` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-mini 4.5B | `d3-mini` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-nano 2.2B | `d3-nano` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
-| Decision 3.0 d3-lite 0.85B | `d3-lite` | ✓ bf16 (community) | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3 26B | `d3` | — | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-flash 8B | `d3-flash` | — | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-mini 4.5B | `d3-mini` | — | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-nano 2.2B | `d3-nano` | — | — | ✓ | ✓ Q8_0 |
+| Decision 3.0 d3-lite 0.85B | `d3-lite` | — | — | ✓ | ✓ Q8_0 |
 | Kev 0.8B | `kev-0.8b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
 | Kev 4B | `kev-4b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
 | Kev 9B | `kev-9b` | ✓ | ✓ | ✓ | ✓ Q8_0 |
@@ -121,8 +121,8 @@ The table below is generated from the model profiles shipped in the current Deqi
 | Von | `von` | — | ✓ | ✓ | — |
 | Bespoke Nimble 9B | `nimble-9b` | ✓ | — | ✓ | — |
 
-- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile; `✓ bf16 (community)` marks the Decision 3.0 MLX conversions by `ahmedandaloes` (BF16, choice and noul only; no 8-bit MLX conversion of Decision 3.0 exists yet).
-- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA, the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408) and the community MLX conversion through `deqio.d3_mlx_sidecar`, whose own forward (`deqio-d3-mlx-forward/2`, named in the answer provenance) drives the community checkpoint with the official `decision_config.json` semantics (non-causal full attention, readout by option position).
+- `✓ 8-bit` marks the cataloged MLX 8-bit path; `✓ Q8_0` marks the accepted GGUF Q8_0 profile.
+- Decision 3.0 (replacing Decision 2.0 in 0.6.1) runs the official package's own System One server (`d3_server.py`) on CUDA and the `ggml-org` Q8_0 files through the pinned llama.cpp (`cbe28bb3`, with the fix of ggml-org/llama.cpp#30408). On Apple Silicon use the GGUF profiles: the community BF16 MLX conversions were catalogued in 0.6.1 and removed in 0.6.2 after the owner's benchmark (d3-lite MLX 41.9 % / 56.8 % decision accuracy against 90.3 % / 90.8 % for the same model on GGUF); no MLX path for Decision 3.0 is offered until a conversion reproduces the official readout.
 - Basal 2.0 (official `rkinas/basal` v2.0.0 runtime; replacing Basal 1.5 in 0.6.1) is catalogued as MLX 8-bit and GGUF Q8_0 with Deqio's broadest native feature set (no evidence head). Remove an old Basal 1.5 installation with `deqio models delete` before upgrading, or delete `.model-runtimes/basal15-*` by hand afterwards.
 - Backend presence does not imply identical capabilities. Deqio checks each profile at runtime and rejects unsupported native features explicitly.
 - Run `deqio models list` for the full catalog and `deqio models installed` for profiles available locally.
@@ -131,10 +131,9 @@ The table below is generated from the model profiles shipped in the current Deqi
 
 Every table in this section is rendered by `deqio benchmark tables` from a completed run's `summary.json` and
 `results.jsonl` (`deqio benchmark tables --run RUN_ID --models MODEL_ID:BACKEND ... --title "..."`): the numbers
-are the run's own, rows are sorted by decision accuracy, a profile that did not load is listed as such, and a
-Decision 3.0 MLX row produced by an older Deqio forward than the current `deqio-d3-mlx-forward/2` is excluded by
-name because its numbers are not comparable. Latency and throughput are machine-specific (Apple Silicon macOS, 16 GiB
-unified memory, one profile resident at a time).
+are the run's own, rows are sorted by decision accuracy, a profile that did not load is listed as such, and a row of a
+profile removed from the catalog (the Decision 3.0 MLX conversions, 0.6.2) is excluded by name. Latency and throughput
+are machine-specific (Apple Silicon macOS, 16 GiB unified memory, one profile resident at a time).
 
 The ENG and PL suites differ in size, difficulty, domains, and question composition, so ENG-vs-PL deltas are descriptive differences between the listed runs — **not** a pure measurement of language quality.
 
@@ -143,14 +142,14 @@ The ENG and PL suites differ in size, difficulty, domains, and question composit
 The 0.6.2 tables are filled in three steps as the owner's runs complete: models up to 1B (below), models from 1B to
 3B, models above 3B. Until a group has its 0.6.2 run, the historical 0.5 tables further down remain the reference
 for it. The PL run below was made on Deqio 0.6.1 fix 2 — the profiles listed did not change in 0.6.2; its `d3-lite`
-MLX row is excluded (forward `/1`), and the ENG run of this group is pending.
+MLX row is excluded (the MLX profiles were removed in 0.6.2), and the ENG run of this group is pending.
 
 ### Models up to 1B — PL Bench (0.6.2 snapshot)
 
 #### Run
 
 - `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.1 · 2026-10-15
-- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported
+- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported
 - runtime errors across the listed profiles: 0
 
 #### Quality
@@ -704,7 +703,7 @@ The browser UI shows the same capability matrix. For example:
 
 - a profile with Choice/Noul/Score but no Multi will reject `/v1/multi`;
 - Basal 2.0 MLX/GGUF profiles support Multi, Act, Facts, SOAM and option keys but not Evidence (no evidence head in 2.0);
-- Decision 3.0 MLX profiles reject Score (the community conversion implements choice and noul only);
+- Decision 3.0 CUDA and GGUF profiles support Choice, Noul and Score but no Multi, Act, Facts or Evidence;
 
 No unsupported feature is silently ignored.
 
@@ -762,7 +761,8 @@ deqio benchmark --all --output runs/today         # results directory (default: 
 the quality, performance and identity tables of a completed run (the ones in "Benchmark snapshot") from its
 `summary.json` and `results.jsonl`; `--summary PATH` takes a run directory outside the workspace. Rows are sorted by
 decision accuracy; remote profiles get the estimated cost per 1 000 scored decisions; profiles that did not load and
-Decision 3.0 MLX rows from a superseded Deqio forward are listed, never silently dropped or merged.
+rows of profiles removed from the catalog (the Decision 3.0 MLX conversions) are listed by name, never silently dropped
+or merged.
 
 Compare two completed runs:
 

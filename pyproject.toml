@@ -66,6 +66,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/deqio"]
 
+[tool.hatch.build.targets.sdist]
+# Benchmark run directories kept in the repository for the README tables are the owner's local measurements
+# (they name the local suite path); they are not part of the published source distribution.
+exclude = ["/runs"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

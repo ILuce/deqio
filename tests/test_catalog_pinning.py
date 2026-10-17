@@ -51,12 +51,7 @@ COMMUNITY_PROFILES = {
     "laya-typed-decisions::mlx",
     "clef-flash::mlx",
     "clef::mlx",
-    # 0.6.1: Decision 3.0 MLX is the BF16 conversion by ahmedandaloes (no official or 8-bit MLX exists).
-    "d3::mlx",
-    "d3-flash::mlx",
-    "d3-mini::mlx",
-    "d3-nano::mlx",
-    "d3-lite::mlx",
+    # 0.6.2: the Decision 3.0 MLX community conversions were removed (they did not reproduce the official readout).
 }
 
 # Hugging Face artifacts whose catalog revision is not yet an immutable commit
@@ -172,7 +167,6 @@ def test_installers_only_install_pinned_packages(tmp_path: Path, monkeypatch: py
 
     for model_id, backend in (
         ("d3-mini", "cuda"),
-        ("d3-mini", "mlx"),
         ("decider-2b", "gguf"),
         ("nimble-9b", "mlx"),
         ("nimble-9b", "cuda"),

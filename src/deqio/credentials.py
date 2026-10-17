@@ -34,14 +34,6 @@ def _unavailable(action: str, error: Exception) -> KeychainUnavailableError:
     )
 
 
-def keychain_backend_name() -> str:
-    try:
-        backend = _keyring().get_keyring()
-    except Exception as error:  # keyring.errors.NoKeyringError and friends
-        raise _unavailable("find", error) from error
-    return str(getattr(backend, "name", backend.__class__.__name__))
-
-
 def store_api_key(provider: str, api_key: str) -> None:
     key = str(api_key or "")
     if not key.strip():

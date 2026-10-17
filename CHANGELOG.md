@@ -8,12 +8,14 @@ production audit.
 
 ## [Unreleased]
 
-## [0.6.2] — 2026-10-15 (not tagged yet)
+## [0.6.2] — 2026-10-17 (not tagged yet)
 
-D13 plus the Decision 3.0 MLX fix 3, on top of the tagged 0.6.1. Public HTTP routes and response fields are
-unchanged; nothing was removed or renamed and no response field was added. New: the OpenAPI 3.1 document of the
-decision routes, the Python SDK `deqio-client`, `deqio decide`, `deqio openapi`, the release checklist. The core
-package gains one dependency, `deqio-client` (the workspace member `clients/python`, itself dependency-free).
+D13 on top of the tagged 0.6.1, plus the removal of the Decision 3.0 MLX backend. Public HTTP routes and response
+fields are unchanged; nothing was removed or renamed and no response field was added. New: the OpenAPI 3.1 document
+of the decision routes, the Python SDK `deqio-client`, `deqio decide`, `deqio openapi`, `deqio benchmark tables`, the
+release checklist. The core package gains one dependency, `deqio-client` (the workspace member `clients/python`,
+itself dependency-free). Catalog: the five `d3-*:mlx` profiles are gone (see "Removed"); every other profile and pin
+is unchanged.
 
 ### Added
 - `GET /openapi.json` (and `/docs`) now describes the responses of the eight decision routes and the `/v1/decision`
@@ -43,8 +45,8 @@ package gains one dependency, `deqio-client` (the workspace member `clients/pyth
   (`deqio.benchmark_tables`): the README / `benchmarks/summary_*.md` tables of a completed run from its `summary.json`
   and `results.jsonl` — quality (case and decision accuracy, per type), performance (median, P95, throughput,
   estimated cost per 1 000 scored decisions for remote profiles) and identity (engine, runtime, precision, source,
-  model/endpoint, pinned revision); rows sorted by decision accuracy, profiles that did not load listed, Decision 3.0
-  MLX rows from a superseded Deqio forward excluded by name. README "Benchmark snapshot" now opens with the 0.6.2
+  model/endpoint, pinned revision); rows sorted by decision accuracy, profiles that did not load listed, rows of the
+  removed Decision 3.0 MLX profiles excluded by name. README "Benchmark snapshot" now opens with the 0.6.2
   tables (models up to 1B and the remote APIs from the owner's PL run `20261015T120300Z`; the 1–3B and 3B+ groups
   follow) above the historical 0.5 tables; `benchmarks/summary_pl.md` carries the same 0.6.2 section.
 
@@ -61,7 +63,22 @@ package gains one dependency, `deqio-client` (the workspace member `clients/pyth
   also requires the two versions to match. The README gains the "Python SDK, `deqio decide` and the OpenAPI
   document" section. Version 0.6.2.
 
-### Fixed (0.6.2 fix 3, 2026-10-15, after the owner's first Decision 3.0 MLX benchmark)
+### Removed (2026-10-17, after the owner's MLX-vs-GGUF benchmark)
+- Decision 3.0 on MLX: the catalog profiles `d3:mlx`, `d3-flash:mlx`, `d3-mini:mlx`, `d3-nano:mlx`, `d3-lite:mlx`
+  (community BF16 conversions by `ahmedandaloes`, runtime `d3-mlx`, pins `mlx-vlm==0.7.6` / `mlx==0.32.3`), the
+  installer `d3_mlx`, the launcher branch, Deqio's own forward `deqio.d3_mlx_sidecar` (`DecisionForward`,
+  `deqio-d3-mlx-forward/2`) with `runtime_metadata.forward`, and the opt-in runtime tests
+  (`tests/test_decision3_mlx_runtime.py`, `tests/_d3_mlx_synthetic.py`). On the owner's Mac the MLX path scored
+  41.9 % / 56.8 % decision accuracy (PL / ENG, runs `small-pl` / `small-eng`, 2026-10-17) against 90.3 % / 90.8 % for
+  the same `d3-lite` on GGUF: even with the official `decision_config.json` semantics the community conversion does
+  not reproduce the official readout, and no verified MLX conversion of Decision 3.0 exists. `decision3` on `mlx` is
+  refused by the launcher by name ("Decision 3.0 runs on CUDA (official server) or GGUF (llama.cpp); backend 'mlx'
+  has no launcher and no fallback is allowed"); a stale `config.json` or registry row naming it fails loading the same
+  way; `deqio benchmark tables` excludes such rows by name. On Apple Silicon the Decision 3.0 GGUF profiles are the
+  supported path. Also dropped as dead code: `providers.remote_provider_names`, `providers.local_provider_descriptor`,
+  `credentials.keychain_backend_name`, `openapi.RESPONSE_SCHEMAS` (never referenced).
+
+### Fixed (0.6.2 fix 3, 2026-10-15, after the owner's first Decision 3.0 MLX benchmark; superseded by the removal above)
 - Decision 3.0 MLX: with fix 2 `d3-lite` answered the second option / "yes" on 60 of 60 `deqio-pl-60` cases
   (decision accuracy 54.8 %, Basal 2.0 main 94.6 % on the same run) — the readout did not depend on the state. Two
   causes, both verified against the official `vllm-sr/d3-*` package (`d3_runtime.py`, `decision_config.json`): the

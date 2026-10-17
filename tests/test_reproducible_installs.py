@@ -79,7 +79,6 @@ def _captured_install_commands(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         ("semif-qwen3.5-4b", "mlx"),
         ("laya-english", "mps"),
         ("d3", "cuda"),
-        ("d3", "mlx"),
         ("basal-2.0-main", "gguf"),
         ("basal-2.0-main", "mlx"),
         ("nimble-9b", "mlx"),

@@ -40,14 +40,14 @@ BASAL = {
             "8af9c1e127f0247cbdc326be04c2feeb273b8e26"),
 }
 # 0.6.1, Decision 3.0: official commits verified by the owner (2026-10-12 runtime commits; the 2026-10-13
-# commits changed the model card only), ggml-org GGUF and ahmedandaloes MLX HEADs read on 2026-10-14.
+# commits changed the model card only) and ggml-org GGUF HEADs read on 2026-10-14. 0.6.2 removed the MLX profiles.
 D3 = {
-    # model -> (official commit, GGUF commit, MLX commit)
-    "d3": ("093cffbaa7be6f5dfe14252ae7e80c396c06dbd9", "de9670136f5ddd83e677c89ce041d5b9bb3b0dcb", "cbc374ff4bc8e2ee17cb78df4725231f97dc1e17"),
-    "d3-flash": ("f6075bff3c0f7d5704e353d0fb2ebf94888d1691", "3d53d13778bf8035e6e1e534ce489ed052ee5663", "77adb3bea9abde92d1f32158743a0cbbb0bf7aa3"),
-    "d3-mini": ("0e78bbdbe3cf480ed1461c185c9e0c4fa9258011", "c03ac9c3bdc5ae949111acb945338933f396e4d7", "c645173f5729051d473916283f9e37208b5113bb"),
-    "d3-nano": ("9d9b937f5f117f78c030ea7ba677c0b3d328ec58", "67baf946c0042cd74ca7106929ed57db699a5f4b", "b503613cd2bdbbaef1cfbd09c6e348a5758b255b"),
-    "d3-lite": ("3c49f5c0bd48a4b28e29b8ec1f38f56e199f3d61", "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21", "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a"),
+    # model -> (official commit, GGUF commit)
+    "d3": ("093cffbaa7be6f5dfe14252ae7e80c396c06dbd9", "de9670136f5ddd83e677c89ce041d5b9bb3b0dcb"),
+    "d3-flash": ("f6075bff3c0f7d5704e353d0fb2ebf94888d1691", "3d53d13778bf8035e6e1e534ce489ed052ee5663"),
+    "d3-mini": ("0e78bbdbe3cf480ed1461c185c9e0c4fa9258011", "c03ac9c3bdc5ae949111acb945338933f396e4d7"),
+    "d3-nano": ("9d9b937f5f117f78c030ea7ba677c0b3d328ec58", "67baf946c0042cd74ca7106929ed57db699a5f4b"),
+    "d3-lite": ("3c49f5c0bd48a4b28e29b8ec1f38f56e199f3d61", "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21"),
 }
 DECIDER = {
     "0.8b": "a0a01d6f8135298f400a8c856b355793012ae971",
@@ -79,9 +79,8 @@ PINS: dict[tuple[str, str], dict[str, str]] = {
        for tier, (repo, mlx, _, _) in BASAL.items()},
     **{(f"basal-2.0-{tier}", "gguf"): {f"Remek/basal-2.0-{repo}": base, f"Remek/basal-2.0-{repo}-GGUF": gguf}
        for tier, (repo, _, base, gguf) in BASAL.items()},
-    **{(model, "cuda"): {f"vllm-sr/{model}": official} for model, (official, _, _) in D3.items()},
-    **{(model, "gguf"): {f"ggml-org/vllm-{model}-GGUF": gguf} for model, (_, gguf, _) in D3.items()},
-    **{(model, "mlx"): {f"ahmedandaloes/{model}-mlx": mlx} for model, (_, _, mlx) in D3.items()},
+    **{(model, "cuda"): {f"vllm-sr/{model}": official} for model, (official, _) in D3.items()},
+    **{(model, "gguf"): {f"ggml-org/vllm-{model}-GGUF": gguf} for model, (_, gguf) in D3.items()},
     ("clef-flash", "gguf"): {"ggml-org/Clef-Flash-GGUF": "6b4fe4c59098479652d94f0fe11a40facbebd1ec"},
     ("clef", "gguf"): {"ggml-org/Clef-GGUF": "d2aa75cb425ae922b5c3c15ef3157d417b7f7641"},
     **{(f"decider-{size}", backend): {f"Mapika/decider-{size}": sha}

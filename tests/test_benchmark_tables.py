@@ -2,8 +2,9 @@
 
 The generator reads a run's ``summary.json`` (schema 2) and ``results.jsonl``, keeps every number as the run
 reported it, sorts by decision accuracy, computes the estimated cost per 1 000 scored decisions for remote
-profiles from the per-row estimates, lists profiles that did not load, and excludes Decision 3.0 MLX rows produced
-by another Deqio forward than the current one (their numbers are not comparable).
+profiles from the per-row estimates, lists profiles that did not load, and excludes rows of the Decision 3.0 MLX
+profiles removed in 0.6.2 (whatever Deqio forward produced them: the backend is gone and its numbers are not
+comparable with the official runtime).
 """
 
 from __future__ import annotations
@@ -18,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _model(model_id: str, backend: str, *, decision_accuracy: float, case_accuracy: float, median: float, p95: float,
            throughput: float, identity: dict | None = None, runtime_metadata: dict | None = None, provider: dict | None = None,
-           load_error: str | None = None, per_type: bool = True) -> dict:
+           load_error: str | None = None, per_type: bool = True, engine: str | None = None) -> dict:
+    engine = engine or model_id.split("-")[0]
     block = lambda cases, correct, assertions: {  # noqa: E731 - compact fixture builder
         "cases": cases, "passed_cases": int(cases * case_accuracy), "case_accuracy": case_accuracy, "assertions": assertions,
         "correct": correct, "decision_accuracy": decision_accuracy, "runtime_errors": 0, "completed_assertions": assertions,
@@ -28,12 +30,12 @@ def _model(model_id: str, backend: str, *, decision_accuracy: float, case_accura
     if per_type:
         summary.update({"noul": block(20, 15, 20), "choice": block(20, 16, 20), "shared": block(20, 10, 53)})
     return {
-        "model_id": model_id, "backend": backend, "engine": model_id.split("-")[0], "load_ms": 10.0, "load_error": load_error,
+        "model_id": model_id, "backend": backend, "engine": engine, "load_ms": 10.0, "load_error": load_error,
         "profile_identity": {"schema_version": 1, "canonical_id": f"{model_id}-{backend}-id", "model_id": model_id, "backend": backend,
-                             "engine": model_id.split("-")[0], "model": f"org/{model_id}", "source": "official",
+                             "engine": engine, "model": f"org/{model_id}", "source": "official",
                              "artifacts": [{"source": "huggingface", "repo_id": f"org/{model_id}", "revision": "0123456789abcdef" * 2 + "01234567"}],
                              **(identity or {})},
-        "runtime_identity": {"deqio_version": "0.6.2", "runtime_instance_id": "r-1", "engine": model_id.split("-")[0], "model_id": model_id,
+        "runtime_identity": {"deqio_version": "0.6.2", "runtime_instance_id": "r-1", "engine": engine, "model_id": model_id,
                              "backend": backend, "runtime_metadata": runtime_metadata or {}, **({"provider": provider} if provider else {})},
         "summary": summary,
     }
@@ -52,8 +54,6 @@ def _write_run(directory: Path, models: list[dict], results: list[dict] | None =
 
 @pytest.fixture()
 def run_dir(tmp_path: Path) -> Path:
-    from deqio.d3_mlx_sidecar import D3_MLX_FORWARD
-
     models = [
         _model("kev-0.8b", "mlx", decision_accuracy=0.785, case_accuracy=0.667, median=54.0, p95=84.2, throughput=25.13),
         _model("decider-0.8b", "mps", decision_accuracy=0.839, case_accuracy=0.75, median=330.7, p95=395.7, throughput=4.9),
@@ -65,10 +65,12 @@ def run_dir(tmp_path: Path) -> Path:
         _model("typesafe-jev", "remote", decision_accuracy=1.0, case_accuracy=1.0, median=317.7, p95=424.8, throughput=4.64,
                identity={"artifacts": [], "model": "jev-latest"},
                provider={"name": "typesafe-jev", "kind": "remote", "model": "jev-latest", "endpoint": "https://api.typesafe.ai/v1/systemone"}),
-        _model("d3-lite", "mlx", decision_accuracy=0.548, case_accuracy=0.367, median=118.2, p95=352.3, throughput=8.76,
+        _model("d3-lite", "mlx", engine="decision3", decision_accuracy=0.548, case_accuracy=0.367, median=118.2, p95=352.3, throughput=8.76,
                identity={"precision": "bf16", "source": "community", "runtime": "d3-mlx-community"}, runtime_metadata={"forward": "deqio-d3-mlx-forward/1"}),
-        _model("d3-nano", "mlx", decision_accuracy=0.7, case_accuracy=0.6, median=200.0, p95=300.0, throughput=5.0,
-               identity={"precision": "bf16", "source": "community", "runtime": "d3-mlx-community"}, runtime_metadata={"forward": D3_MLX_FORWARD}),
+        _model("d3-nano", "mlx", engine="decision3", decision_accuracy=0.7, case_accuracy=0.6, median=200.0, p95=300.0, throughput=5.0,
+               identity={"precision": "bf16", "source": "community", "runtime": "d3-mlx-community"}, runtime_metadata={"forward": "deqio-d3-mlx-forward/2"}),
+        _model("d3-lite", "gguf", engine="decision3", decision_accuracy=0.903, case_accuracy=0.85, median=85.7, p95=120.0, throughput=10.0,
+               identity={"precision": "q8_0", "quantization": {"quantization": "Q8_0", "kind": "gguf"}, "runtime": "llama.cpp-systemone"}),
         _model("laya-english", "mlx", decision_accuracy=0.0, case_accuracy=0.0, median=0.0, p95=0.0, throughput=0.0,
                load_error="sidecar did not become ready", per_type=False),
     ]
@@ -93,9 +95,11 @@ def test_tables_keep_the_runs_numbers_sort_by_decision_accuracy_and_exclude_inco
     assert tables["run_id"] == "20261015T120300Z" and tables["suite_name"] == "deqio-pl-60" and tables["suite_cases"] == 60
     assert tables["scored_decisions"] == 93 and tables["deqio_version"] == "0.6.2"
     assert [row["profile"] for row in tables["rows"]] == [
-        "typesafe-jev:remote", "openai-decisions:remote", "basal-2.0-main:gguf", "decider-0.8b:mps", "kev-0.8b:mlx", "d3-nano:mlx",
+        "typesafe-jev:remote", "openai-decisions:remote", "d3-lite:gguf", "basal-2.0-main:gguf", "decider-0.8b:mps", "kev-0.8b:mlx",
     ]
-    assert tables["excluded"] == [{"profile": "d3-lite:mlx", "reason": "Decision 3.0 MLX forward deqio-d3-mlx-forward/1; only deqio-d3-mlx-forward/2 runs are reported"}]
+    reason = "Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported"
+    assert tables["excluded"] == [{"profile": "d3-lite:mlx", "reason": reason}, {"profile": "d3-nano:mlx", "reason": reason}]
+    assert by_profile_label(tables, "d3-lite:gguf") == ("Decision 3.0 d3-lite 0.85B", "GGUF Q8_0")
     assert tables["not_loaded"] == [{"profile": "laya-english:mlx", "load_error": "sidecar did not become ready"}]
     by_profile = {row["profile"]: row for row in tables["rows"]}
     kev = by_profile["kev-0.8b:mlx"]
@@ -107,7 +111,12 @@ def test_tables_keep_the_runs_numbers_sort_by_decision_accuracy_and_exclude_inco
     assert openai["cost"]["usd_per_1k_decisions"] == pytest.approx(0.00002 * 93 / 93 * 1000) and openai["cost"]["decisions"] == 93
     assert openai["endpoint"] == "https://api.openai.com/v1/decisions" and openai["model"] == "gpt-6-luna" and openai["backend_label"] == "remote"
     assert by_profile["typesafe-jev:remote"]["cost"]["usd_per_1k_decisions"] is None  # one row without a reported amount → no number
-    assert by_profile["d3-nano:mlx"]["d3_mlx_forward"] == "deqio-d3-mlx-forward/2"
+    assert "d3_mlx_forward" not in by_profile["d3-lite:gguf"]
+
+
+def by_profile_label(tables: dict, profile: str) -> tuple[str, str]:
+    row = next(row for row in tables["rows"] if row["profile"] == profile)
+    return row["label"], row["backend_label"]
 
 
 def test_markdown_tables_name_the_run_the_exclusions_and_every_metric(run_dir: Path) -> None:
@@ -116,7 +125,10 @@ def test_markdown_tables_name_the_run_the_exclusions_and_every_metric(run_dir: P
     text = render_markdown(build_tables(load_run(run_dir)), title="Models up to 1B")
     assert text.startswith("### Models up to 1B\n\n#### Run\n")
     assert "- `20261015T120300Z` · suite `deqio-pl-60` — 60 cases / 93 scored decisions · Deqio 0.6.2 · 2026-10-15" in text
-    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX forward deqio-d3-mlx-forward/1" in text
+    assert "- excluded: `d3-lite:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2" in text
+    assert "- excluded: `d3-nano:mlx` — Decision 3.0 MLX profiles were removed in 0.6.2" in text
+    assert "| d3-lite | GGUF Q8_0 | 85.0% | 90.3% |" in text
+    assert "d3-nano" not in text.split("#### Quality")[1]  # removed profiles never reach a table
     assert "- did not load: `laya-english:mlx` — sidecar did not become ready" in text
     assert "| Model | Backend | Accuracy | Decision accuracy | Noul | Choice | Shared | Shared decision accuracy |" in text
     assert "| typesafe-jev | remote | 100.0% | 100.0% |" in text  # no catalog → the model id is the label

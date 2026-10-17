@@ -744,9 +744,8 @@ class SystemOneRuntime:
         The official CUDA package carries ``MODEL_MANIFEST.json`` (``d3-package-manifest/1``) with the
         model identity ``identity.model_sha256``; the catalog pins that value as ``d3_model_sha256`` so a
         snapshot at another identity is refused before the server starts.  GGUF profiles record the
-        official source commit (``d3_source_sha``) and MLX profiles the source model; neither ships a
-        manifest, so only the CUDA profile is verified against one here.  MLX profiles also record the
-        Deqio forward path that runs the community checkpoint (``forward``, 0.6.1 fix 2).
+        official source commit (``d3_source_sha``); they ship no manifest, so only the CUDA profile is
+        verified against one here.
         """
         metadata: dict[str, Any] = {
             "family": "decision3",
@@ -756,14 +755,6 @@ class SystemOneRuntime:
         if settings.backend != "cuda":
             if profile.get("d3_source_sha"):
                 metadata["d3_source_sha"] = str(profile["d3_source_sha"])
-            if profile.get("d3_source_model"):
-                metadata["d3_source_model"] = str(profile["d3_source_model"])
-            if settings.backend == "mlx":
-                # 0.6.1 fix 2: the community d3_mlx.py only loads the checkpoint; Deqio's sidecar runs the
-                # forward pass, and names that path so MLX results stay attributable to it.
-                from deqio.d3_mlx_sidecar import D3_MLX_FORWARD
-
-                metadata["forward"] = D3_MLX_FORWARD
             return metadata
         snapshot = Path(
             _pinned_snapshot_path(
@@ -993,8 +984,9 @@ class SystemOneRuntime:
             return command
 
         if engine == "decision3":
-            # 0.6.1: both launchers run from the pinned Hub snapshot's path, the only form that names
-            # the commit for code the package itself ships (d3_server.py / d3_mlx.py).
+            # 0.6.1: the official server runs from the pinned Hub snapshot's path, the only form that names
+            # the commit for code the package itself ships (d3_server.py). GGUF profiles use the llama.cpp
+            # launcher above; the community MLX conversion was removed in 0.6.2.
             if settings.backend == "cuda":
                 snapshot = Path(
                     _pinned_snapshot_path(model, profile.get("model_revision"), model_id=settings.model_id, backend="cuda")
@@ -1017,24 +1009,8 @@ class SystemOneRuntime:
                     "--host", "127.0.0.1",
                     "--port", str(port),
                 ]
-            if settings.backend == "mlx":
-                snapshot = Path(
-                    _pinned_snapshot_path(model, profile.get("model_revision"), model_id=settings.model_id, backend="mlx")
-                )
-                if not (snapshot / "d3_mlx.py").is_file():
-                    raise RuntimeError(
-                        f"The Decision 3.0 MLX runtime d3_mlx.py is missing from the pinned snapshot {snapshot}; "
-                        "run deqio models update for this profile"
-                    )
-                sidecar = Path(__file__).with_name("d3_mlx_sidecar.py").resolve()
-                return [
-                    str(python), str(sidecar),
-                    "--snapshot", str(snapshot),
-                    "--name", str(profile.get("wire_model", model)),
-                    "--port", str(port),
-                ]
             raise RuntimeError(
-                "Decision 3.0 runs on CUDA (official server), GGUF (llama.cpp) or MLX (community sidecar); "
+                "Decision 3.0 runs on CUDA (official server) or GGUF (llama.cpp); "
                 f"backend {settings.backend!r} has no launcher and no fallback is allowed"
             )
 

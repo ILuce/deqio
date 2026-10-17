@@ -1,0 +1,814 @@
+{
+  "schema_version": 2,
+  "run_id": "small-eng",
+  "created_at": "2026-10-17T09:01:34.464083+00:00",
+  "suite": "/Users/euuki/deqio-ecosystem/deqio/benchmarks/basic.json",
+  "suite_name": "deqio-basic-150",
+  "suite_cases": 150,
+  "models": [
+    {
+      "model_id": "decider-0.8b",
+      "backend": "mps",
+      "engine": "decider",
+      "load_ms": 4881.401874939911,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "bb2bba19bf7b2192584022e5aaacab8cee4e1b7fe79c93c8e7c3392a86cc7afe",
+        "model_id": "decider-0.8b",
+        "backend": "mps",
+        "engine": "decider",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "Mapika/decider-0.8b",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-0.8b",
+            "revision": "a0a01d6f8135298f400a8c856b355793012ae971",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "176119a6c31849ea99987bbe8cdcb094",
+        "engine": "decider",
+        "model_id": "decider-0.8b",
+        "backend": "mps",
+        "model": "Mapika/decider-0.8b",
+        "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "Mapika/decider-0.8b",
+            "requested_revision": "a0a01d6f8135298f400a8c856b355793012ae971",
+            "resolved_revision": "a0a01d6f8135298f400a8c856b355793012ae971"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:25:56.848734+00:00",
+        "installation_verified_at": "2026-10-14T21:25:56.848734+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decider"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 126,
+          "case_accuracy": 0.84,
+          "assertions": 250,
+          "correct": 222,
+          "decision_accuracy": 0.888,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 312.9473477974534,
+          "median_ms": 321.54441700549796,
+          "p95_ms": 402.2831249749288,
+          "throughput_decisions_per_s": 5.325709511190269
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 44,
+          "case_accuracy": 0.88,
+          "assertions": 50,
+          "correct": 44,
+          "decision_accuracy": 0.88,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 258.5968566359952,
+          "median_ms": 286.2814584514126,
+          "p95_ms": 323.41700000688434,
+          "throughput_decisions_per_s": 3.867023029624892
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 323.1296275672503,
+          "median_ms": 319.432437478099,
+          "p95_ms": 404.36112496536225,
+          "throughput_decisions_per_s": 3.0947332422864204
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 35,
+          "case_accuracy": 0.7,
+          "assertions": 150,
+          "correct": 131,
+          "decision_accuracy": 0.8733333333333333,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 357.1155591891147,
+          "median_ms": 363.61877102172,
+          "p95_ms": 407.8260000096634,
+          "throughput_decisions_per_s": 8.400642096950234
+        }
+      }
+    },
+    {
+      "model_id": "kev-0.8b",
+      "backend": "mlx",
+      "engine": "kev",
+      "load_ms": 4030.5294160498306,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "95d8fdc32c96d9bb24f6a52200b756756253191caaa7f34edb495ec28ff7131f",
+        "model_id": "kev-0.8b",
+        "backend": "mlx",
+        "engine": "kev",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "a95e085400ae48bbaa1b1cf48dfb222a",
+        "engine": "kev",
+        "model_id": "kev-0.8b",
+        "backend": "mlx",
+        "model": "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "jaredpalmer/kev-0.8b",
+            "requested_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f",
+            "resolved_revision": "bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:20:33.765790+00:00",
+        "installation_verified_at": "2026-10-14T21:23:02.602004+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "kev"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 115,
+          "case_accuracy": 0.7666666666666667,
+          "assertions": 250,
+          "correct": 210,
+          "decision_accuracy": 0.84,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 63.593333333333334,
+          "median_ms": 55.849999999999994,
+          "p95_ms": 90.4,
+          "throughput_decisions_per_s": 26.208197924310724
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 42,
+          "case_accuracy": 0.84,
+          "assertions": 50,
+          "correct": 42,
+          "decision_accuracy": 0.84,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 47.218,
+          "median_ms": 49.3,
+          "p95_ms": 51.7,
+          "throughput_decisions_per_s": 21.178364183150492
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 43,
+          "case_accuracy": 0.86,
+          "assertions": 50,
+          "correct": 43,
+          "decision_accuracy": 0.86,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 56.172,
+          "median_ms": 55.849999999999994,
+          "p95_ms": 59.7,
+          "throughput_decisions_per_s": 17.802463860998365
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 30,
+          "case_accuracy": 0.6,
+          "assertions": 150,
+          "correct": 125,
+          "decision_accuracy": 0.8333333333333334,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 87.39,
+          "median_ms": 87.25,
+          "p95_ms": 92.3,
+          "throughput_decisions_per_s": 34.32887058015791
+        }
+      }
+    },
+    {
+      "model_id": "laya-english",
+      "backend": "mlx",
+      "engine": "laya",
+      "load_ms": 773.5662909690291,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "2087afc943a1321fddefb07b1201b672a1875dfec7ada044436e796d026b218b",
+        "model_id": "laya-english",
+        "backend": "mlx",
+        "engine": "laya",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "aac6fef/laya-mlx",
+        "source": "community",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "aac6fef/laya-mlx",
+            "revision": "047678560251f28113ee8f5df4be82102c7bf336",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "616eefa9d04b40c4a0111904af1be209",
+        "engine": "laya",
+        "model_id": "laya-english",
+        "backend": "mlx",
+        "model": "aac6fef/laya-mlx",
+        "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "aac6fef/laya-mlx",
+            "requested_revision": "047678560251f28113ee8f5df4be82102c7bf336",
+            "resolved_revision": "047678560251f28113ee8f5df4be82102c7bf336"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:25:13.768138+00:00",
+        "installation_verified_at": "2026-10-14T21:25:13.768138+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "laya"
+        },
+        "source": "community",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 82,
+          "case_accuracy": 0.5466666666666666,
+          "assertions": 250,
+          "correct": 167,
+          "decision_accuracy": 0.668,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 40.53263333333334,
+          "median_ms": 34.62,
+          "p95_ms": 74.575,
+          "throughput_decisions_per_s": 41.11913116920604
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 34,
+          "case_accuracy": 0.68,
+          "assertions": 50,
+          "correct": 34,
+          "decision_accuracy": 0.68,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 22.873620000000003,
+          "median_ms": 21.648,
+          "p95_ms": 34.067,
+          "throughput_decisions_per_s": 43.718484437531096
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 33,
+          "case_accuracy": 0.66,
+          "assertions": 50,
+          "correct": 33,
+          "decision_accuracy": 0.66,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 31.68552,
+          "median_ms": 34.6105,
+          "p95_ms": 37.132,
+          "throughput_decisions_per_s": 31.560157447313472
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 15,
+          "case_accuracy": 0.3,
+          "assertions": 150,
+          "correct": 100,
+          "decision_accuracy": 0.6666666666666666,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 67.03876,
+          "median_ms": 70.3615,
+          "p95_ms": 77.082,
+          "throughput_decisions_per_s": 44.75023106035971
+        }
+      }
+    },
+    {
+      "model_id": "von",
+      "backend": "mps",
+      "engine": "von",
+      "load_ms": 5259.2085839714855,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "7c48b1576357be508776201a65f5c584a00ca23a733a2aeb3aa881af686337ad",
+        "model_id": "von",
+        "backend": "mps",
+        "engine": "von",
+        "family": null,
+        "runtime": null,
+        "runtime_version": null,
+        "model": "von",
+        "source": "official",
+        "precision": null,
+        "quantization": null,
+        "runtime_metadata": {},
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "wfzyx/von",
+            "revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "aa118525381543f3b0796f6d0be123c8",
+        "engine": "von",
+        "model_id": "von",
+        "backend": "mps",
+        "model": "von",
+        "requested_revision": null,
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "wfzyx/von",
+            "requested_revision": null,
+            "resolved_revision": "498ceba33390b32cfefaab6422ec380318ba9b99",
+            "filename": "option_marker.pt"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:26:45.544237+00:00",
+        "installation_verified_at": "2026-10-14T21:32:04.664544+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "von"
+        },
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 96,
+          "case_accuracy": 0.64,
+          "assertions": 250,
+          "correct": 183,
+          "decision_accuracy": 0.732,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 81.4978838743021,
+          "median_ms": 64.01262496365234,
+          "p95_ms": 119.13533299230039,
+          "throughput_decisions_per_s": 20.450428740422787
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 43,
+          "case_accuracy": 0.86,
+          "assertions": 50,
+          "correct": 43,
+          "decision_accuracy": 0.86,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 79.53943161759526,
+          "median_ms": 63.68785444647074,
+          "p95_ms": 94.44308397360146,
+          "throughput_decisions_per_s": 12.572380511942026
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 29,
+          "case_accuracy": 0.58,
+          "assertions": 50,
+          "correct": 29,
+          "decision_accuracy": 0.58,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 41.362327572423965,
+          "median_ms": 40.23741703713313,
+          "p95_ms": 51.66970903519541,
+          "throughput_decisions_per_s": 24.17658914984984
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 24,
+          "case_accuracy": 0.48,
+          "assertions": 150,
+          "correct": 111,
+          "decision_accuracy": 0.74,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 123.59189243288711,
+          "median_ms": 99.62512494530529,
+          "p95_ms": 131.05458300560713,
+          "throughput_decisions_per_s": 24.273436881218245
+        }
+      }
+    },
+    {
+      "model_id": "d3-lite",
+      "backend": "gguf",
+      "engine": "decision3",
+      "load_ms": 1360.8868339797482,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "fad3cdbbe5b2e97b355cbbbbcfec12577a846b5e3f7190c094d6ad8ef937b867",
+        "model_id": "d3-lite",
+        "backend": "gguf",
+        "engine": "decision3",
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "runtime_version": null,
+        "model": "ggml-org/vllm-d3-lite-GGUF",
+        "source": "official",
+        "precision": "q8_0",
+        "quantization": {
+          "applied": "checkpoint",
+          "bits": 8,
+          "block_size": 32,
+          "kind": "gguf",
+          "quantization": "Q8_0"
+        },
+        "runtime_metadata": {
+          "official_runtime": false
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-lite-GGUF",
+            "revision": "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21",
+            "role": "systemone-gguf-q8_0"
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "f071f588650147a69d58b0567854c62b",
+        "engine": "decision3",
+        "model_id": "d3-lite",
+        "backend": "gguf",
+        "model": "ggml-org/vllm-d3-lite-GGUF",
+        "requested_revision": "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ggml-org/vllm-d3-lite-GGUF",
+            "requested_revision": "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21",
+            "resolved_revision": "a1f9fa124e8d60ac02d1a2884b1dec5a3ec2fd21",
+            "role": "systemone-gguf-q8_0",
+            "filename": "vllm-d3-lite-Q8_0.gguf",
+            "local_dir": "models/d3-lite-GGUF"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-17T08:52:55.738669+00:00",
+        "installation_verified_at": "2026-10-17T08:54:04.482613+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decision3"
+        },
+        "family": "decision3",
+        "runtime": "llama.cpp-systemone",
+        "platform": "gguf",
+        "source": "official",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": true,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "q8_0",
+        "runtime_metadata": {
+          "family": "decision3",
+          "official_runtime": false,
+          "launcher": "llama_cpp",
+          "d3_source_sha": "3c49f5c0bd48a4b28e29b8ec1f38f56e199f3d61"
+        },
+        "quantization": {
+          "kind": "gguf",
+          "quantization": "Q8_0",
+          "bits": 8,
+          "block_size": 32,
+          "applied": "checkpoint"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 129,
+          "case_accuracy": 0.86,
+          "assertions": 250,
+          "correct": 227,
+          "decision_accuracy": 0.908,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 129.52087996915603,
+          "median_ms": 83.9902704465203,
+          "p95_ms": 248.9817909663543,
+          "throughput_decisions_per_s": 12.867938104370236
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 71.93032329436392,
+          "median_ms": 71.70949998544529,
+          "p95_ms": 73.04187503177673,
+          "throughput_decisions_per_s": 13.902342631043823
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 47,
+          "case_accuracy": 0.94,
+          "assertions": 50,
+          "correct": 47,
+          "decision_accuracy": 0.94,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 83.3536449726671,
+          "median_ms": 83.95814546383917,
+          "p95_ms": 87.21945807337761,
+          "throughput_decisions_per_s": 11.997075836670549
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 35,
+          "case_accuracy": 0.7,
+          "assertions": 150,
+          "correct": 133,
+          "decision_accuracy": 0.8866666666666667,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 233.2786716404371,
+          "median_ms": 235.0745625444688,
+          "p95_ms": 251.7757499590516,
+          "throughput_decisions_per_s": 12.860155533738785
+        }
+      }
+    },
+    {
+      "model_id": "d3-lite",
+      "backend": "mlx",
+      "engine": "decision3",
+      "load_ms": 2365.0829169200733,
+      "load_error": null,
+      "profile_identity": {
+        "schema_version": 1,
+        "canonical_id": "233b2e113488387e12495089338ec9de952812aed157060acb43620ff4b92455",
+        "model_id": "d3-lite",
+        "backend": "mlx",
+        "engine": "decision3",
+        "family": "decision3",
+        "runtime": "d3-mlx-community",
+        "runtime_version": null,
+        "model": "ahmedandaloes/d3-lite-mlx",
+        "source": "community",
+        "precision": "bf16",
+        "quantization": null,
+        "runtime_metadata": {
+          "official_runtime": false
+        },
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ahmedandaloes/d3-lite-mlx",
+            "revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
+            "role": null
+          }
+        ]
+      },
+      "runtime_identity": {
+        "deqio_version": "0.6.2",
+        "runtime_instance_id": "d13a05982e1b4908869cd80a86f44494",
+        "engine": "decision3",
+        "model_id": "d3-lite",
+        "backend": "mlx",
+        "model": "ahmedandaloes/d3-lite-mlx",
+        "requested_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
+        "artifacts": [
+          {
+            "source": "huggingface",
+            "repo_id": "ahmedandaloes/d3-lite-mlx",
+            "requested_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a",
+            "resolved_revision": "235b1fb6ed8d20ab911e10801a4f4cec9cadc24a"
+          }
+        ],
+        "artifact_revisions_resolved": true,
+        "installation_installed_at": "2026-10-14T21:19:09.188960+00:00",
+        "installation_verified_at": "2026-10-15T18:18:20.071268+00:00",
+        "artifact_verification_status": "verified",
+        "max_input_tokens": 4096,
+        "provider": {
+          "name": "local",
+          "kind": "local",
+          "engine": "decision3"
+        },
+        "family": "decision3",
+        "runtime": "d3-mlx-community",
+        "platform": "mlx",
+        "source": "community",
+        "capabilities": {
+          "systemone": true,
+          "choice": true,
+          "noul": true,
+          "score": false,
+          "multi_question": true,
+          "multi": false,
+          "act": false,
+          "facts": false,
+          "evidence": false
+        },
+        "precision": "bf16",
+        "runtime_metadata": {
+          "family": "decision3",
+          "official_runtime": false,
+          "launcher": "d3_mlx",
+          "d3_source_model": "vllm-sr/d3-lite",
+          "forward": "deqio-d3-mlx-forward/2"
+        }
+      },
+      "summary": {
+        "overall": {
+          "cases": 150,
+          "passed_cases": 51,
+          "case_accuracy": 0.34,
+          "assertions": 250,
+          "correct": 142,
+          "decision_accuracy": 0.568,
+          "runtime_errors": 0,
+          "completed_assertions": 250,
+          "mean_ms": 179.05451333333332,
+          "median_ms": 119.0565,
+          "p95_ms": 355.015,
+          "throughput_decisions_per_s": 9.308152224925765
+        },
+        "noul": {
+          "cases": 50,
+          "passed_cases": 25,
+          "case_accuracy": 0.5,
+          "assertions": 50,
+          "correct": 25,
+          "decision_accuracy": 0.5,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 94.49647999999999,
+          "median_ms": 94.1755,
+          "p95_ms": 95.437,
+          "throughput_decisions_per_s": 10.582404762590098
+        },
+        "choice": {
+          "cases": 50,
+          "passed_cases": 21,
+          "case_accuracy": 0.42,
+          "assertions": 50,
+          "correct": 21,
+          "decision_accuracy": 0.42,
+          "runtime_errors": 0,
+          "completed_assertions": 50,
+          "mean_ms": 116.41712,
+          "median_ms": 119.0565,
+          "p95_ms": 120.977,
+          "throughput_decisions_per_s": 8.58980191229606
+        },
+        "shared": {
+          "cases": 50,
+          "passed_cases": 5,
+          "case_accuracy": 0.1,
+          "assertions": 150,
+          "correct": 96,
+          "decision_accuracy": 0.64,
+          "runtime_errors": 0,
+          "completed_assertions": 150,
+          "mean_ms": 326.24994,
+          "median_ms": 328.2145,
+          "p95_ms": 367.551,
+          "throughput_decisions_per_s": 9.195403989959354
+        }
+      }
+    }
+  ]
+}

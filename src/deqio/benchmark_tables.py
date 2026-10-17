@@ -8,10 +8,10 @@ estimates — and renders, per run: the run line (id, suite, cases, scored decis
 quality table (case accuracy, decision accuracy, per-type accuracy), the performance table (median, P95,
 throughput, estimated cost per 1 000 decisions for remote profiles) and the identity table (engine, runtime,
 precision, source, model, pinned revision).  Rows are sorted by decision accuracy.  Nothing is interpolated:
-a profile whose runtime failed to load is listed under "did not load", a missing metric prints ``—``, and a
-Decision 3.0 MLX row produced by another Deqio forward than the current ``deqio-d3-mlx-forward/N`` is excluded
-and named (its numbers are not comparable).  ``--json`` prints the same data as JSON (an additive automation
-contract, like ``deqio benchmark compare --json``).
+a profile whose runtime failed to load is listed under "did not load", a missing metric prints ``—``, and a row
+of a Decision 3.0 MLX profile (removed in 0.6.2: the community conversion did not reproduce the official
+readout) is excluded and named, whatever Deqio forward produced it.  ``--json`` prints the same data as JSON (an
+additive automation contract, like ``deqio benchmark compare --json``).
 """
 
 from __future__ import annotations
@@ -27,14 +27,11 @@ from .catalog import catalog_index, load_catalog
 from .config import read_config_data
 
 SCHEMA_VERSION = 1
-D3_MLX_FORWARD_PREFIX = "deqio-d3-mlx-forward/"
 TYPE_ORDER = ("noul", "choice", "shared", "score", "multi", "act", "systemone")
-
-
-def _current_d3_forward() -> str:
-    from .d3_mlx_sidecar import D3_MLX_FORWARD
-
-    return D3_MLX_FORWARD
+REMOVED_PROFILES = {
+    # (engine, backend) -> why a run's row is not reported
+    ("decision3", "mlx"): "Decision 3.0 MLX profiles were removed in 0.6.2 (the community conversion did not reproduce the official readout); not reported",
+}
 
 
 def load_run(source: str | Path) -> dict[str, Any]:
@@ -115,12 +112,10 @@ def _revision(model: dict[str, Any]) -> str | None:
     return ", ".join(revisions) if revisions else None
 
 
-def build_tables(run: dict[str, Any], *, catalog: dict[str, Any] | None = None, models: list[str] | None = None,
-                 d3_mlx_forward: str | None = None) -> dict[str, Any]:
+def build_tables(run: dict[str, Any], *, catalog: dict[str, Any] | None = None, models: list[str] | None = None) -> dict[str, Any]:
     summary, results = run["summary"], run["results"]
     labels = {model_id: str(entry.get("label") or model_id) for model_id, entry in catalog_index(catalog).items()} if catalog else {}
     selectors = [_parse_selector(value) for value in models] if models else None
-    current_forward = d3_mlx_forward or _current_d3_forward()
     rows: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     not_loaded: list[dict[str, Any]] = []
@@ -133,10 +128,9 @@ def build_tables(run: dict[str, Any], *, catalog: dict[str, Any] | None = None, 
             not_loaded.append({"profile": key, "load_error": str(model["load_error"])})
             continue
         runtime_identity = model.get("runtime_identity") if isinstance(model.get("runtime_identity"), dict) else {}
-        metadata = runtime_identity.get("runtime_metadata") if isinstance(runtime_identity.get("runtime_metadata"), dict) else {}
-        forward = metadata.get("forward")
-        if isinstance(forward, str) and forward.startswith(D3_MLX_FORWARD_PREFIX) and forward != current_forward:
-            excluded.append({"profile": key, "reason": f"Decision 3.0 MLX forward {forward}; only {current_forward} runs are reported"})
+        removed_reason = REMOVED_PROFILES.get((str(model.get("engine")), str(model.get("backend"))))
+        if removed_reason:
+            excluded.append({"profile": key, "reason": removed_reason})
             continue
         overall = (model.get("summary") or {}).get("overall") or {}
         per_type = {kind: (model.get("summary") or {}).get(kind) for kind in TYPE_ORDER if isinstance((model.get("summary") or {}).get(kind), dict)}
@@ -168,7 +162,6 @@ def build_tables(run: dict[str, Any], *, catalog: dict[str, Any] | None = None, 
             "throughput_decisions_per_s": overall.get("throughput_decisions_per_s"),
             "per_type": {kind: {"case_accuracy": value.get("case_accuracy"), "decision_accuracy": value.get("decision_accuracy")} for kind, value in per_type.items()},
             "cost": _cost_per_1k(model, results) if model.get("backend") == "remote" else None,
-            "d3_mlx_forward": forward if isinstance(forward, str) else None,
         })
     rows.sort(key=lambda row: (-(row["decision_accuracy"] or 0.0), -(row["case_accuracy"] or 0.0), row["label"]))
     return {

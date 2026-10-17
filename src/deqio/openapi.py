@@ -47,7 +47,6 @@ DECISION_ROUTES: tuple[tuple[str, str, str, str], ...] = (
     ("/v1/systemone", "SystemOneResponse", "Raw native System One", "The canonical native System One contract of the active profile."),
 )
 CONTRACT_ROUTES = ("/v1/noul", "/v1/choice", "/v1/decision", "/v1/shared")
-RESPONSE_SCHEMAS = ("DecisionResponse", "SharedResponse", "SystemOneResponse")
 
 
 # ---------------------------------------------------------------------------
